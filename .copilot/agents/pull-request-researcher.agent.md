@@ -5,9 +5,11 @@ model: Auto (copilot)
 user-invocable: false
 disable-model-invocation: true
 tools:
-  - search/codebase
+  - GitHub.vscode-pull-request-github/activePullRequest
+  - GitHub.vscode-pull-request-github/openPullRequest
+  - GitHub.vscode-pull-request-github/pullRequestStatusChecks
+  - GitHub.vscode-pull-request-github/issue_fetch
   - read/readFile
-  - read/problems
 agents: []
 ---
 
