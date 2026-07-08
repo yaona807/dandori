@@ -12,7 +12,7 @@ tools:
   - search/listDirectory
   - read/readFile
   - read/problems
-  - web
+  - web/fetch
 agents: []
 ---
 

@@ -6,8 +6,6 @@ user-invocable: false
 disable-model-invocation: true
 tools:
   - browser
-  - read/readFile
-  - read/problems
 agents: []
 ---
 
