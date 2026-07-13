@@ -4,7 +4,6 @@ description: Strict Task Flow Review approval, internal Task Card delegation, wo
 model: Auto (copilot)
 tools:
   - agent
-  - read
   - read/readFile
 agents: [Researcher, PullRequestResearcher, Writer, Reviewer, BrowserQA]
 ---
