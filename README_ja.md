@@ -114,12 +114,12 @@ Orchestrator は control plane を担い、Worker は狭い実作業を担いま
 ```text
 .copilot/
   agents/
-    orchestrator.agent.md
-    researcher.agent.md
-    pull-request-researcher.agent.md
-    writer.agent.md
-    reviewer.agent.md
-    browser-qa.agent.md
+    Orchestrator.agent.md
+    Researcher.agent.md
+    Pull-request-researcher.agent.md
+    Writer.agent.md
+    Reviewer.agent.md
+    Browser-qa.agent.md
   skills/
     code-review/
       SKILL.md

@@ -114,12 +114,12 @@ The Orchestrator owns the control plane. Workers own narrow execution.
 ```text
 .copilot/
   agents/
-    orchestrator.agent.md
-    researcher.agent.md
-    pull-request-researcher.agent.md
-    writer.agent.md
-    reviewer.agent.md
-    browser-qa.agent.md
+    Orchestrator.agent.md
+    Researcher.agent.md
+    Pull-request-researcher.agent.md
+    Writer.agent.md
+    Reviewer.agent.md
+    Browser-qa.agent.md
   skills/
     code-review/
       SKILL.md
