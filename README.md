@@ -5,11 +5,11 @@
 <h1 align="center">DANDORI</h1>
 
 <p align="center">
-  <strong>Task Card-driven orchestration for the agents you already use.</strong>
+  <strong>Bounded adaptive orchestration for the agents you already use.</strong>
 </p>
 
 <p align="center">
-  Make AI agents spend tokens on approved work, not runaway work.
+  Keep approval compact, execution narrow, and workers replaceable.
 </p>
 
 <p align="center">
@@ -18,96 +18,208 @@
 
 DANDORI is an Orchestrator layer for GitHub Copilot Custom Agents.
 
-It turns approved work into bounded Task Cards so your agents can execute narrowly, spend tokens intentionally, and remain easy to replace.
+It converts a user-approved work contract into minimal, bounded Task Cards. The Orchestrator can adapt the internal execution plan without repeatedly asking for approval, while every worker invocation remains constrained by the approved goal, boundaries, effects, and verification requirements.
 
-The core of DANDORI is the **Orchestrator**. The included workers are reference implementations. You can use them as-is, replace them with your own agents, or add specialized workers as your workflow grows.
+The core of DANDORI is the **Orchestrator**. The included workers are reference implementations. You can use them as-is, replace them with your own agents, or add specialized workers without embedding their internal details into the Orchestrator.
 
 > DANDORI is an independent open source project. It is not affiliated with, endorsed by, or maintained by GitHub or Microsoft.
 
 ## Why DANDORI?
 
-AI coding agents are powerful, but vague work creates predictable failure modes:
+AI agents are powerful, but vague delegation creates predictable failure modes:
 
 - unnecessary repository scans
-- repeated tool calls
+- repeated tool calls without progress
 - speculative edits
-- broad investigations
 - scope expansion during execution
-- unclear delegation history
+- workers choosing their own next steps
+- frequent reapproval for harmless internal plan changes
+- long approval screens that users stop reading carefully
 
-Token efficiency is not only about shorter prompts. In agentic workflows, wasted work becomes wasted tokens.
+Token efficiency is not only about shorter prompts. In agentic workflows, unnecessary work, repeated context, and redundant verification become unnecessary token consumption.
 
-DANDORI reduces this waste by making the Orchestrator define the approved scope, create bounded Task Cards, delegate one card at a time, and review each result before continuing.
+DANDORI separates the workflow into two layers:
 
-## Task Card-driven orchestration
+- **User-approved contract**: goal, deliverables, boundaries, permitted effects, target-expansion limit, and verification level
+- **Adaptive internal plan**: worker choice, ordering, Task Card grouping, bounded investigation, retry, and verification
 
-DANDORI is built around a simple rule:
+The contract remains fixed until the user approves a meaningful widening. The internal plan can change freely inside that contract.
 
-```text
-No worker should act without a bounded Task Card.
-```
+## Bounded adaptive orchestration
 
-A Task Card is a compact execution contract between the Orchestrator and a worker. It defines what the worker should do, what it should not do, what output is expected, when the task is done, and when the worker must stop and return to the Orchestrator.
-
-In DANDORI, users approve the Task Flow Review. The Orchestrator then creates internal Task Cards from that approved scope.
-
-The central invariant is:
+DANDORI is built around one containment rule:
 
 ```text
-Internal Task Card ⊆ approved Task Flow Review step
+worker execution ⊆ Task Card ⊆ active approved contract ⊆ approved TFR/TFC chain
 ```
 
-No worker may expand the task based on preference, relevance, convenience, confidence, or broad best practices.
+A **Task Flow Review (TFR)** is a short human decision surface. It is not a detailed execution plan.
+
+A **Task Card** is a worker-neutral execution contract for one permission boundary. It defines the concrete objective, authorized targets, permitted effects, limits, acceptance conditions, and stop conditions for one invocation.
+
+The Orchestrator may change workers, reorder internal work, split or combine Task Cards, perform bounded investigation, and add verification without reapproval. It must request a **Task Flow Change (TFC)** only when the approved contract itself must widen.
 
 ## Key features
 
-- **Task Card-driven orchestration**: workers execute bounded Task Cards, not vague requests.
-- **Token-efficient by design**: DANDORI is designed to reduce wasted tokens by reducing wasted agent work.
-- **Orchestrator-first control**: planning, delegation, review, and synthesis stay in the Orchestrator.
-- **Approved-scope execution**: workers act within the user-approved work scope.
-- **Bring your own workers**: reuse existing agents or add specialized workers as needed.
-- **Loosely coupled workers**: the Orchestrator depends on delegation contracts, not worker internals.
-- **Review before continuation**: worker results are checked before the workflow proceeds.
-- **Capable Orchestrator model recommended**: use a stronger reasoning model for the Orchestrator, while workers can be chosen per task.
-- **Minimal runtime footprint**: the runtime is limited to agent definitions and the focused code-review skill.
+- **Compact approval**: users review only goal, deliverables, boundaries, effects, target-expansion limit, verification, and reapproval conditions.
+- **Revisioned contracts**: every Task Card and result belongs to one active approved contract revision.
+- **Adaptive planning**: internal routing and execution order can change without reapproval when the contract does not widen.
+- **Permission-boundary Task Cards**: work is grouped by authorization boundary rather than mechanically split into many tiny steps.
+- **Discovery/effect separation**: a target discovered by a worker cannot be affected in the same invocation.
+- **Atomic effect targets**: automatic authorization applies only to individually addressable targets, not directories, wildcard sets, or “related files.”
+- **Cumulative effect control**: actions must declare every effect they may produce, including secondary effects.
+- **Worker-neutral orchestration**: worker definitions remain the source of truth for worker behavior and output conventions.
+- **Contract audit**: worker-reported targets, effects, limits, evidence, and revision are checked before progress is accepted.
+- **Separate-context verification**: persistent changes are verified through a separate observation-only invocation when possible.
+- **Differential approval**: only the requested widening is shown when reapproval is required.
+- **Progress-based loop control**: equivalent calls without new evidence, artifacts, authorization, verification, or a more specific blocker are prohibited.
 
 ## Bring your own workers
 
-The Orchestrator is the core of DANDORI.
+The Orchestrator does not contain a static worker capability manifest, worker-specific routing table, or duplicated worker instructions.
 
-DANDORI keeps the Orchestrator decoupled from worker internals. The Orchestrator does not need to embed each worker's implementation details. It only depends on a simple delegation contract: a worker receives a bounded Task Card, executes within that scope, and returns the result.
+At execution time it selects a plausible worker from the allowed agents, resolves that worker's active definition, checks only explicit incompatibilities, and adds only task-specific fields that the selected definition explicitly requires. Worker selection affects execution quality, but never expands authorization.
 
-You can use the included reference workers, replace them with your own agents, or add new specialized workers as your workflow grows.
+This allows you to:
 
-This makes DANDORI easy to adopt incrementally: start with the Orchestrator, reuse the agents you already have, and add or swap workers without redesigning the orchestration layer.
+- start with the included reference workers
+- reuse existing Custom Agents
+- replace workers without redesigning the orchestration logic
+- add specialized workers by updating the allowed agent list when needed
 
-## Model requirements
-
-DANDORI works best with a capable reasoning model, especially for the Orchestrator.
-
-The Orchestrator is responsible for planning, scope control, delegation, review, and synthesis. A weaker model may still handle simple tasks, but it is more likely to skip clarification, create vague Task Cards, over-delegate, or miss out-of-scope worker results.
-
-Use the strongest model for the Orchestrator, not necessarily for every worker. Worker agents can often use smaller, faster, or more specialized models depending on the task.
+DANDORI does not require workers to contain DANDORI-specific implementation details.
 
 ## How it works
 
 ```text
 User request
    ↓
-Orchestrator
+Compact Task Flow Review
+   ↓ exact approval
+Approved Contract revision
    ↓
-Task Flow Review
+Flow Ledger: criteria, authorized targets, limits, material evidence
    ↓
-Bounded Task Cards
+Minimal Task Card for one permission boundary
    ↓
-Specialized Workers
+Selected Worker
    ↓
-Orchestrator Review
+Result normalization and contract audit
    ↓
-Final response
+Separate-context verification when required
+   ↓
+Complete / next Task Card / differential approval / partial stop
 ```
 
 The Orchestrator owns the control plane. Workers own narrow execution.
+
+## Approval example
+
+The Orchestrator presents a short review such as:
+
+```markdown
+## Task Flow Review: TFR-ab12
+
+**Goal**
+Fix the specified defect.
+
+**Deliverables**
+An explanation of the cause, the required changes, and the verification results that can be obtained.
+
+**Work boundaries**
+- Observe: the target repository
+- Affect: explicit targets and evidence-backed atomic existing targets
+- Automatic additions: up to five local change targets
+
+**Allowed effects**
+- observe
+- change_local
+
+**Verification**
+- Persistent changes are checked in a separate context.
+
+**Reapproval**
+Only if the goal, deliverables, boundaries, allowed effects, automatic-addition cap, or verification level must widen or weaken.
+```
+
+Approval is exact-token based and language-neutral:
+
+```text
+APPROVE:TFR-ab12
+```
+
+Extra conditions, corrections, or additional instructions are treated as a change request, not approval.
+
+If the contract must widen later, the Orchestrator displays only the difference:
+
+```markdown
+## Task Flow Change: TFC-cd34
+
+**Reason**
+The work requires more targets than the current automatic-addition cap permits.
+
+**Requested change**
+Automatic-addition cap: 5 → 7
+
+**Unchanged**
+Goal, deliverables, allowed effects, and verification level
+```
+
+The differential change uses the same language-neutral approval format:
+
+```text
+APPROVE:TFC-cd34
+```
+
+## Language handling
+
+DANDORI uses the user's **interaction language**, not an inferred native language. The Orchestrator chooses it in this order:
+
+1. An explicitly requested language
+2. The primary language of the current substantive request
+3. The established conversation language
+4. English when the language is mixed, ambiguous, or uncertain
+
+User-facing TFR/TFC labels, questions, stop reports, verification labels, and final summaries are localized. Code, paths, identifiers, schema keys, effect tags, evidence states, status values, and approval tokens remain unchanged. A display-language change does not alter the Approved Contract, create a new revision, or require reapproval.
+
+Task Card control fields remain in English. Free-text task instructions normally use the interaction language unless the selected Worker explicitly requires another language. Worker results are translated or summarized for the user without translating code, paths, identifiers, literals, or quoted evidence.
+
+## Effect model
+
+DANDORI uses cumulative effect tags:
+
+| Effect | Meaning |
+| --- | --- |
+| `observe` | Read, search, inspect, analyze, or fetch information |
+| `change_local` | Create or modify local artifacts |
+| `execute` | Run commands, tests, scripts, or automation |
+| `affect_external` | Mutate remote state through UI, API, messaging, save, or post actions |
+| `destructive` | Delete, discard, irreversibly overwrite, or perform similar destructive actions |
+
+Effects are cumulative, not exclusive. For example, a command that can modify files requires both `execute` and `change_local`. Allowing a tool or action never implicitly authorizes its secondary effects.
+
+## Target authorization
+
+Observation boundaries and effect targets are separate.
+
+A repository, directory, domain, query, or wildcard may define where observation is allowed, but it is not one automatically authorized effect target. Effects may be applied only to **atomic targets**: the smallest individually addressable target with a stable identifier, such as a file, document, record, issue, pull request, comment, API resource, or specific configuration item.
+
+Discovered targets move through bounded states:
+
+```text
+explicit → authorized
+candidate → authorized or rejected
+```
+
+A candidate can be authorized without reapproval only when its exact identity, approved-boundary containment, deliverable traceability, concrete evidence source, required effects, risk state, and cumulative cap can all be established. A candidate never becomes a new discovery anchor and cannot be affected in the invocation that discovered it.
+
+## Verification and limits
+
+Persistent local changes, external effects, and destructive effects require a separate observation-only verification invocation when possible. This is **separate-context verification**, not guaranteed independent third-party review.
+
+If verification is unavailable, DANDORI reports the result as unverified rather than entering an approval loop or claiming completion without qualification.
+
+DANDORI limits repeated work by requiring each invocation to produce a concrete delta: a new material fact, artifact, authorized target, criterion transition, verification result, conflict resolution, or more specific blocker.
 
 ## What's included
 
@@ -123,28 +235,27 @@ The Orchestrator owns the control plane. Workers own narrow execution.
   skills/
     code-review/
       SKILL.md
-      references/
-        correctness.md
-        maintainability.md
-        testability.md
-        security.md
-        performance.md
 assets/
-  dandori-logo.svg
   dandori-logo.png
 ```
 
 | Component | Role |
 | --- | --- |
-| `Orchestrator` | Core control-plane agent. Plans, requests approval, creates Task Cards, delegates work, audits responses, and synthesizes the final answer. |
-| Reference workers | Minimal workers for research, PR inspection, writing, review, and browser QA. |
-| `code-review` skill | Focused review guidance used by the reviewer worker. |
+| `Orchestrator` | Control-plane agent for intake, compact approval, contract management, Task Card creation, worker selection, audit, loop control, and synthesis |
+| Reference workers | Optional workers for investigation, pull-request inspection, implementation, review, and browser-based verification |
+| `code-review` skill | Focused review guidance used by the reference review worker |
 
-The reference workers are optional starting points. You can replace them with your own agents as long as they follow bounded delegation from the Orchestrator.
+## Model requirements
+
+DANDORI works best with a capable reasoning model for the Orchestrator.
+
+The Orchestrator must distinguish execution-method ambiguity from authorization ambiguity, normalize contracts without widening them, create minimal Task Cards, audit worker results, resolve conflicts, and stop when containment cannot be established.
+
+Worker models can be smaller, faster, or specialized depending on the delegated task.
 
 ## Installation
 
-Copy the agents and skills into the discovery paths supported by your GitHub Copilot environment.
+Copy the agents and skills into discovery paths supported by your GitHub Copilot environment.
 
 Example user-level installation:
 
@@ -154,51 +265,55 @@ cp .copilot/agents/*.agent.md ~/.copilot/agents/
 cp -R .copilot/skills/* ~/.copilot/skills/
 ```
 
-Example workspace-level installation:
+Example repository-level installation for an environment that discovers `.copilot`:
 
 ```bash
 cp -R .copilot /path/to/your/repository/
 ```
 
-Avoid keeping multiple active copies of the same agent definition in different locations. Duplicate definitions can make the Orchestrator audit one definition while Copilot invokes another.
+Avoid keeping multiple active copies of the same agent definition in different locations. Duplicate definitions can cause the Orchestrator to inspect one definition while Copilot invokes another.
 
 ## Usage
 
 1. Open Copilot Chat.
 2. Select the `Orchestrator` agent.
 3. Give it a task.
-4. Review the proposed Task Flow Review.
-5. Approve only when the proposed flow, boundaries, and stop conditions are correct.
-
-When approval is required, the Orchestrator asks for an exact approval line:
-
-```text
-承認:TFR-xxxx
-```
-
-Approval applies only to the displayed Task Flow Review. If you add conditions, corrections, or extra instructions, the message is treated as a change request, not approval.
+4. Review the compact Task Flow Review.
+5. Reply with only the exact approval token when the goal, deliverables, boundaries, effects, target-expansion limit, and verification level are correct.
+6. Review only differential changes if the approved contract later needs to widen.
 
 ## Design principles
 
-- **Plan before execution**: the Orchestrator defines the work before workers act.
-- **Task Cards over vague delegation**: workers receive explicit execution contracts.
-- **Approved scope only**: workers operate within the approved work scope.
-- **One bounded task at a time**: delegation stays narrow and auditable.
-- **Review before continuing**: the Orchestrator checks worker output before moving forward.
-- **Loose coupling**: the Orchestrator depends on delegation contracts, not worker internals.
-- **Small replaceable workers**: workers are reference implementations, not the core value.
+- **Human approval is a contract, not an execution trace.**
+- **Internal plans may adapt; approved permissions may not.**
+- **Task Cards are split by permission boundary, not automatically by process step.**
+- **Discovery does not authorize effects.**
+- **Missing permission is denied.**
+- **Worker output cannot authorize the next action.**
+- **Worker selection affects quality, not scope.**
+- **Only material claims receive evidence-state tracking.**
+- **Verification is narrow and effect-driven.**
+- **Reapproval is differential and risk-based.**
+- **No progress means no repeated delegation.**
+
+## Security boundary
+
+DANDORI narrows delegated work and improves detection and stopping behavior, but it is not an operating-system sandbox. Tool restrictions, Workspace Trust, approval settings, diff review, and other platform controls remain important.
+
+DANDORI does not claim that worker deviation is impossible. It narrows contracts, separates discovery from effects, audits reported actions, and stops when containment cannot be established.
 
 ## Non-goals
 
 DANDORI is not:
 
 - a general-purpose autonomous coding agent
-- a replacement for GitHub Copilot
-- a replacement for human review
-- a workflow engine with durable state
+- a replacement for GitHub Copilot or human review
+- an operating-system security sandbox
+- a durable workflow engine
 - a CI/CD runner
 - an agent marketplace
-- a prompt collection for making one agent do everything
+- a worker capability-manifest standard
+- a framework that requires workers to contain DANDORI-specific internals
 - a framework that encourages workers to self-delegate or expand scope
 - an official GitHub or Microsoft product
 
