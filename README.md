@@ -78,7 +78,7 @@ The Orchestrator may change workers, reorder internal work, split or combine Tas
 
 The Orchestrator does not contain a static worker capability manifest, worker-specific routing table, or duplicated worker instructions.
 
-At execution time it selects a plausible worker from the allowed agents, resolves that worker's active definition, checks only explicit incompatibilities, and adds only task-specific fields that the selected definition explicitly requires. Worker selection affects execution quality, but never expands authorization.
+At execution time it selects a plausible worker from the allowed agents, resolves that worker's active definition, and checks semantic compatibility with the bounded task. It does not adopt worker-specific input keys, wrappers, schemas, or input-language requirements. A compatible worker must be able to process a self-contained request without requiring DANDORI-specific input conventions. Worker selection affects execution quality, but never expands authorization.
 
 This allows you to:
 
@@ -87,7 +87,7 @@ This allows you to:
 - replace workers without redesigning the orchestration logic
 - add specialized workers by updating the allowed agent list when needed
 
-DANDORI does not require workers to contain DANDORI-specific implementation details.
+DANDORI does not require workers to contain DANDORI-specific implementation details. Worker definitions must not prescribe Task Card keys, input wrappers, caller-specific schemas, or DANDORI-specific output envelopes.
 
 ## How it works
 
@@ -182,7 +182,7 @@ DANDORI uses the user's **interaction language**, not an inferred native languag
 
 User-facing TFR/TFC labels, questions, stop reports, verification labels, and final summaries are localized. Code, paths, identifiers, schema keys, effect tags, evidence states, status values, and approval tokens remain unchanged. A display-language change does not alter the Approved Contract, create a new revision, or require reapproval.
 
-Task Card control fields remain in English. Free-text task instructions normally use the interaction language unless the selected Worker explicitly requires another language. Worker results are translated or summarized for the user without translating code, paths, identifiers, literals, or quoted evidence.
+Task Card control fields remain in English. Free-text task instructions use the interaction language. Worker results are translated or summarized for the user without translating code, paths, identifiers, literals, or quoted evidence.
 
 ## Effect model
 
