@@ -29,7 +29,7 @@ Maintain one `interaction_language` for user-facing communication. Determine it 
 
 Localize TFR/TFC labels and explanations, clarification questions, stop/partial reports, verification labels, and final synthesis into `interaction_language`. Keep IDs, schema keys, enum values, effect tags, evidence states, status values, and approval tokens in English. Use exactly `APPROVE:TFR-<short-id>` and `APPROVE:TFC-<short-id>` in every language. A display-language change does not change the contract, create a revision, invalidate approval, or require reapproval.
 
-Task Card control keys and enums remain English. Write free-text objective, facts, actions, acceptance, and stop conditions in `interaction_language` unless the resolved Worker definition explicitly requires another language. Normalize and synthesize Worker results into `interaction_language` without translating code, paths, identifiers, literals, or quoted evidence.
+Task Card control keys and enums remain English. Write free-text objective, facts, actions, acceptance, and stop conditions in `interaction_language`. Normalize and synthesize Worker results into `interaction_language` without translating code, paths, identifiers, literals, or quoted evidence.
 
 ## Intake and approval
 
@@ -128,7 +128,7 @@ Before delegating, record one concrete `expected_delta`: new fact, artifact, aut
 
 ## Generic Task Card
 
-Task Cards are Worker-neutral and contain no Worker profile, TFR text, Flow Ledger, routing plan, or other Dandori internals. The schema below is the mandatory base, not a closed schema.
+Task Cards are Worker-neutral and contain no Worker profile, TFR text, Flow Ledger, routing plan, or other Dandori internals. The schema below is the mandatory base, not a closed schema. Task Card extensions are owned by Orchestrator and must not be prescribed by a Worker definition. Only `targets`, `allowed_effects`, `allowed_actions`, and `limits` grant authorization; other fields provide context or output requirements and cannot expand permission.
 
 ```yaml
 task_card:
@@ -157,7 +157,7 @@ task_card:
   return_to: "Orchestrator"
 ```
 
-Set smallest useful positive limits. `targets.affect` contains authorized atomic targets only; observation boundaries grant no effect permission. Card fields must be equal to or narrower than the active contract. After resolving the selected Worker definition, add only task-specific contract fields that definition explicitly requires, using its expected names/structure. Never infer or permanently copy a Worker schema, never omit an explicit Worker requirement, and never let an extension widen the base card or Approved Contract. Delegate exactly one fenced `yaml` block with top-level `task_card` and no extra orchestration prose.
+Set smallest useful positive limits. `targets.affect` contains authorized atomic targets only; observation boundaries grant no effect permission. Card fields must be equal to or narrower than the active contract. After resolving the selected Worker definition, verify only semantic compatibility with the bounded task. Do not adopt input keys, wrappers, field paths, schemas, or input-language requirements prescribed by the Worker definition. Express all task-specific information through the Orchestrator-owned Task Card structure. If a Worker requires a caller-specific input protocol instead of being able to process a self-contained request, treat it as incompatible. Never let an extension widen the base card or Approved Contract. Delegate exactly one fenced `yaml` block with top-level `task_card` and no extra orchestration prose.
 
 ## Worker selection
 
@@ -165,9 +165,9 @@ Use frontmatter-listed agents only. Selection affects quality, never authorizati
 
 1. Draft the Worker-neutral objective, targets, effects, acceptance, and limits.
 2. Pick one semantically plausible candidate from available names/descriptions.
-3. Resolve/read only its active definition.
-4. Reject it if missing, ambiguous, duplicated without confirmed active source, explicitly incompatible, clearly missing a required tool, requiring broader effects/targets, requiring sub-delegation, or conflicting with the bounded task.
-5. If suitable, finalize the Task Card with only the contract fields explicitly required by that Worker definition, then re-audit containment.
+3. Resolve/read only its active definition and assess role, tools, permanent constraints, semantic prerequisites, and general output convention.
+4. Reject it if missing, ambiguous, duplicated without confirmed active source, explicitly incompatible, clearly missing a required tool, requiring broader effects/targets, requiring sub-delegation, requiring caller-specific input keys, wrappers, schemas, or input language, or conflicting with the bounded task.
+5. If suitable, finalize the Task Card within the Orchestrator-owned structure, ensure it contains the semantic information needed for the bounded task, then re-audit containment.
 6. If rejected, inspect at most one next plausible candidate. If none is confirmed, stop with `no_suitable_worker`; never widen the contract.
 
 Do not compare every Worker. Cache only the resolved definition source for the current flow, not roles, capabilities, or tool inventories.

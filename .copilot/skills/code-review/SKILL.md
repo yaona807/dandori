@@ -1,6 +1,6 @@
 ---
 name: code-review
-description: "Review code changes using selected perspectives: correctness, maintainability, testability, security, and performance. Used by Reviewer only; returns findings to Orchestrator for final routing."
+description: "Review code changes using selected perspectives: correctness, maintainability, testability, security, and performance. Used by Reviewer only."
 user-invocable: false
 ---
 
@@ -11,13 +11,13 @@ Do not create separate skills for each perspective. Select the necessary perspec
 
 - Do not modify files.
 - Do not call another agent.
-- Do not choose final routing.
+- Do not decide who should perform follow-up work.
 - Make findings concrete and actionable.
 - Prioritize requirement alignment, correctness, maintainability, and testability by default.
 - Load additional perspectives only when relevant.
 - Perspective names such as `correctness`, `maintainability`, `testability`, `security`, and `performance` are internal labels.
 - Ignore style-only issues unless they materially affect correctness, consistency, or maintainability.
-- Return findings at a granularity that Orchestrator and Writer can act on directly.
+- Return concrete findings at a granularity that the caller can act on directly.
 
 ## Language policy
 
@@ -54,11 +54,11 @@ Use [performance](./references/performance.md) when the change touches:
 - network calls
 - rendering performance
 
-## Output contract priority
+## Output
 
-When Reviewer is invoked through an Orchestrator Task Card, the Task Card `response` field is authoritative and overrides every example in this Skill. Return exactly the format requested by the Task Card, normally one fenced `yaml` block with top-level `worker_response`. Do not return Markdown frontmatter when a Task Card response field is present.
+Follow the output format explicitly requested in the current task.
 
-Use the review sections below only as content guidance to populate `worker_response.result`, `changes`, `risks`, `unknowns`, or optional Task Card-requested sections:
+Otherwise, return a compact review containing:
 
 - `review_scope`
 - `perspectives_used`
@@ -67,6 +67,6 @@ Use the review sections below only as content guidance to populate `worker_respo
 - `non_blocking_suggestions`
 - `missing_tests`
 - `questions`
-- `suggested_next_capability`
+- `unresolved_requirements`
 
-If no Task Card response field is provided, still prefer the shared `worker_response` YAML shape used by Orchestrator.
+Use `unresolved_requirements` to report missing context or verification capabilities. Do not name or select who should perform follow-up work.
