@@ -253,6 +253,9 @@ DANDORI は、次の累積効果タグを使用します。
     validate.yml
 scripts/
   validate_definitions.py
+tests/
+  test_validate_definitions.py
+  conformance.md
 assets/
   dandori-logo.png
 ```
@@ -262,7 +265,6 @@ assets/
 | `Orchestrator` | 要求整理、短い承認、契約管理、Task Card作成、Worker選択、監査、ループ制御、最終統合を担当するcontrol-plane agent |
 | Reference workers | 調査、Pull Request確認、実装、レビュー、ブラウザ確認用の任意Worker |
 | `code-review` skill | Reference Reviewerが使用するfocused review guidance |
-
 
 ## 互換性と前提条件
 
@@ -338,7 +340,7 @@ python -m pip install PyYAML==6.0.3
 python scripts/validate_definitions.py
 ```
 
-GitHub Actionsでも、Pull Requestと`master`へのpush時に同じ検証を実行します。frontmatter、Agent allowlist、Workerの呼び出し制約、Skill構成とリンク、DANDORI固有依存の再流入、READMEの固定inventoryを検査します。翻訳内容の意味的一致やLLMの挙動は判定しません。
+GitHub Actionsでは、Pull Requestと`master`へのpush時に決定論的な定義検証とValidatorのMutation Testを実行します。frontmatterとTool policy、runtime／contract schema移行、Workerの呼び出し制約、ローカル／外部allowlist、Skill構成とリンク、Prompt長、Orchestrator中核marker、DANDORI固有依存の再流入、READMEの固定inventoryを検査します。静的ファイルからLLM挙動は推定せず、モデルやVS Code更新時は`tests/conformance.md`を使用します。
 
 ## 設計原則
 

@@ -1,29 +1,19 @@
 ---
 name: code-review
-description: "Review code changes using selected perspectives: correctness, maintainability, testability, security, and performance. Used by Reviewer only."
+description: "Code review perspective guidance for correctness, maintainability, testability, security, and performance."
 user-invocable: false
 ---
 
-This is the single shared review skill for implementation changes.
-Do not create separate skills for each perspective. Select the necessary perspectives and use the corresponding Markdown-linked reference files.
+This is the shared perspective guide for implementation review. Select only the perspectives relevant to the delegated change and load the corresponding Markdown references.
 
-## Core rules
+## Core review principles
 
-- Do not modify files.
-- Do not call another agent.
-- Do not decide who should perform follow-up work.
-- Make findings concrete and actionable.
+- Make findings concrete, evidence-based, and directly actionable.
 - Prioritize requirement alignment, correctness, maintainability, and testability by default.
-- Load additional perspectives only when relevant.
-- Perspective names such as `correctness`, `maintainability`, `testability`, `security`, and `performance` are internal labels.
+- Load additional perspectives only when the changed behavior warrants them.
 - Ignore style-only issues unless they materially affect correctness, consistency, or maintainability.
-- Return concrete findings at a granularity that the caller can act on directly.
-
-## Language policy
-
-- Review handoff output should be compact English.
-- Preserve file paths, code symbols, commands, APIs, identifiers, and exact quoted text.
-- Use severity labels: high / medium / low.
+- Distinguish confirmed defects, credible risks, missing verification, and unresolved context.
+- Avoid duplicating one underlying issue across multiple perspectives.
 
 ## Perspective selection
 
@@ -35,38 +25,30 @@ Default perspectives:
 
 Use [security](./references/security.md) when the change touches:
 
-- authentication
-- authorization
-- admin features
-- personal data
-- file upload/download
+- authentication or authorization
+- administrative capabilities
+- personal or confidential data
+- file upload or download
 - external API calls
-- logging
-- secrets or environment variables
-- payment
+- logging, secrets, or environment variables
+- payment or billing behavior
 
 Use [performance](./references/performance.md) when the change touches:
 
 - large-data loops
 - database queries
-- batch jobs
+- batch processing
 - caching
 - network calls
 - rendering performance
 
-## Output
+## Finding quality
 
-Follow the output format explicitly requested in the current task.
+A useful finding identifies:
 
-Otherwise, return a compact review containing:
+- the concrete location or behavior
+- the violated requirement, invariant, or plausible failure mode
+- why the issue matters
+- the smallest defensible correction or verification needed
 
-- `review_scope`
-- `perspectives_used`
-- `verdict`: approve | request_changes | comment_only
-- `blocking_issues`
-- `non_blocking_suggestions`
-- `missing_tests`
-- `questions`
-- `unresolved_requirements`
-
-Use `unresolved_requirements` to report missing context or verification capabilities. Do not name or select who should perform follow-up work.
+Use severity labels `high`, `medium`, and `low` only when the requested output format needs severity. Treat missing context or unavailable verification as unresolved rather than inventing certainty.

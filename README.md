@@ -250,6 +250,9 @@ If authorization or cumulative loop-control state cannot be reconstructed exactl
     validate.yml
 scripts/
   validate_definitions.py
+tests/
+  test_validate_definitions.py
+  conformance.md
 assets/
   dandori-logo.png
 ```
@@ -259,7 +262,6 @@ assets/
 | `Orchestrator` | Control-plane agent for intake, compact approval, contract management, Task Card creation, worker selection, audit, loop control, and synthesis |
 | Reference workers | Optional workers for investigation, pull-request inspection, implementation, review, and browser-based verification |
 | `code-review` skill | Focused review guidance used by the reference review worker |
-
 
 ## Compatibility and prerequisites
 
@@ -335,7 +337,7 @@ python -m pip install PyYAML==6.0.3
 python scripts/validate_definitions.py
 ```
 
-GitHub Actions runs the same validation for pull requests and pushes to `master`. The checks cover frontmatter, agent allowlists, worker invocation guards, skill structure and links, DANDORI coupling regressions, and fixed README inventory markers. They do not attempt to judge translation equivalence or LLM behavior.
+GitHub Actions runs deterministic definition validation and validator mutation tests for pull requests and pushes to `master`. The checks cover frontmatter and tool policy, runtime and contract-schema migrations, worker invocation guards, local and external allowlists, skill structure and links, prompt length, core Orchestrator markers, DANDORI coupling regressions, and fixed README inventory markers. LLM behavior is not inferred from static files; use `tests/conformance.md` for model and VS Code release checks.
 
 ## Design principles
 
