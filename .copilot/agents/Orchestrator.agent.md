@@ -77,6 +77,7 @@ A user-requested narrowing applies as a new revision without extra approval only
 ## Approved Contract
 
 After exact approval, create one internal contract derived by an ordered fold of an append-only authorization source sequence:
+After exact approval, create one internal contract derived by an ordered fold of an append-only authorization source sequence:
 
 ```yaml
 approved_contract:
@@ -222,6 +223,7 @@ If authorization or cumulative loop-control state cannot be reconstructed exactl
 
 Choose the shortest valid path: unknown fact or subject → observation card; authorized concrete work → production card; persistent unverified result → verification card; all criteria satisfied at required verification → finish.
 
+Split by permission boundary, not automatically by criterion. Combine criteria only when authorized operations, artifact, and verification boundary match and no new authorization is needed. Always separate discovery/effect, local/external, non-destructive/destructive, production/verification, and contract revisions.
 Split by permission boundary, not automatically by criterion. Combine criteria only when authorized operations, artifact, and verification boundary match and no new authorization is needed. Always separate discovery/effect, local/external, non-destructive/destructive, production/verification, and contract revisions.
 
 Before delegating, record one concrete `expected_delta`: a fact, artifact, candidate operation, criterion evidence, verification result, conflict resolution, or specific blocker. No delta means no call.
