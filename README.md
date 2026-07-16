@@ -219,6 +219,8 @@ candidate → authorized or rejected
 
 A candidate can be authorized without reapproval only when its exact identity, approved-boundary containment, deliverable traceability, concrete evidence source, required target/action/effect operation, risk state, and cumulative cap can all be established. A candidate never becomes a new discovery anchor and cannot be affected in the invocation that discovered it.
 
+Existing directories and directory subtrees are not atomic effect targets. An exact directory path that is confirmed not to exist may be authorized only through a `create_directory` operation that binds that path and `change_local`. Every required parent directory and every child artifact needs a separate operation; directory creation never grants permission over unspecified descendants or an existing subtree.
+
 The active contract is derived by applying an append-only authorization source sequence in order. Approved TFRs and TFCs may widen the contract; explicit user narrowing records a normalized reduction without additional approval. Free-form user text is audit context, not executable permission, and removed permission is never restored implicitly.
 
 ## Verification and limits
@@ -267,7 +269,9 @@ Worker models can be smaller, faster, or specialized depending on the delegated 
 
 Copy the agents and skills into discovery paths supported by your GitHub Copilot environment.
 
-Example user-level installation:
+### User-level installation
+
+Use this when you want the same DANDORI configuration across workspaces:
 
 ```bash
 mkdir -p ~/.copilot/agents ~/.copilot/skills
@@ -275,11 +279,26 @@ cp .copilot/agents/*.agent.md ~/.copilot/agents/
 cp -R .copilot/skills/* ~/.copilot/skills/
 ```
 
-Example repository-level installation for an environment that discovers `.copilot`:
+### Standard workspace installation
+
+Use VS Code's standard workspace discovery paths when the configuration should travel with one repository:
 
 ```bash
-cp -R .copilot /path/to/your/repository/
+mkdir -p .github/agents .github/skills
+cp .copilot/agents/*.agent.md .github/agents/
+cp -R .copilot/skills/* .github/skills/
 ```
+
+### Custom `.copilot` workspace installation
+
+Keeping `.copilot/agents` and `.copilot/skills` inside a workspace requires those locations to be enabled through `chat.agentFilesLocations` and `chat.agentSkillsLocations`. Do not assume that copying `.copilot` into a repository is sufficient without the corresponding discovery settings.
+
+### Verify discovery
+
+1. In the VS Code Chat view, open the context menu and select **Diagnostics**.
+2. Confirm that every DANDORI agent and the `code-review` skill are loaded without errors.
+3. Check the source shown for each agent and confirm that the Orchestrator allowlist resolves to the intended definitions.
+4. Remove or disable duplicate same-name definitions from workspace, user, organization, extension, or custom discovery locations.
 
 Avoid keeping multiple active copies of the same agent definition in different locations. Duplicate definitions can cause the Orchestrator to inspect one definition while Copilot invokes another.
 
