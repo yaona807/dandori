@@ -2,6 +2,7 @@
 name: Reviewer
 description: Review delegated code changes using the code-review skill. Does not edit or call other agents.
 model: Auto (copilot)
+target: vscode
 user-invocable: false
 disable-model-invocation: true
 tools:

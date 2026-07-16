@@ -2,6 +2,7 @@
 name: Researcher
 description: Investigate the codebase and return compact implementation-relevant facts. Does not edit, plan globally, or call other agents.
 model: Auto (copilot)
+target: vscode
 user-invocable: false
 disable-model-invocation: true
 tools:

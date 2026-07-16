@@ -2,6 +2,7 @@
 name: BrowserQA
 description: Verify UI behavior, visual consistency, and interaction flows using VS Code integrated browser tools. Does not edit or call other agents.
 model: Auto (copilot)
+target: vscode
 user-invocable: false
 disable-model-invocation: true
 tools:
