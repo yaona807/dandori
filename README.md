@@ -16,7 +16,7 @@
   <a href="./README_ja.md">日本語</a>
 </p>
 
-DANDORI is an Orchestrator layer for GitHub Copilot Custom Agents.
+DANDORI is an Orchestrator layer for GitHub Copilot Custom Agents in VS Code.
 
 It converts a user-approved work contract into minimal, bounded Task Cards. The Orchestrator can adapt the internal execution plan without repeatedly asking for approval, while every worker invocation remains constrained by the approved goal, completion criteria, operation permissions, target-expansion limit, exclusions, and verification requirements.
 
@@ -53,9 +53,6 @@ DANDORI is built around one containment rule:
 worker execution operation ⊆ exact Task Card operation ⊆ exact contract permission or authorized instantiation of a contract rule
 
 active approved contract = ordered fold(authorization source sequence)
-worker execution operation ⊆ exact Task Card operation ⊆ exact contract permission or authorized instantiation of a contract rule
-
-active approved contract = ordered fold(authorization source sequence)
 ```
 
 A **Task Flow Review (TFR)** is a short human decision surface. It is not a detailed execution plan.
@@ -73,7 +70,6 @@ The Orchestrator may change workers, reorder internal work, split or combine Tas
 - **Discovery/effect separation**: a target discovered by a worker cannot be affected in the same invocation.
 - **Atomic effect targets**: automatic authorization applies only to individually addressable targets, not directories, wildcard sets, or “related files.”
 - **Operation-level authorization**: each permission binds an observation boundary or exact effect target/rule, one action, and every effect the action may produce; separate lists never create Cartesian-product permission.
-- **Operation-level authorization**: each permission binds an observation boundary or exact effect target/rule, one action, and every effect the action may produce; separate lists never create Cartesian-product permission.
 - **Worker-neutral orchestration**: worker definitions remain the source of truth for worker behavior and output conventions.
 - **Contract audit**: worker-reported operations, limits, evidence, expected progress, and revision are checked before criterion progress is accepted.
 - **Separate-context verification**: persistent changes are verified through a separate observation-only invocation when possible.
@@ -84,7 +80,7 @@ The Orchestrator may change workers, reorder internal work, split or combine Tas
 
 The Orchestrator does not contain a static worker capability manifest, worker-specific routing table, or duplicated worker instructions.
 
-At execution time it selects a plausible worker from the allowed agents, resolves that worker's active definition, and checks semantic compatibility with the bounded task. It does not adopt worker-specific input keys, wrappers, schemas, or input-language requirements. A compatible worker must be able to process a self-contained request without requiring DANDORI-specific input conventions. Worker selection affects execution quality, but never expands authorization.
+At execution time it selects a plausible worker from the runtime-visible allowed agent names and descriptions, then sends one self-contained bounded Task Card. It does not read or depend on a Worker definition file and does not adopt worker-specific input keys, wrappers, schemas, or input-language requirements. A Worker that reports a role, tool, or input mismatch is treated as blocked; the Orchestrator may try at most one other candidate without expanding authorization.
 
 This allows you to:
 
@@ -102,8 +98,6 @@ User request
    ↓
 Compact Task Flow Review
    ↓ exact approval
-Authorization source sequence
-   ↓ ordered fold
 Authorization source sequence
    ↓ ordered fold
 Approved Contract revision
@@ -247,15 +241,10 @@ If authorization or cumulative loop-control state cannot be reconstructed exactl
     PullRequestResearcher.agent.md
     Writer.agent.md
     Reviewer.agent.md
-    BrowserQa.agent.md
+    BrowserQA.agent.md
   skills/
     code-review/
       SKILL.md
-.github/
-  workflows/
-    validate.yml
-scripts/
-  validate_definitions.py
 .github/
   workflows/
     validate.yml
@@ -271,6 +260,17 @@ assets/
 | Reference workers | Optional workers for investigation, pull-request inspection, implementation, review, and browser-based verification |
 | `code-review` skill | Focused review guidance used by the reference review worker |
 
+
+## Compatibility and prerequisites
+
+- DANDORI agents explicitly target VS Code.
+- Subagent restriction uses the `agents` allowlist, which is currently an experimental VS Code feature.
+- `PullRequestResearcher` requires the GitHub Pull Requests extension and its exposed tools.
+- `BrowserQA` requires the configured browser tool set.
+- Unavailable or unrecognized tool names can be ignored by the runtime; verify actual tool availability before use.
+- External workers must accept a self-contained request, avoid sub-delegation, use no broader tools than necessary, and describe their role and effect boundary accurately.
+- Confirm the loaded source for every agent and skill with VS Code Chat Diagnostics.
+
 ## Model requirements
 
 DANDORI works best with a capable reasoning model for the Orchestrator.
@@ -281,11 +281,8 @@ Worker models can be smaller, faster, or specialized depending on the delegated 
 
 ## Installation
 
-Copy the agents and skills into discovery paths supported by your GitHub Copilot environment.
+DANDORI targets GitHub Copilot Custom Agents in VS Code. Copy the agents and skills into discovery paths supported by that environment.
 
-### User-level installation
-
-Use this when you want the same DANDORI configuration across workspaces:
 ### User-level installation
 
 Use this when you want the same DANDORI configuration across workspaces:
@@ -299,9 +296,6 @@ cp -R .copilot/skills/* ~/.copilot/skills/
 ### Standard workspace installation
 
 Use VS Code's standard workspace discovery paths when the configuration should travel with one repository:
-### Standard workspace installation
-
-Use VS Code's standard workspace discovery paths when the configuration should travel with one repository:
 
 ```bash
 mkdir -p .github/agents .github/skills
@@ -318,24 +312,10 @@ Keeping `.copilot/agents` and `.copilot/skills` inside a workspace requires thos
 1. In the VS Code Chat view, open the context menu and select **Diagnostics**.
 2. Confirm that every DANDORI agent and the `code-review` skill are loaded without errors.
 3. Check the source shown for each agent and confirm that the Orchestrator allowlist resolves to the intended definitions.
-4. Remove or disable duplicate same-name definitions from workspace, user, organization, extension, or custom discovery locations.
-mkdir -p .github/agents .github/skills
-cp .copilot/agents/*.agent.md .github/agents/
-cp -R .copilot/skills/* .github/skills/
-```
+4. Confirm that each external Worker satisfies the compatibility checklist above.
+5. Remove or disable duplicate same-name definitions from workspace, user, organization, extension, or custom discovery locations.
 
-### Custom `.copilot` workspace installation
-
-Keeping `.copilot/agents` and `.copilot/skills` inside a workspace requires those locations to be enabled through `chat.agentFilesLocations` and `chat.agentSkillsLocations`. Do not assume that copying `.copilot` into a repository is sufficient without the corresponding discovery settings.
-
-### Verify discovery
-
-1. In the VS Code Chat view, open the context menu and select **Diagnostics**.
-2. Confirm that every DANDORI agent and the `code-review` skill are loaded without errors.
-3. Check the source shown for each agent and confirm that the Orchestrator allowlist resolves to the intended definitions.
-4. Remove or disable duplicate same-name definitions from workspace, user, organization, extension, or custom discovery locations.
-
-Avoid keeping multiple active copies of the same agent definition in different locations. Duplicate definitions can cause the Orchestrator to inspect one definition while Copilot invokes another.
+Avoid keeping multiple active copies of the same agent definition in different locations. Duplicate definitions can cause Copilot to invoke a different definition than the one the user intended.
 
 ## Usage
 
@@ -357,23 +337,10 @@ python scripts/validate_definitions.py
 
 GitHub Actions runs the same validation for pull requests and pushes to `master`. The checks cover frontmatter, agent allowlists, worker invocation guards, skill structure and links, DANDORI coupling regressions, and fixed README inventory markers. They do not attempt to judge translation equivalence or LLM behavior.
 
-## Definition validation
-
-Run the deterministic validator before opening a pull request:
-
-```bash
-python -m pip install PyYAML==6.0.3
-python scripts/validate_definitions.py
-```
-
-GitHub Actions runs the same validation for pull requests and pushes to `master`. The checks cover frontmatter, agent allowlists, worker invocation guards, skill structure and links, DANDORI coupling regressions, and fixed README inventory markers. They do not attempt to judge translation equivalence or LLM behavior.
-
 ## Design principles
 
 - **Human approval is a contract, not an execution trace.**
 - **Internal plans may adapt; approved permissions may not.**
-- **Target, action, and effect are authorized together as one operation.**
-- **The active contract is derived from an ordered, append-only authorization source sequence.**
 - **Target, action, and effect are authorized together as one operation.**
 - **The active contract is derived from an ordered, append-only authorization source sequence.**
 - **Task Cards are split by permission boundary, not automatically by process step.**
