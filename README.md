@@ -53,9 +53,6 @@ DANDORI is built around one containment rule:
 worker execution operation ⊆ exact Task Card operation ⊆ exact contract permission or authorized instantiation of a contract rule
 
 active approved contract = ordered fold(authorization source sequence)
-worker execution operation ⊆ exact Task Card operation ⊆ exact contract permission or authorized instantiation of a contract rule
-
-active approved contract = ordered fold(authorization source sequence)
 ```
 
 A **Task Flow Review (TFR)** is a short human decision surface. It is not a detailed execution plan.
@@ -72,7 +69,6 @@ The Orchestrator may change workers, reorder internal work, split or combine Tas
 - **Permission-boundary Task Cards**: work is grouped by authorization boundary rather than mechanically split into many tiny steps.
 - **Discovery/effect separation**: a target discovered by a worker cannot be affected in the same invocation.
 - **Atomic effect targets**: automatic authorization applies only to individually addressable targets, not directories, wildcard sets, or “related files.”
-- **Operation-level authorization**: each permission binds an observation boundary or exact effect target/rule, one action, and every effect the action may produce; separate lists never create Cartesian-product permission.
 - **Operation-level authorization**: each permission binds an observation boundary or exact effect target/rule, one action, and every effect the action may produce; separate lists never create Cartesian-product permission.
 - **Worker-neutral orchestration**: worker definitions remain the source of truth for worker behavior and output conventions.
 - **Contract audit**: worker-reported operations, limits, evidence, expected progress, and revision are checked before criterion progress is accepted.
@@ -102,8 +98,6 @@ User request
    ↓
 Compact Task Flow Review
    ↓ exact approval
-Authorization source sequence
-   ↓ ordered fold
 Authorization source sequence
    ↓ ordered fold
 Approved Contract revision
@@ -269,7 +263,6 @@ assets/
 | Reference workers | Optional workers for investigation, pull-request inspection, implementation, review, and browser-based verification |
 | `code-review` skill | Focused review guidance used by the reference review worker |
 
-
 ## Compatibility and prerequisites
 
 - DANDORI agents explicitly target VS Code.
@@ -295,9 +288,6 @@ DANDORI targets GitHub Copilot Custom Agents in VS Code. Copy the agents and ski
 ### User-level installation
 
 Use this when you want the same DANDORI configuration across workspaces:
-### User-level installation
-
-Use this when you want the same DANDORI configuration across workspaces:
 
 ```bash
 mkdir -p ~/.copilot/agents ~/.copilot/skills
@@ -305,9 +295,6 @@ cp .copilot/agents/*.agent.md ~/.copilot/agents/
 cp -R .copilot/skills/* ~/.copilot/skills/
 ```
 
-### Standard workspace installation
-
-Use VS Code's standard workspace discovery paths when the configuration should travel with one repository:
 ### Standard workspace installation
 
 Use VS Code's standard workspace discovery paths when the configuration should travel with one repository:
@@ -356,8 +343,6 @@ GitHub Actions runs deterministic definition validation and validator mutation t
 
 - **Human approval is a contract, not an execution trace.**
 - **Internal plans may adapt; approved permissions may not.**
-- **Target, action, and effect are authorized together as one operation.**
-- **The active contract is derived from an ordered, append-only authorization source sequence.**
 - **Target, action, and effect are authorized together as one operation.**
 - **The active contract is derived from an ordered, append-only authorization source sequence.**
 - **Task Cards are split by permission boundary, not automatically by process step.**
