@@ -53,6 +53,9 @@ DANDORI is built around one containment rule:
 worker execution operation ⊆ exact Task Card operation ⊆ exact contract permission or authorized instantiation of a contract rule
 
 active approved contract = ordered fold(authorization source sequence)
+worker execution operation ⊆ exact Task Card operation ⊆ exact contract permission or authorized instantiation of a contract rule
+
+active approved contract = ordered fold(authorization source sequence)
 ```
 
 A **Task Flow Review (TFR)** is a short human decision surface. It is not a detailed execution plan.
@@ -69,6 +72,7 @@ The Orchestrator may change workers, reorder internal work, split or combine Tas
 - **Permission-boundary Task Cards**: work is grouped by authorization boundary rather than mechanically split into many tiny steps.
 - **Discovery/effect separation**: a target discovered by a worker cannot be affected in the same invocation.
 - **Atomic effect targets**: automatic authorization applies only to individually addressable targets, not directories, wildcard sets, or “related files.”
+- **Operation-level authorization**: each permission binds an observation boundary or exact effect target/rule, one action, and every effect the action may produce; separate lists never create Cartesian-product permission.
 - **Operation-level authorization**: each permission binds an observation boundary or exact effect target/rule, one action, and every effect the action may produce; separate lists never create Cartesian-product permission.
 - **Worker-neutral orchestration**: worker definitions remain the source of truth for worker behavior and output conventions.
 - **Contract audit**: worker-reported operations, limits, evidence, expected progress, and revision are checked before criterion progress is accepted.
@@ -98,6 +102,8 @@ User request
    ↓
 Compact Task Flow Review
    ↓ exact approval
+Authorization source sequence
+   ↓ ordered fold
 Authorization source sequence
    ↓ ordered fold
 Approved Contract revision
@@ -250,6 +256,11 @@ If authorization or cumulative loop-control state cannot be reconstructed exactl
     validate.yml
 scripts/
   validate_definitions.py
+.github/
+  workflows/
+    validate.yml
+scripts/
+  validate_definitions.py
 assets/
   dandori-logo.png
 ```
@@ -286,6 +297,9 @@ DANDORI targets GitHub Copilot Custom Agents in VS Code. Copy the agents and ski
 ### User-level installation
 
 Use this when you want the same DANDORI configuration across workspaces:
+### User-level installation
+
+Use this when you want the same DANDORI configuration across workspaces:
 
 ```bash
 mkdir -p ~/.copilot/agents ~/.copilot/skills
@@ -296,8 +310,26 @@ cp -R .copilot/skills/* ~/.copilot/skills/
 ### Standard workspace installation
 
 Use VS Code's standard workspace discovery paths when the configuration should travel with one repository:
+### Standard workspace installation
+
+Use VS Code's standard workspace discovery paths when the configuration should travel with one repository:
 
 ```bash
+mkdir -p .github/agents .github/skills
+cp .copilot/agents/*.agent.md .github/agents/
+cp -R .copilot/skills/* .github/skills/
+```
+
+### Custom `.copilot` workspace installation
+
+Keeping `.copilot/agents` and `.copilot/skills` inside a workspace requires those locations to be enabled through `chat.agentFilesLocations` and `chat.agentSkillsLocations`. Do not assume that copying `.copilot` into a repository is sufficient without the corresponding discovery settings.
+
+### Verify discovery
+
+1. In the VS Code Chat view, open the context menu and select **Diagnostics**.
+2. Confirm that every DANDORI agent and the `code-review` skill are loaded without errors.
+3. Check the source shown for each agent and confirm that the Orchestrator allowlist resolves to the intended definitions.
+4. Remove or disable duplicate same-name definitions from workspace, user, organization, extension, or custom discovery locations.
 mkdir -p .github/agents .github/skills
 cp .copilot/agents/*.agent.md .github/agents/
 cp -R .copilot/skills/* .github/skills/
@@ -337,10 +369,23 @@ python scripts/validate_definitions.py
 
 GitHub Actions runs the same validation for pull requests and pushes to `master`. The checks cover frontmatter, agent allowlists, worker invocation guards, skill structure and links, DANDORI coupling regressions, and fixed README inventory markers. They do not attempt to judge translation equivalence or LLM behavior.
 
+## Definition validation
+
+Run the deterministic validator before opening a pull request:
+
+```bash
+python -m pip install PyYAML==6.0.3
+python scripts/validate_definitions.py
+```
+
+GitHub Actions runs the same validation for pull requests and pushes to `master`. The checks cover frontmatter, agent allowlists, worker invocation guards, skill structure and links, DANDORI coupling regressions, and fixed README inventory markers. They do not attempt to judge translation equivalence or LLM behavior.
+
 ## Design principles
 
 - **Human approval is a contract, not an execution trace.**
 - **Internal plans may adapt; approved permissions may not.**
+- **Target, action, and effect are authorized together as one operation.**
+- **The active contract is derived from an ordered, append-only authorization source sequence.**
 - **Target, action, and effect are authorized together as one operation.**
 - **The active contract is derived from an ordered, append-only authorization source sequence.**
 - **Task Cards are split by permission boundary, not automatically by process step.**
