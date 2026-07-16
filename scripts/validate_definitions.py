@@ -50,7 +50,7 @@ BUNDLED_WORKER_TOOLS: dict[str, set[str]] = {
     },
 }
 
-ORCHESTRATOR_V2_REQUIRED_MARKERS = (
+ORCHESTRATOR_REQUIRED_MARKERS = (
     "**Authorized operations**",
     "normalized_patch:",
     "completion_criteria:",
@@ -58,8 +58,9 @@ ORCHESTRATOR_V2_REQUIRED_MARKERS = (
     "criterion_refs:",
     "expected_delta:",
     "**Contract patch**",
+    "set_auto_added_targets_max:",
 )
-ORCHESTRATOR_V2_FORBIDDEN_MARKERS = (
+ORCHESTRATOR_FORBIDDEN_MARKERS = (
     "normalized_delta:",
     "allowed_actions:",
     "allowed_effects:",
@@ -67,13 +68,8 @@ ORCHESTRATOR_V2_FORBIDDEN_MARKERS = (
     "resolve/read only its active definition",
     "new fact, artifact, authorized target",
     "kind: \"authorized_target\"",
+    "set_limits:",
 )
-ORCHESTRATOR_V2_ACTIVATION_MARKERS = (
-    "**Authorized operations**",
-    "normalized_patch:",
-    "criterion_refs:",
-)
-
 DANDORI_COUPLING_PATTERNS = {
     "Task Card": re.compile(r"\bTask Card\b"),
     "TFR": re.compile(r"\bTFR\b"),
@@ -279,44 +275,26 @@ def validate_repository(root: Path) -> ValidationResult:
     except DefinitionError:
         orchestrator_tools = []
 
-    runtime_v2 = (
-        any("target" in definition.meta for definition in definitions.values())
-        or orchestrator.meta.get("disable-model-invocation") is not None
-        or orchestrator_tools == ["agent"]
-    )
-    contract_v2 = any(marker in orchestrator.body for marker in ORCHESTRATOR_V2_ACTIVATION_MARKERS)
+    for definition in definitions.values():
+        if definition.meta.get("target") != "vscode":
+            result.errors.append(f"{relative(definition.path, root)}: agent must set target: vscode")
+    if orchestrator.meta.get("user-invocable") is not True:
+        result.errors.append(f"{relative(orchestrator.path, root)}: Orchestrator must set user-invocable: true")
+    if orchestrator.meta.get("disable-model-invocation") is not True:
+        result.errors.append(
+            f"{relative(orchestrator.path, root)}: Orchestrator must set disable-model-invocation: true"
+        )
+    if orchestrator_tools != ["agent"]:
+        result.errors.append(
+            f"{relative(orchestrator.path, root)}: Orchestrator tools must be exactly ['agent']"
+        )
 
-    if runtime_v2:
-        for definition in definitions.values():
-            if definition.meta.get("target") != "vscode":
-                result.errors.append(f"{relative(definition.path, root)}: runtime-v2 agent must set target: vscode")
-        if orchestrator.meta.get("user-invocable") is not True:
-            result.errors.append(f"{relative(orchestrator.path, root)}: Orchestrator must set user-invocable: true")
-        if orchestrator.meta.get("disable-model-invocation") is not True:
-            result.errors.append(
-                f"{relative(orchestrator.path, root)}: Orchestrator must set disable-model-invocation: true"
-            )
-        if orchestrator_tools != ["agent"]:
-            result.errors.append(
-                f"{relative(orchestrator.path, root)}: runtime-v2 Orchestrator tools must be exactly ['agent']"
-            )
-    else:
-        legacy_allowed = {"agent", "read/readFile"}
-        if "agent" not in orchestrator_tools:
-            result.errors.append(f"{relative(orchestrator.path, root)}: Orchestrator must include the agent tool")
-        unexpected = set(orchestrator_tools) - legacy_allowed
-        if unexpected:
-            result.errors.append(
-                f"{relative(orchestrator.path, root)}: Orchestrator contains unauthorized tools: {sorted(unexpected)}"
-            )
-
-    if contract_v2:
-        for marker in ORCHESTRATOR_V2_REQUIRED_MARKERS:
-            if marker not in orchestrator.body:
-                result.errors.append(f"{relative(orchestrator.path, root)}: missing contract-v2 marker {marker!r}")
-        for marker in ORCHESTRATOR_V2_FORBIDDEN_MARKERS:
-            if marker in orchestrator.body:
-                result.errors.append(f"{relative(orchestrator.path, root)}: forbidden legacy marker {marker!r}")
+    for marker in ORCHESTRATOR_REQUIRED_MARKERS:
+        if marker not in orchestrator.body:
+            result.errors.append(f"{relative(orchestrator.path, root)}: missing required Orchestrator marker {marker!r}")
+    for marker in ORCHESTRATOR_FORBIDDEN_MARKERS:
+        if marker in orchestrator.body:
+            result.errors.append(f"{relative(orchestrator.path, root)}: forbidden legacy marker {marker!r}")
 
     allowed_agents = orchestrator.meta.get("agents")
     if not isinstance(allowed_agents, list) or not allowed_agents:
@@ -365,7 +343,7 @@ def validate_repository(root: Path) -> ValidationResult:
                 f"{relative(definition.path, root)}: bundled worker tools changed; "
                 f"expected={sorted(expected_tools)}, actual={sorted(worker_tools)}"
             )
-        if runtime_v2 and name in BUNDLED_WORKER_TOOLS:
+        if name in BUNDLED_WORKER_TOOLS:
             expected_filename = f"{name}.agent.md"
             if definition.path.name != expected_filename:
                 result.errors.append(

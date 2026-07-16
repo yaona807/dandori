@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import importlib.util
-import re
 import shutil
 import sys
 import tempfile
@@ -41,7 +40,7 @@ class ValidatorMutationTests(unittest.TestCase):
             path = repo / ".copilot/agents/Orchestrator.agent.md"
             text = path.read_text().replace("tools:\n", "tools:\n  - edit/editFiles\n", 1)
             path.write_text(text)
-            self.assert_invalid(repo, "Orchestrator")
+            self.assert_invalid(repo, "Orchestrator tools must be exactly")
 
     def test_worker_rejects_agent_tool(self) -> None:
         temp, repo = self.make_repo()
@@ -99,68 +98,51 @@ class ValidatorMutationTests(unittest.TestCase):
             path.write_text(text)
             self.assert_invalid(repo, "bundled workers missing from allowlist")
 
-    def make_runtime_v2(self, repo: Path) -> None:
-        agents_dir = repo / ".copilot/agents"
-        browser_old = agents_dir / "BrowserQa.agent.md"
-        browser_new = agents_dir / "BrowserQA.agent.md"
-        if browser_old.exists():
-            browser_old.rename(browser_new)
-            for readme in (repo / "README.md", repo / "README_ja.md"):
-                readme.write_text(readme.read_text().replace("BrowserQa.agent.md", "BrowserQA.agent.md"))
-        for path in agents_dir.glob("*.agent.md"):
-            text = path.read_text()
-            head, separator, body = text.partition("---\n\n")
-            if not separator:
-                raise AssertionError(f"invalid fixture frontmatter: {path}")
-            if "target:" in head:
-                head = re.sub(r"^target:.*$", "target: vscode", head, flags=re.MULTILINE)
-            else:
-                head = head.replace("model: Auto (copilot)\n", "model: Auto (copilot)\ntarget: vscode\n", 1)
-            if path.name == "Orchestrator.agent.md":
-                if "user-invocable:" in head:
-                    head = re.sub(r"^user-invocable:.*$", "user-invocable: true", head, flags=re.MULTILINE)
-                else:
-                    head = head.replace("target: vscode\n", "target: vscode\nuser-invocable: true\n", 1)
-                if "disable-model-invocation:" in head:
-                    head = re.sub(
-                        r"^disable-model-invocation:.*$",
-                        "disable-model-invocation: true",
-                        head,
-                        flags=re.MULTILINE,
-                    )
-                else:
-                    head = head.replace(
-                        "user-invocable: true\n",
-                        "user-invocable: true\ndisable-model-invocation: true\n",
-                        1,
-                    )
-                head = re.sub(r"tools:\n(?:  - .*\n)+agents:", "tools:\n  - agent\nagents:", head)
-            path.write_text(head + separator + body)
-
-    def test_runtime_v2_validates_target_and_orchestrator_tools(self) -> None:
+    def test_target_and_orchestrator_tools_are_always_enforced(self) -> None:
         temp, repo = self.make_repo()
         with temp:
-            self.make_runtime_v2(repo)
-            self.assert_valid(repo)
             path = repo / ".copilot/agents/Researcher.agent.md"
             path.write_text(path.read_text().replace("target: vscode\n", "target: github-copilot\n", 1))
-            self.assert_invalid(repo, "runtime-v2 agent must set target: vscode")
+            self.assert_invalid(repo, "agent must set target: vscode")
 
-    def make_contract_v2_body(self, repo: Path) -> None:
-        path = repo / ".copilot/agents/Orchestrator.agent.md"
-        text = path.read_text()
-        frontmatter, _, _body = text.partition("---\n\n")
-        body = """Contract policy fixture.\n\n**Authorized operations**\n\n```yaml\nnormalized_patch:\ncompletion_criteria:\nverification_requirements:\ncriterion_refs:\nexpected_delta:\n```\n\n**Contract patch**\n"""
-        path.write_text(frontmatter + "---\n\n" + body)
-
-    def test_contract_v2_requires_all_markers(self) -> None:
+    def test_contract_requires_all_markers(self) -> None:
         temp, repo = self.make_repo()
         with temp:
-            self.make_contract_v2_body(repo)
-            self.assert_valid(repo)
             path = repo / ".copilot/agents/Orchestrator.agent.md"
             path.write_text(path.read_text().replace("criterion_refs:\n", "", 1))
-            self.assert_invalid(repo, "missing contract-v2 marker")
+            self.assert_invalid(repo, "missing required Orchestrator marker")
+
+    def test_removing_all_contract_activation_markers_is_rejected(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".copilot/agents/Orchestrator.agent.md"
+            text = path.read_text()
+            text = text.replace("**Authorized operations**", "**Work boundaries**")
+            text = text.replace("normalized_patch:\n", "")
+            text = text.replace("criterion_refs:\n", "acceptance:\n")
+            path.write_text(text)
+            self.assert_invalid(repo, "missing required Orchestrator marker")
+
+    def test_reverting_all_runtime_controls_is_rejected(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            agents_dir = repo / ".copilot/agents"
+            for path in agents_dir.glob("*.agent.md"):
+                text = path.read_text().replace("target: vscode\n", "")
+                if path.name == "Orchestrator.agent.md":
+                    text = text.replace("user-invocable: true\n", "")
+                    text = text.replace("disable-model-invocation: true\n", "")
+                    text = text.replace("tools:\n  - agent\n", "tools:\n  - agent\n  - read/readFile\n", 1)
+                path.write_text(text)
+            self.assert_invalid(repo, "agent must set target: vscode")
+
+    def test_legacy_generic_limit_marker_is_rejected(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".copilot/agents/Orchestrator.agent.md"
+            text = path.read_text().replace("set_auto_added_targets_max:", "set_limits:", 1)
+            path.write_text(text)
+            self.assert_invalid(repo, "forbidden legacy marker 'set_limits:'")
 
     def test_skill_link_breakage_is_rejected(self) -> None:
         temp, repo = self.make_repo()
