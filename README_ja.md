@@ -257,6 +257,11 @@ candidate → authorized または rejected
   skills/
     code-review/
       SKILL.md
+.github/
+  workflows/
+    validate.yml
+scripts/
+  validate_definitions.py
 assets/
   dandori-logo.png
 ```
@@ -320,6 +325,17 @@ workspace内の `.copilot/agents` と `.copilot/skills` を使うには、`chat.
 4. 短いTask Flow Reviewを確認する
 5. 目的、成果、境界、効果、自動追加上限、検証水準が正しい場合だけ、承認用の1行をそのまま返信する
 6. 後から契約を広げる必要が出た場合は、差分だけを確認する
+
+## 定義の検証
+
+Pull Requestを作成する前に、決定論的なvalidatorを実行できます。
+
+```bash
+python -m pip install PyYAML==6.0.3
+python scripts/validate_definitions.py
+```
+
+GitHub Actionsでも、Pull Requestと`master`へのpush時に同じ検証を実行します。frontmatter、Agent allowlist、Workerの呼び出し制約、Skill構成とリンク、DANDORI固有依存の再流入、READMEの固定inventoryを検査します。翻訳内容の意味的一致やLLMの挙動は判定しません。
 
 ## 設計原則
 

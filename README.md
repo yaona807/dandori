@@ -247,6 +247,11 @@ If authorization or cumulative loop-control state cannot be reconstructed exactl
   skills/
     code-review/
       SKILL.md
+.github/
+  workflows/
+    validate.yml
+scripts/
+  validate_definitions.py
 assets/
   dandori-logo.png
 ```
@@ -310,6 +315,17 @@ Avoid keeping multiple active copies of the same agent definition in different l
 4. Review the compact Task Flow Review.
 5. Reply with only the exact approval token when the goal, deliverables, boundaries, effects, target-expansion limit, and verification level are correct.
 6. Review only differential changes if the approved contract later needs to widen.
+
+## Definition validation
+
+Run the deterministic validator before opening a pull request:
+
+```bash
+python -m pip install PyYAML==6.0.3
+python scripts/validate_definitions.py
+```
+
+GitHub Actions runs the same validation for pull requests and pushes to `master`. The checks cover frontmatter, agent allowlists, worker invocation guards, skill structure and links, DANDORI coupling regressions, and fixed README inventory markers. They do not attempt to judge translation equivalence or LLM behavior.
 
 ## Design principles
 
