@@ -16,9 +16,9 @@
   <a href="./README_ja.md">日本語</a>
 </p>
 
-DANDORI is an Orchestrator layer for GitHub Copilot Custom Agents.
+DANDORI is an Orchestrator layer for GitHub Copilot Custom Agents in VS Code.
 
-It converts a user-approved work contract into minimal, bounded Task Cards. The Orchestrator can adapt the internal execution plan without repeatedly asking for approval, while every worker invocation remains constrained by the approved goal, boundaries, effects, and verification requirements.
+It converts a user-approved work contract into minimal, bounded Task Cards. The Orchestrator can adapt the internal execution plan without repeatedly asking for approval, while every worker invocation remains constrained by the approved goal, operation permissions, limits, and verification requirements.
 
 The core of DANDORI is the **Orchestrator**. The included workers are reference implementations. You can use them as-is, replace them with your own agents, or add specialized workers without embedding their internal details into the Orchestrator.
 
@@ -40,7 +40,7 @@ Token efficiency is not only about shorter prompts. In agentic workflows, unnece
 
 DANDORI separates the workflow into two layers:
 
-- **User-approved contract**: goal, deliverables, boundaries, permitted effects, target-expansion limit, and verification level
+- **User-approved contract**: goal, deliverables, observation boundaries, target/action/effect permissions, target-expansion limit, and verification level
 - **Adaptive internal plan**: worker choice, ordering, Task Card grouping, bounded investigation, retry, and verification
 
 The contract remains fixed until the user approves a meaningful widening. The internal plan can change freely inside that contract.
@@ -50,26 +50,28 @@ The contract remains fixed until the user approves a meaningful widening. The in
 DANDORI is built around one containment rule:
 
 ```text
-worker execution ⊆ Task Card ⊆ active approved contract ⊆ approved TFR/TFC chain
+worker execution operation ⊆ exact Task Card operation ⊆ exact contract permission or authorized instantiation of a contract rule
+
+active approved contract = ordered fold(authorization source sequence)
 ```
 
 A **Task Flow Review (TFR)** is a short human decision surface. It is not a detailed execution plan.
 
-A **Task Card** is a worker-neutral execution contract for one permission boundary. It defines the concrete objective, authorized targets, permitted effects, limits, acceptance conditions, and stop conditions for one invocation.
+A **Task Card** is a worker-neutral execution contract for one permission boundary. It defines the concrete objective, authorized target/action/effect operations, card-wide ceilings, limits, acceptance conditions, and stop conditions for one invocation.
 
 The Orchestrator may change workers, reorder internal work, split or combine Task Cards, perform bounded investigation, and add verification without reapproval. It must request a **Task Flow Change (TFC)** only when the approved contract itself must widen.
 
 ## Key features
 
-- **Compact approval**: users review only goal, deliverables, boundaries, effects, target-expansion limit, verification, and reapproval conditions.
-- **Revisioned contracts**: every Task Card and result belongs to one active approved contract revision.
+- **Compact approval**: users review only goal, deliverables, observation boundaries, affect operations or bounded authorization rules, target-expansion limit, verification, and reapproval conditions.
+- **Revisioned contracts**: every Task Card and result belongs to one active approved contract revision derived from an ordered authorization source sequence.
 - **Adaptive planning**: internal routing and execution order can change without reapproval when the contract does not widen.
 - **Permission-boundary Task Cards**: work is grouped by authorization boundary rather than mechanically split into many tiny steps.
 - **Discovery/effect separation**: a target discovered by a worker cannot be affected in the same invocation.
 - **Atomic effect targets**: automatic authorization applies only to individually addressable targets, not directories, wildcard sets, or “related files.”
-- **Cumulative effect control**: actions must declare every effect they may produce, including secondary effects.
+- **Operation-level authorization**: each permission binds an observation boundary or exact effect target/rule, one action, and every effect the action may produce; separate lists never create Cartesian-product permission.
 - **Worker-neutral orchestration**: worker definitions remain the source of truth for worker behavior and output conventions.
-- **Contract audit**: worker-reported targets, effects, limits, evidence, and revision are checked before progress is accepted.
+- **Contract audit**: worker-reported operations, targets, actions, effects, limits, evidence, and revision are checked before progress is accepted.
 - **Separate-context verification**: persistent changes are verified through a separate observation-only invocation when possible.
 - **Differential approval**: only the requested widening is shown when reapproval is required.
 - **Progress-based loop control**: equivalent calls without new evidence, artifacts, authorization, verification, or a more specific blocker are prohibited.
@@ -78,7 +80,7 @@ The Orchestrator may change workers, reorder internal work, split or combine Tas
 
 The Orchestrator does not contain a static worker capability manifest, worker-specific routing table, or duplicated worker instructions.
 
-At execution time it selects a plausible worker from the allowed agents, resolves that worker's active definition, and checks semantic compatibility with the bounded task. It does not adopt worker-specific input keys, wrappers, schemas, or input-language requirements. A compatible worker must be able to process a self-contained request without requiring DANDORI-specific input conventions. Worker selection affects execution quality, but never expands authorization.
+At execution time it selects a plausible worker from the runtime-visible allowed agent names and descriptions, then sends one self-contained bounded Task Card. It does not read or depend on a Worker definition file and does not adopt worker-specific input keys, wrappers, schemas, or input-language requirements. A Worker that reports a role, tool, or input mismatch is treated as blocked; the Orchestrator may try at most one other candidate without expanding authorization.
 
 This allows you to:
 
@@ -96,9 +98,11 @@ User request
    ↓
 Compact Task Flow Review
    ↓ exact approval
+Authorization source sequence
+   ↓ ordered fold
 Approved Contract revision
    ↓
-Flow Ledger: criteria, authorized targets, limits, material evidence
+Flow Ledger: criteria, authorized operations and targets, limits, material evidence
    ↓
 Minimal Task Card for one permission boundary
    ↓
@@ -139,7 +143,7 @@ An explanation of the cause, the required changes, and the verification results 
 - Persistent changes are checked in a separate context.
 
 **Reapproval**
-Only if the goal, deliverables, boundaries, allowed effects, automatic-addition cap, or verification level must widen or weaken.
+Only if the goal, deliverables, boundaries, target/action/effect permissions, automatic-addition cap, or verification level must widen or weaken.
 ```
 
 Approval is exact-token based and language-neutral:
@@ -198,6 +202,8 @@ DANDORI uses cumulative effect tags:
 
 Effects are cumulative, not exclusive. For example, a command that can modify files requires both `execute` and `change_local`. Allowing a tool or action never implicitly authorizes its secondary effects.
 
+Authorization is operation-based. Each permission binds an observation boundary or an exact effect target/bounded authorization rule, an action, and all effects that action may produce. Contract-wide action and effect lists are ceilings and summaries only; they do not authorize a target/action combination by themselves.
+
 ## Target authorization
 
 Observation boundaries and effect targets are separate.
@@ -211,7 +217,11 @@ explicit → authorized
 candidate → authorized or rejected
 ```
 
-A candidate can be authorized without reapproval only when its exact identity, approved-boundary containment, deliverable traceability, concrete evidence source, required effects, risk state, and cumulative cap can all be established. A candidate never becomes a new discovery anchor and cannot be affected in the invocation that discovered it.
+A candidate can be authorized without reapproval only when its exact identity, approved-boundary containment, deliverable traceability, concrete evidence source, required target/action/effect operation, risk state, and cumulative cap can all be established. A candidate never becomes a new discovery anchor and cannot be affected in the invocation that discovered it.
+
+Existing directories and directory subtrees are not atomic effect targets. An exact directory path that is confirmed not to exist may be authorized only through a `create_directory` operation that binds that path and `change_local`. Every required parent directory and every child artifact needs a separate operation; directory creation never grants permission over unspecified descendants or an existing subtree.
+
+The active contract is derived by applying an append-only authorization source sequence in order. Approved TFRs and TFCs may widen the contract; explicit user narrowing records a normalized reduction without additional approval. Free-form user text is audit context, not executable permission, and removed permission is never restored implicitly.
 
 ## Verification and limits
 
@@ -220,6 +230,8 @@ Persistent local changes, external effects, and destructive effects require a se
 If verification is unavailable, DANDORI reports the result as unverified rather than entering an approval loop or claiming completion without qualification.
 
 DANDORI limits repeated work by requiring each invocation to produce a concrete delta: a new material fact, artifact, authorized target, criterion transition, verification result, conflict resolution, or more specific blocker.
+
+If authorization or cumulative loop-control state cannot be reconstructed exactly, DANDORI stops with `state_unrecoverable`. Re-observable evidence may be reacquired inside the approved observation boundary, but lost permission state, cap usage, attempt counts, or pending-revision bindings are never guessed or reset.
 
 ## What's included
 
@@ -231,10 +243,15 @@ DANDORI limits repeated work by requiring each invocation to produce a concrete 
     PullRequestResearcher.agent.md
     Writer.agent.md
     Reviewer.agent.md
-    BrowserQa.agent.md
+    BrowserQA.agent.md
   skills/
     code-review/
       SKILL.md
+.github/
+  workflows/
+    validate.yml
+scripts/
+  validate_definitions.py
 assets/
   dandori-logo.png
 ```
@@ -244,6 +261,17 @@ assets/
 | `Orchestrator` | Control-plane agent for intake, compact approval, contract management, Task Card creation, worker selection, audit, loop control, and synthesis |
 | Reference workers | Optional workers for investigation, pull-request inspection, implementation, review, and browser-based verification |
 | `code-review` skill | Focused review guidance used by the reference review worker |
+
+
+## Compatibility and prerequisites
+
+- DANDORI agents explicitly target VS Code.
+- Subagent restriction uses the `agents` allowlist, which is currently an experimental VS Code feature.
+- `PullRequestResearcher` requires the GitHub Pull Requests extension and its exposed tools.
+- `BrowserQA` requires the configured browser tool set.
+- Unavailable or unrecognized tool names can be ignored by the runtime; verify actual tool availability before use.
+- External workers must accept a self-contained request, avoid sub-delegation, use no broader tools than necessary, and describe their role and effect boundary accurately.
+- Confirm the loaded source for every agent and skill with VS Code Chat Diagnostics.
 
 ## Model requirements
 
@@ -255,9 +283,11 @@ Worker models can be smaller, faster, or specialized depending on the delegated 
 
 ## Installation
 
-Copy the agents and skills into discovery paths supported by your GitHub Copilot environment.
+DANDORI targets GitHub Copilot Custom Agents in VS Code. Copy the agents and skills into discovery paths supported by that environment.
 
-Example user-level installation:
+### User-level installation
+
+Use this when you want the same DANDORI configuration across workspaces:
 
 ```bash
 mkdir -p ~/.copilot/agents ~/.copilot/skills
@@ -265,13 +295,29 @@ cp .copilot/agents/*.agent.md ~/.copilot/agents/
 cp -R .copilot/skills/* ~/.copilot/skills/
 ```
 
-Example repository-level installation for an environment that discovers `.copilot`:
+### Standard workspace installation
+
+Use VS Code's standard workspace discovery paths when the configuration should travel with one repository:
 
 ```bash
-cp -R .copilot /path/to/your/repository/
+mkdir -p .github/agents .github/skills
+cp .copilot/agents/*.agent.md .github/agents/
+cp -R .copilot/skills/* .github/skills/
 ```
 
-Avoid keeping multiple active copies of the same agent definition in different locations. Duplicate definitions can cause the Orchestrator to inspect one definition while Copilot invokes another.
+### Custom `.copilot` workspace installation
+
+Keeping `.copilot/agents` and `.copilot/skills` inside a workspace requires those locations to be enabled through `chat.agentFilesLocations` and `chat.agentSkillsLocations`. Do not assume that copying `.copilot` into a repository is sufficient without the corresponding discovery settings.
+
+### Verify discovery
+
+1. In the VS Code Chat view, open the context menu and select **Diagnostics**.
+2. Confirm that every DANDORI agent and the `code-review` skill are loaded without errors.
+3. Check the source shown for each agent and confirm that the Orchestrator allowlist resolves to the intended definitions.
+4. Confirm that each external Worker satisfies the compatibility checklist above.
+5. Remove or disable duplicate same-name definitions from workspace, user, organization, extension, or custom discovery locations.
+
+Avoid keeping multiple active copies of the same agent definition in different locations. Duplicate definitions can cause Copilot to invoke a different definition than the one the user intended.
 
 ## Usage
 
@@ -282,10 +328,23 @@ Avoid keeping multiple active copies of the same agent definition in different l
 5. Reply with only the exact approval token when the goal, deliverables, boundaries, effects, target-expansion limit, and verification level are correct.
 6. Review only differential changes if the approved contract later needs to widen.
 
+## Definition validation
+
+Run the deterministic validator before opening a pull request:
+
+```bash
+python -m pip install PyYAML==6.0.3
+python scripts/validate_definitions.py
+```
+
+GitHub Actions runs the same validation for pull requests and pushes to `master`. The checks cover frontmatter, agent allowlists, worker invocation guards, skill structure and links, DANDORI coupling regressions, and fixed README inventory markers. They do not attempt to judge translation equivalence or LLM behavior.
+
 ## Design principles
 
 - **Human approval is a contract, not an execution trace.**
 - **Internal plans may adapt; approved permissions may not.**
+- **Target, action, and effect are authorized together as one operation.**
+- **The active contract is derived from an ordered, append-only authorization source sequence.**
 - **Task Cards are split by permission boundary, not automatically by process step.**
 - **Discovery does not authorize effects.**
 - **Missing permission is denied.**
