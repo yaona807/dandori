@@ -48,4 +48,5 @@ Use the [code-review guidance](../skills/code-review/SKILL.md) for review criter
 
 - This `.agent.md` defines this agent's role and tool boundary.
 - The `code-review` skill defines review-specific criteria and perspective references.
+- The `code-review` skill defines review-specific criteria and perspective references.
 - The delegated request defines task-specific scope and output requirements.
