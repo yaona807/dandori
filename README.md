@@ -135,7 +135,10 @@ Fix the specified defect.
 **Authorized operations**
 - Observe: the target repository — search and read (`observe`)
 - Affect: explicitly listed existing files — modify existing content (`change_local`)
-- Affect by rule: evidence-backed atomic existing files — modify existing content (`change_local`), cumulative maximum 5
+- Affect by rule: evidence-backed atomic existing files — modify existing content (`change_local`)
+
+**Automatic target addition**
+- Flow-wide cumulative maximum: 5
 
 **Verification requirements**
 - Persistent changes are checked in a separate context.
@@ -151,7 +154,9 @@ Approval is exact-token based and language-neutral:
 APPROVE:TFR-ab12
 ```
 
-Extra conditions, corrections, or additional instructions are treated as a change request, not approval.
+Extra conditions, corrections, or additional instructions are treated as a change request, not approval. TFR/TFC IDs and approval tokens are never reused within the same chat session.
+
+Every authorized operation displays all cumulative effects it may produce. A rule-based operation shares one flow-wide automatic-target cap with every other rule-based operation; the cap is shown separately rather than repeated per rule.
 
 If the contract must widen later, the Orchestrator displays only the difference:
 
@@ -221,13 +226,17 @@ Existing directories and directory subtrees are not atomic effect targets. An ex
 
 The active contract is a materialized view reconstructed by folding an append-only sequence of normalized patches. The first approved TFR initializes the contract; approved TFCs apply complete revision patches; explicit user narrowing records only structural reductions. Free-form user text is audit context, not executable permission, and removed permission is never restored implicitly.
 
+Display-only wording or localization can avoid a revision only when the normalized authorization source sequence and every executable contract field remain byte-for-byte unchanged. A change to a criterion, operation, effect, limit, verification requirement, exclusion, stable ID, or source order is structural and follows the applicable revision path.
+
+An automatic-target cap may be reduced only to a value greater than or equal to the number of unique targets already consumed. Removing permissions or criteria does not reverse consumed usage.
+
 ## Verification and limits
 
 Persistent local changes, external effects, and destructive effects require a separate observation-only verification invocation when possible. This is **separate-context verification**, not guaranteed independent third-party review.
 
 If verification is unavailable, DANDORI reports the result as unverified rather than entering an approval loop or claiming completion without qualification.
 
-DANDORI limits repeated work by requiring each invocation to produce a concrete delta: a new material fact, artifact, candidate operation, criterion evidence or transition, verification result, conflict resolution, or more specific blocker.
+DANDORI limits repeated work by requiring each invocation to produce a concrete delta: a new material fact, artifact, candidate operation, criterion evidence or transition, verification result, conflict resolution, or more specific blocker. Execution attempts are counted by criterion and the canonical set of source permission IDs, so changing the Worker, order, grouping, or Task Card ID does not reset the limit.
 
 If authorization or cumulative loop-control state cannot be reconstructed exactly, DANDORI stops with `state_unrecoverable`. Re-observable evidence may be reacquired inside the approved observation boundary, but lost permission state, cap usage, attempt counts, or pending-revision bindings are never guessed or reset.
 

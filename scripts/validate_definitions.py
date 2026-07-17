@@ -52,6 +52,12 @@ BUNDLED_WORKER_TOOLS: dict[str, set[str]] = {
 
 ORCHESTRATOR_REQUIRED_MARKERS = (
     "**Authorized operations**",
+    "**Automatic target addition**",
+    "issued_review_ids:",
+    "attempts_by_criterion_and_permission_boundary:",
+    "A lower value is an invalid patch:",
+    "A correction is non-revisioned only when",
+    "session-scoped `issued_review_ids` set",
     "normalized_patch:",
     "completion_criteria:",
     "verification_requirements:",

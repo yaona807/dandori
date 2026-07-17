@@ -112,6 +112,66 @@ class ValidatorMutationTests(unittest.TestCase):
             path.write_text(path.read_text().replace("criterion_refs:\n", "", 1))
             self.assert_invalid(repo, "missing required Orchestrator marker")
 
+    def test_pr1_tfr_requires_flow_wide_cap_marker(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".copilot/agents/Orchestrator.agent.md"
+            path.write_text(path.read_text().replace("**Automatic target addition**", "**Per-rule limits**", 1))
+            self.assert_invalid(repo, "missing required Orchestrator marker")
+
+    def test_pr1_session_review_id_state_is_required(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".copilot/agents/Orchestrator.agent.md"
+            path.write_text(path.read_text().replace("  issued_review_ids: []\n", "", 1))
+            self.assert_invalid(repo, "missing required Orchestrator marker")
+
+    def test_pr1_attempt_counter_schema_is_required(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".copilot/agents/Orchestrator.agent.md"
+            path.write_text(
+                path.read_text().replace(
+                    "attempts_by_criterion_and_permission_boundary:",
+                    "attempts_by_criterion:",
+                    1,
+                )
+            )
+            self.assert_invalid(repo, "missing required Orchestrator marker")
+
+    def test_pr1_consumed_cap_floor_policy_is_required(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".copilot/agents/Orchestrator.agent.md"
+            path.write_text(path.read_text().replace("A lower value is an invalid patch:", "A lower value is accepted:", 1))
+            self.assert_invalid(repo, "missing required Orchestrator marker")
+
+    def test_pr1_non_revision_wording_rule_is_required(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".copilot/agents/Orchestrator.agent.md"
+            path.write_text(
+                path.read_text().replace(
+                    "A correction is non-revisioned only when",
+                    "A correction is normally non-revisioned when",
+                    1,
+                )
+            )
+            self.assert_invalid(repo, "missing required Orchestrator marker")
+
+    def test_pr1_session_scoped_review_id_policy_is_required(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".copilot/agents/Orchestrator.agent.md"
+            path.write_text(
+                path.read_text().replace(
+                    "session-scoped `issued_review_ids` set",
+                    "flow-scoped `issued_review_ids` set",
+                    1,
+                )
+            )
+            self.assert_invalid(repo, "missing required Orchestrator marker")
+
     def test_removing_all_contract_activation_markers_is_rejected(self) -> None:
         temp, repo = self.make_repo()
         with temp:
