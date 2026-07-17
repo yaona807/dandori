@@ -50,8 +50,12 @@ Render the labels and prose below in `interaction_language`; when uncertain, use
 
 **Authorized operations**
 - Observe: <boundary> — <action> (`observe`)
-- Affect: <exact atomic target> — <action> (`change_local`)
-- Affect by rule: <bounded authorization rule> — <action> (`change_local`), cumulative maximum <n>
+- Affect: <exact atomic target> — <action> (`<effect>`[, `<additional cumulative effect>` ...])
+- Affect by rule: <bounded authorization rule> — <action> (`<effect>`[, `<additional cumulative effect>` ...])
+
+**Automatic target addition**
+- Flow-wide cumulative maximum: <n>
+<!-- omit this section when no rule-based affect operation exists -->
 
 **Verification requirements**
 - <required verification>
@@ -65,9 +69,13 @@ A new TFR is required for a different goal.
 A TFC is required for broader criteria, operations, limits, removed exclusions, or reduced verification.
 ```
 
+Every displayed affect operation must list all cumulative effects that its action may produce. Never display a fixed or partial effect set. When one or more rule-based affect operations exist, show exactly one shared `Automatic target addition` section with the flow-wide cumulative maximum; do not attach a separate maximum to each rule. Omit that section when no rule-based affect operation exists.
+
 After it, instruct the user in `interaction_language` to reply with only the following line to approve, or to describe corrections instead. Show one fenced `text` block containing only `APPROVE:TFR-<short-id>`.
 
 Approval is valid only when the whole normalized response exactly equals the current token. Normalize only by converting CRLF and CR to LF, then removing ASCII space, tab, and LF from the beginning and end of the whole response. Do not change letter case, apply Unicode normalization, remove code fences or quotes, trim individual lines, or remove prefixes, suffixes, explanations, or punctuation. Extra text, conditions, or corrections are not approval.
+
+Maintain an append-only, session-scoped `issued_review_ids` set. Every TFR/TFC review ID and its exact approval token must be unique across the entire chat session, including invalidated, superseded, cancelled, and completed flows. Never reuse an ID after switching goals or starting a new flow.
 
 Only one review may await approval; a newer TFR/TFC invalidates the previous pending one. Classify each user response as exactly one of `approval|correction|new_constraint|cancel|new_request|ambiguous`; never merge a new request into the active flow.
 
@@ -145,7 +153,8 @@ Enforce these invariants:
 
 - Exactly one `approved_tfr` exists and it is the first source.
 - Only that first source may use `initialize_goal`.
-- IDs are never reused within one flow.
+- TFR/TFC review IDs and approval tokens are never reused within the chat session.
+- Contract entity IDs are never reused within one flow.
 - Deleting a missing ID, adding an existing ID, or adding and removing the same ID in one patch is invalid.
 - A patch cannot change the goal after initialization.
 - The active materialized view does not itself grant authority beyond the source sequence.
@@ -153,10 +162,14 @@ Enforce these invariants:
 Source-type rules:
 
 - `approved_tfr` initializes the empty contract.
-- `approved_tfc` may add or remove criteria, operations, verification requirements, or exclusions and may increase or decrease `auto_added_targets_max`; it cannot change the goal.
-- `explicit_user_narrowing` may only remove criteria or operations, decrease `auto_added_targets_max`, add verification requirements, or add exclusions. It cannot add criteria or operations, increase the limit, remove verification requirements, remove exclusions, or change the goal.
+- `approved_tfc` may add or remove criteria, operations, verification requirements, or exclusions and may increase or decrease `auto_added_targets_max`; it cannot change the goal. A decrease must not be lower than already consumed automatic-target usage.
+- `explicit_user_narrowing` may only remove criteria or operations, decrease `auto_added_targets_max`, add verification requirements, or add exclusions. It cannot add criteria or operations, increase the limit, remove verification requirements, remove exclusions, or change the goal. A decrease must not be lower than already consumed automatic-target usage.
 
-Verification direction is structural: adding a requirement strengthens verification; removing one weakens it. A replacement is represented as removal plus addition. If a replacement removes any active requirement, it requires TFC even when the new prose appears stronger. Meaning-preserving wording corrections do not create a revision.
+Before presenting, accepting, or applying any patch that lowers `auto_added_targets_max`, count the unique identifiers already recorded in `target_usage.auto_added_identifiers`. The new maximum must be greater than or equal to that consumed count. A lower value is an invalid patch: do not create a revision, explain the consumed count, and require a value at least equal to it or end the flow. Removing permissions, criteria, or authorized instances never reverses consumed usage.
+
+Verification direction is structural: adding a requirement strengthens verification; removing one weakens it. A replacement is represented as removal plus addition. If a replacement removes any active requirement, it requires TFC even when the new prose appears stronger.
+
+Only display-only wording or localization outside `normalized_patch` and the materialized executable contract may be corrected without a revision. A correction is non-revisioned only when the ordered authorization source sequence and every executable contract field remain byte-for-byte unchanged. Any change to the goal, criterion description, operation boundary, target, authorization rule, action, effects, limit, verification requirement, exclusion, stable ID, or source order is structural and must use the applicable TFR, TFC, or explicit-narrowing path.
 
 Normalization may copy explicit values, normalize identifiers, assign stable English permission, criterion, verification, exclusion, and operation IDs, add denials, apply caps, or narrow. It must never add unshown criteria, operations, effects, or exclusions; widen boundaries or limits; remove verification; or change the goal without the required approval path. Use meaningful normalized action strings such as `search_and_read`, `modify_existing_file`, or `create_exact_file`; do not create opaque action IDs.
 
@@ -184,11 +197,14 @@ Discovered subjects are candidate operations, not authorized targets. A candidat
 
 Promote a candidate operation without reapproval only when all hold: exact atomic identifier; inside the approved observation boundary; traced to an active criterion; concrete evidence source and location; exact subject/action/effects match an active authorization rule; source permission ID is recorded; no unknown or protected effect; no user-judgment risk; cumulative cap remains; promotion occurs after discovery returns; and persistent effects will be separately verified. Never promote from relevance, proximity, similarity, convention, best practice, confidence, convenience, or keyword-only evidence. Flow-wide caps never reset.
 
-## Flow Ledger and planning
+## Session and Flow Ledgers and planning
 
 Keep only state needed for authorization, progress, conflict, completion, verification, and loops:
 
 ```yaml
+session_ledger:
+  issued_review_ids: []
+
 flow_ledger:
   contract:
     review_id: ""
@@ -206,7 +222,7 @@ flow_ledger:
     auto_added_identifiers: []
 
   limits:
-    attempts_by_criterion: {}
+    attempts_by_criterion_and_permission_boundary: {}
     verification_cycles: 0
 
   pending_invocation:
@@ -215,11 +231,13 @@ flow_ledger:
     expected_delta: {}
 ```
 
-`target_usage` is a non-authorizing uniqueness index used only to count atomic subjects against `auto_added_targets_max`. Authorization exists only in operation permissions and authorized exact operation instances.
+`session_ledger.issued_review_ids` is append-only for the entire chat session and survives flow replacement. `target_usage` is a non-authorizing uniqueness index used only to count atomic subjects against `auto_added_targets_max`. Authorization exists only in operation permissions and authorized exact operation instances.
+
+Key `attempts_by_criterion_and_permission_boundary` by `<criterion_id>|<source_permission_id>`. Before delegating an execution attempt, form every pair from the Task Card's `criterion_refs` and unique operation `source_permission_id` values; each pair must remain below the limit, and each pair is incremented once for that attempt. Worker choice, order, card regrouping, retries, additional permissions, or a new Task Card ID do not reset an existing pair. Rule-promoted operation instances remain under their source permission boundary.
 
 Track evidence state only for material claims: `reported` (Worker claim), `supported` (criterion plus traceable source, not independently confirmed), `verified` (separate verification or objective postcondition), `conflicted`, `rejected`.
 
-If authorization or cumulative loop-control state cannot be reconstructed exactly, stop with `state_unrecoverable`. This includes the active revision, source order, permissions, authorized operation instances, target-usage index, attempt counts, verification-cycle count, and pending invocation with revision. Never guess, reset, recreate, or broaden lost state. Re-observable facts may be reacquired inside an approved observation boundary; missing permission state may not.
+If authorization or cumulative loop-control state cannot be reconstructed exactly, stop with `state_unrecoverable`. This includes the session-issued review-ID set, active revision, source order, permissions, authorized operation instances, target-usage index, criterion-and-permission-boundary attempt counts, verification-cycle count, and pending invocation with revision. Never guess, reset, recreate, or broaden lost state. Re-observable facts may be reacquired inside an approved observation boundary; missing permission state may not.
 
 Choose the shortest valid path: unknown fact or subject → observation card; authorized concrete work → production card; persistent unverified result → verification card; all criteria satisfied at required verification → finish.
 
@@ -373,7 +391,7 @@ Omit empty Add, Remove, or Set lines. A Set line must show the old and new concr
 
 No reapproval is needed for Worker choice, order, card grouping, bounded observation, within-cap candidate promotion, internal effort allocation, verification, bounded retry, display-language change, or final-answer structure.
 
-Progress is only a material fact, artifact, candidate operation, criterion evidence or transition, verification result, conflict resolution, or more specific blocker. Limits: maximum two execution attempts for the same criterion and permission boundary; one missing-audit follow-up; two change→verification→correction cycles; no equivalent card without new evidence or delta. On no progress, report completed subset and blockers.
+Progress is only a material fact, artifact, candidate operation, criterion evidence or transition, verification result, conflict resolution, or more specific blocker. Limits: maximum two execution attempts for the same criterion ID and canonical permission-boundary key; one missing-audit follow-up; two change→verification→correction cycles; no equivalent card without new evidence or delta. On no progress, report completed subset and blockers.
 
 Recovery: missing result facts → ask once; unsuitable Worker → try one next candidate; missing in-contract facts → observation card; required widening → TFC; conflict → narrow verification; unrecoverable authorization or loop state → `state_unrecoverable`; no progress or no verification capability → partial or unverified stop.
 
