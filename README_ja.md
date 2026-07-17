@@ -349,7 +349,7 @@ python -m pip install PyYAML==6.0.3
 python scripts/validate_definitions.py
 ```
 
-GitHub Actionsでは、Pull Requestと`master`へのpush時に決定論的な定義検証とValidatorのMutation Testを実行します。frontmatterとTool policy、runtime／contract schema移行、Workerの呼び出し制約、ローカル／外部allowlist、Skill構成とリンク、Prompt長、Orchestrator中核marker、DANDORI固有依存の再流入、READMEの固定inventoryを検査します。静的ファイルからLLM挙動は推定せず、モデルやVS Code更新時は`tests/conformance.md`を使用します。
+GitHub Actionsでは、Pull Requestと`master`へのpush時に決定論的な定義検証とValidatorのMutation Testを実行します。Validatorは同梱定義をclosed release inventoryとして扱い、Agentディレクトリでは`*.agent.md`以外を拒否し、`hooks`、`handoffs`、`mcp-servers`などTool境界を迂回し得るfrontmatterを禁止します。同梱Agentのfrontmatter、Tool、ファイル名、必須Section、安全Policy anchor、十分な圧縮余地を持つ本文回帰下限を固定し、Orchestratorの中核Invariantが意図したSection内に残っていることを検査します。同梱`code-review` Skillは宣言済みMarkdownだけを許可し、すべてのSkill Markdownに対して、大文字小文字や空白・ハイフン・アンダースコアの表記揺れを正規化したDANDORI固有依存と、Reviewerに属するWorker Policyの再流入を検査します。追加のローカルWorkerは`*.agent.md`として追加できますが、共通runtime、再委譲禁止、禁止frontmatter、DANDORI固有依存の検査対象となり、手動Policy／Diagnostics確認を要求するwarningを出します。リポジトリ外の外部Workerも定義を静的検査できないため、引き続きDiagnostics確認を要求するwarningとします。静的ファイルからLLM挙動は推定せず、モデルやVS Code更新時は`tests/conformance.md`を使用します。
 
 ## 設計原則
 
