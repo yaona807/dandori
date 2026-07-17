@@ -279,6 +279,8 @@ assets/
 - `PullRequestResearcher` requires the GitHub Pull Requests extension and its exposed tools.
 - `BrowserQA` requires the configured browser tool set.
 - Unavailable or unrecognized tool names can be ignored by the runtime; verify actual tool availability before use.
+- A bundled Worker calls a tool only when the tool arguments and runtime behavior can enforce the delegated boundary. If the available tool can operate only on a broader scope, the Worker returns `blocked` and identifies the narrower capability required.
+- The bundled reference set does not include a terminal-command Worker. Add a dedicated, narrowly scoped execution Worker when tests, lint, type checks, builds, formatters, or other commands are required.
 - External workers must accept a self-contained request, avoid sub-delegation, use no broader tools than necessary, and describe their role and effect boundary accurately.
 - Confirm the loaded source for every agent and skill with VS Code Chat Diagnostics.
 
@@ -318,6 +320,27 @@ cp -R .copilot/skills/* .github/skills/
 
 Keeping `.copilot/agents` and `.copilot/skills` inside a workspace requires those locations to be enabled through `chat.agentFilesLocations` and `chat.agentSkillsLocations`. Do not assume that copying `.copilot` into a repository is sufficient without the corresponding discovery settings.
 
+
+### Upgrade an existing installation
+
+Copying a new version over an existing installation does not remove files that were deleted or renamed in the new release. Before upgrading, remove only the files managed by DANDORI, then copy the new release. Do not remove custom Workers or unrelated Skills.
+
+User-level cleanup:
+
+```bash
+rm -f ~/.copilot/agents/{Orchestrator,Researcher,PullRequestResearcher,Writer,Reviewer,BrowserQA}.agent.md
+rm -rf ~/.copilot/skills/code-review
+```
+
+Standard workspace cleanup:
+
+```bash
+rm -f .github/agents/{Orchestrator,Researcher,PullRequestResearcher,Writer,Reviewer,BrowserQA}.agent.md
+rm -rf .github/skills/code-review
+```
+
+After cleanup, run the installation commands for the selected scope and verify discovery again. For a custom `.copilot` workspace installation, remove the same managed filenames from the configured discovery paths.
+
 ### Verify discovery
 
 1. In the VS Code Chat view, open the context menu and select **Diagnostics**.
@@ -346,7 +369,7 @@ python -m pip install PyYAML==6.0.3
 python scripts/validate_definitions.py
 ```
 
-GitHub Actions runs deterministic definition validation and validator mutation tests for pull requests and pushes to `master`. The validator treats the bundled definitions as a closed release inventory: only `*.agent.md` files are allowed in the agent directory; execution-bypass frontmatter such as `hooks`, `handoffs`, and `mcp-servers` is rejected; bundled-agent frontmatter, tools, filenames, required sections, safety-policy anchors, and conservative body-size regression floors are fixed; core Orchestrator invariants must remain in their intended sections; and the bundled `code-review` skill must contain only its declared Markdown files. DANDORI-specific coupling and Reviewer-owned worker policy are checked across every Skill Markdown file with case and separator variants normalized. Additional local workers may still be added as `*.agent.md` files, but they remain subject to the common runtime, no-subdelegation, forbidden-frontmatter, and DANDORI-coupling checks and produce a manual policy/Diagnostics review warning. External allowlisted workers also remain a Diagnostics-reviewed warning because their definitions are outside this repository. LLM behavior is not inferred from static files; use `tests/conformance.md` for model and VS Code release checks.
+GitHub Actions runs deterministic definition validation and validator mutation tests for pull requests and pushes to `master`. External workflow actions are pinned to full-length commit SHAs, and the validator rejects tag- or branch-based action references. The validator treats the bundled definitions as a closed release inventory: only `*.agent.md` files are allowed in the agent directory; execution-bypass frontmatter such as `hooks`, `handoffs`, and `mcp-servers` is rejected; bundled-agent frontmatter, tools, filenames, required sections, safety-policy anchors, and conservative body-size regression floors are fixed; core Orchestrator invariants must remain in their intended sections; and the bundled `code-review` skill must contain only its declared Markdown files. DANDORI-specific coupling and Reviewer-owned worker policy are checked across every Skill Markdown file with case and separator variants normalized. Additional local workers may still be added as `*.agent.md` files, but they remain subject to the common runtime, no-subdelegation, forbidden-frontmatter, and DANDORI-coupling checks and produce a manual policy/Diagnostics review warning. External allowlisted workers also remain a Diagnostics-reviewed warning because their definitions are outside this repository. LLM behavior is not inferred from static files; use the structured cases and run-record template in `tests/conformance.md` for model, Worker-tool, and VS Code release checks.
 
 ## Design principles
 
