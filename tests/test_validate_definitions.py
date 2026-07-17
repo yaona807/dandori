@@ -472,6 +472,46 @@ Inspect only the delegated resource. Do not call another agent.
             path.write_text(path.read_text().replace("user-invocable: false\n", "user-invocable: false\nallowed-tools: read\n", 1))
             self.assert_invalid(repo, "code-review frontmatter contains unsupported keys")
 
+    def test_all_bundled_workers_require_tool_boundary_enforcement_policy(self) -> None:
+        policy = validator.BOUNDARY_ENFORCEMENT_POLICY
+        for worker in validator.BUNDLED_WORKER_TOOLS:
+            with self.subTest(worker=worker):
+                temp, repo = self.make_repo()
+                with temp:
+                    path = repo / f".copilot/agents/{worker}.agent.md"
+                    text = path.read_text()
+                    self.assertIn(policy, text)
+                    path.write_text(text.replace(policy, "REMOVED_TOOL_BOUNDARY_POLICY", 1))
+                    self.assert_invalid(repo, "missing required bundled-worker policy")
+
+    def test_writer_rejects_workspace_wide_problems_tool(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".copilot/agents/Writer.agent.md"
+            path.write_text(path.read_text().replace("  - read/readFile\n", "  - read/readFile\n  - read/problems\n", 1))
+            self.assert_invalid(repo, "bundled worker tools changed")
+
+
+    def test_list_style_workflow_action_requires_full_commit_sha(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".github/workflows/extra.yml"
+            path.write_text(
+                "name: Extra\non: push\njobs:\n  check:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/cache@v4\n"
+            )
+            self.assert_invalid(repo, "external action must be pinned to a full-length commit SHA")
+
+    def test_workflow_actions_require_full_commit_sha(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".github/workflows/validate.yml"
+            text = path.read_text().replace(
+                "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0",
+                "actions/checkout@v7",
+                1,
+            )
+            path.write_text(text)
+            self.assert_invalid(repo, "external action must be pinned to a full-length commit SHA")
 
 if __name__ == "__main__":
     unittest.main()

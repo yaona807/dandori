@@ -15,6 +15,11 @@ DEFAULT_ROOT = Path(__file__).resolve().parents[1]
 MAX_AGENT_BODY_CHARS = 30_000
 MAX_SKILL_NAME_CHARS = 64
 MAX_SKILL_DESCRIPTION_CHARS = 1_024
+FULL_COMMIT_SHA_PATTERN = re.compile(r"^[0-9a-fA-F]{40}$")
+BOUNDARY_ENFORCEMENT_POLICY = (
+    "Use a tool only when its arguments and runtime behavior can enforce the assigned boundary. "
+    "If a tool can operate only on a broader scope, do not call it; return `blocked` and identify the narrower capability required."
+)
 
 BUNDLED_WORKER_TOOLS: dict[str, set[str]] = {
     "BrowserQA": {"browser"},
@@ -43,7 +48,6 @@ BUNDLED_WORKER_TOOLS: dict[str, set[str]] = {
     },
     "Writer": {
         "read/readFile",
-        "read/problems",
         "edit/editFiles",
         "edit/createFile",
         "edit/createDirectory",
@@ -76,6 +80,7 @@ BUNDLED_WORKER_REQUIRED_SECTION_MARKERS: dict[str, dict[str, tuple[str, ...]]] =
     "BrowserQA": {
         "## Delegated task contract": ("Treat the delegated request as the complete task boundary.",),
         "## Strict rules": (
+            BOUNDARY_ENFORCEMENT_POLICY,
             "Do not modify files.",
             "Do not run terminal commands.",
             "Do not call another agent.",
@@ -86,6 +91,7 @@ BUNDLED_WORKER_REQUIRED_SECTION_MARKERS: dict[str, dict[str, tuple[str, ...]]] =
     "PullRequestResearcher": {
         "## Delegated task contract": ("Treat the delegated request as the complete task boundary.",),
         "## Strict rules": (
+            BOUNDARY_ENFORCEMENT_POLICY,
             "Do not modify files.",
             "Do not run terminal commands.",
             "Do not call another agent.",
@@ -96,6 +102,7 @@ BUNDLED_WORKER_REQUIRED_SECTION_MARKERS: dict[str, dict[str, tuple[str, ...]]] =
     "Researcher": {
         "## Delegated task contract": ("Treat the delegated request as the complete task boundary.",),
         "## Strict rules": (
+            BOUNDARY_ENFORCEMENT_POLICY,
             "Do not modify files.",
             "Do not run terminal commands.",
             "Do not call another agent.",
@@ -106,6 +113,7 @@ BUNDLED_WORKER_REQUIRED_SECTION_MARKERS: dict[str, dict[str, tuple[str, ...]]] =
     "Reviewer": {
         "## Delegated task contract": ("Treat the delegated request as the complete task boundary.",),
         "## Strict rules": (
+            BOUNDARY_ENFORCEMENT_POLICY,
             "Do not modify files.",
             "Do not run terminal commands.",
             "Do not call another agent.",
@@ -115,6 +123,7 @@ BUNDLED_WORKER_REQUIRED_SECTION_MARKERS: dict[str, dict[str, tuple[str, ...]]] =
     "Writer": {
         "## Delegated task contract": ("Treat the delegated request as the complete task boundary.",),
         "## Strict rules": (
+            BOUNDARY_ENFORCEMENT_POLICY,
             "Do not perform broad codebase investigation.",
             "Do not run terminal commands.",
             "Do not call another agent.",
@@ -358,6 +367,38 @@ def validate_section_markers(
                 result.errors.append(
                     f"{relative(path, root)}: missing required {definition_label} section marker "
                     f"{marker!r} in {heading!r}"
+                )
+
+
+def validate_workflow_action_pins(root: Path, result: ValidationResult) -> None:
+    workflows_dir = root / ".github" / "workflows"
+    if not workflows_dir.is_dir():
+        result.errors.append("missing .github/workflows directory")
+        return
+
+    workflow_files = sorted((*workflows_dir.glob("*.yml"), *workflows_dir.glob("*.yaml")))
+    if not workflow_files:
+        result.errors.append("no GitHub Actions workflow definitions found")
+        return
+
+    for path in workflow_files:
+        for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+            content = line.split("#", 1)[0].strip()
+            match = re.fullmatch(r"(?:-\s*)?uses:\s*(.+)", content)
+            if match is None:
+                continue
+            action_ref = match.group(1).strip().strip("\"'")
+            if action_ref.startswith("./") or action_ref.startswith("docker://"):
+                continue
+            if "@" not in action_ref:
+                result.errors.append(
+                    f"{relative(path, root)}:{line_number}: external action reference is missing @<full-commit-sha>"
+                )
+                continue
+            _, revision = action_ref.rsplit("@", 1)
+            if not FULL_COMMIT_SHA_PATTERN.fullmatch(revision):
+                result.errors.append(
+                    f"{relative(path, root)}:{line_number}: external action must be pinned to a full-length commit SHA: {action_ref}"
                 )
 
 
@@ -685,6 +726,8 @@ def validate_repository(root: Path) -> ValidationResult:
         )
     if "code-review" not in skill_entries:
         result.errors.append("code-review skill is missing")
+
+    validate_workflow_action_pins(root, result)
 
     for readme_path, required_sections in readmes:
         if not readme_path.exists():

@@ -35,6 +35,7 @@ Use GitHub Pull Requests extension context/tools when available in the local VS 
 
 ## Strict rules
 
+- Use a tool only when its arguments and runtime behavior can enforce the assigned boundary. If a tool can operate only on a broader scope, do not call it; return `blocked` and identify the narrower capability required.
 - Do not modify files.
 - Do not approve, merge, close, or comment on PRs.
 - Do not run terminal commands.

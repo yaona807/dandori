@@ -282,6 +282,8 @@ assets/
 - `PullRequestResearcher`にはGitHub Pull Requests拡張機能と、その拡張機能が公開するToolが必要です。
 - `BrowserQA`には設定済みのbrowser Tool群が必要です。
 - 利用できない、または認識されないTool名はruntimeに無視される場合があるため、実際のTool可用性を確認してください。
+- 同梱Workerは、Toolの引数とruntime挙動で委譲境界を強制できる場合だけ、そのToolを呼び出します。利用可能なToolがより広い範囲でしか動作できない場合は、実行せず`blocked`を返し、必要な狭いcapabilityを示します。
+- 同梱Reference Workerにはterminal command実行用Workerを含めていません。test、lint、型検査、build、formatterなどのcommand実行が必要な場合は、許可commandと作用範囲を限定した専用Workerを追加してください。
 - 外部Workerは、自己完結した依頼を処理し、再委譲せず、必要以上のToolを持たず、役割と作用範囲をdescriptionへ正確に記載する必要があります。
 - VS Code Chat Diagnosticsで、すべてのAgentとSkillの読み込み元を確認してください。
 
@@ -321,6 +323,27 @@ cp -R .copilot/skills/* .github/skills/
 
 workspace内の `.copilot/agents` と `.copilot/skills` を使うには、`chat.agentFilesLocations` と `chat.agentSkillsLocations` で追加探索先として有効にする必要があります。設定を行わずに `.copilot` をコピーするだけで認識されるとは限りません。
 
+
+### 既存インストールの更新
+
+既存配置へ新しい版を上書きするだけでは、新版で削除・改名されたファイルが残ります。更新前にDANDORIが管理するファイルだけを削除し、その後で新版をコピーしてください。独自Workerや無関係なSkillは削除しないでください。
+
+ユーザーレベル配置の削除対象：
+
+```bash
+rm -f ~/.copilot/agents/{Orchestrator,Researcher,PullRequestResearcher,Writer,Reviewer,BrowserQA}.agent.md
+rm -rf ~/.copilot/skills/code-review
+```
+
+標準workspace配置の削除対象：
+
+```bash
+rm -f .github/agents/{Orchestrator,Researcher,PullRequestResearcher,Writer,Reviewer,BrowserQA}.agent.md
+rm -rf .github/skills/code-review
+```
+
+削除後、選択した配置方法のインストールcommandを実行し、再度読み込み確認を行ってください。`.copilot`を追加探索先として使う場合も、設定した探索先から同じ管理対象ファイル名だけを削除します。
+
 ### 読み込み確認
 
 1. VS CodeのChat Viewでcontext menuを開き、**Diagnostics**を選択する
@@ -349,7 +372,7 @@ python -m pip install PyYAML==6.0.3
 python scripts/validate_definitions.py
 ```
 
-GitHub Actionsでは、Pull Requestと`master`へのpush時に決定論的な定義検証とValidatorのMutation Testを実行します。Validatorは同梱定義をclosed release inventoryとして扱い、Agentディレクトリでは`*.agent.md`以外を拒否し、`hooks`、`handoffs`、`mcp-servers`などTool境界を迂回し得るfrontmatterを禁止します。同梱Agentのfrontmatter、Tool、ファイル名、必須Section、安全Policy anchor、十分な圧縮余地を持つ本文回帰下限を固定し、Orchestratorの中核Invariantが意図したSection内に残っていることを検査します。同梱`code-review` Skillは宣言済みMarkdownだけを許可し、すべてのSkill Markdownに対して、大文字小文字や空白・ハイフン・アンダースコアの表記揺れを正規化したDANDORI固有依存と、Reviewerに属するWorker Policyの再流入を検査します。追加のローカルWorkerは`*.agent.md`として追加できますが、共通runtime、再委譲禁止、禁止frontmatter、DANDORI固有依存の検査対象となり、手動Policy／Diagnostics確認を要求するwarningを出します。リポジトリ外の外部Workerも定義を静的検査できないため、引き続きDiagnostics確認を要求するwarningとします。静的ファイルからLLM挙動は推定せず、モデルやVS Code更新時は`tests/conformance.md`を使用します。
+GitHub Actionsでは、Pull Requestと`master`へのpush時に決定論的な定義検証とValidatorのMutation Testを実行します。外部Actionは完全長commit SHAへ固定し、tagやbranchを参照する`uses`はValidatorで拒否します。Validatorは同梱定義をclosed release inventoryとして扱い、Agentディレクトリでは`*.agent.md`以外を拒否し、`hooks`、`handoffs`、`mcp-servers`などTool境界を迂回し得るfrontmatterを禁止します。同梱Agentのfrontmatter、Tool、ファイル名、必須Section、安全Policy anchor、十分な圧縮余地を持つ本文回帰下限を固定し、Orchestratorの中核Invariantが意図したSection内に残っていることを検査します。同梱`code-review` Skillは宣言済みMarkdownだけを許可し、すべてのSkill Markdownに対して、大文字小文字や空白・ハイフン・アンダースコアの表記揺れを正規化したDANDORI固有依存と、Reviewerに属するWorker Policyの再流入を検査します。追加のローカルWorkerは`*.agent.md`として追加できますが、共通runtime、再委譲禁止、禁止frontmatter、DANDORI固有依存の検査対象となり、手動Policy／Diagnostics確認を要求するwarningを出します。リポジトリ外の外部Workerも定義を静的検査できないため、引き続きDiagnostics確認を要求するwarningとします。静的ファイルからLLM挙動は推定せず、モデル、Worker Tool、VS Code更新時は`tests/conformance.md`の構造化Caseと実行記録templateを使用します。
 
 ## 設計原則
 
