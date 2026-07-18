@@ -13,12 +13,22 @@ run_id: CONF-YYYYMMDD-01
 date: YYYY-MM-DD
 vscode_version: ""
 copilot_chat_version: ""
+dandori_revision: ""
 model: ""
 subagent_feature_state: ""
 installation_scope: "user|workspace|custom"
 agent_sources_verified_with_diagnostics: false
 cases:
   CONF-001: pass|fail|blocked|not_run
+  CONF-002: pass|fail|blocked|not_run
+  CONF-003: pass|fail|blocked|not_run
+  CONF-004: pass|fail|blocked|not_run
+  CONF-005: pass|fail|blocked|not_run
+  CONF-006: pass|fail|blocked|not_run
+  CONF-007: pass|fail|blocked|not_run
+  CONF-008: pass|fail|blocked|not_run
+  CONF-009: pass|fail|blocked|not_run
+  CONF-010: pass|fail|blocked|not_run
 notes: ""
 ```
 

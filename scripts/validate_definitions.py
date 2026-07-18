@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import ast
 import re
 import sys
 from dataclasses import dataclass, field
@@ -16,6 +17,47 @@ MAX_AGENT_BODY_CHARS = 30_000
 MAX_SKILL_NAME_CHARS = 64
 MAX_SKILL_DESCRIPTION_CHARS = 1_024
 FULL_COMMIT_SHA_PATTERN = re.compile(r"^[0-9a-fA-F]{40}$")
+REQUIRED_REPOSITORY_FILES = frozenset(
+    {
+        ".gitignore",
+        "LICENSE",
+        "README.md",
+        "README_ja.md",
+        ".github/workflows/validate.yml",
+        "scripts/validate_definitions.py",
+        "tests/conformance.md",
+        "tests/test_validate_definitions.py",
+    }
+)
+REQUIRED_WORKFLOW_COMMANDS = (
+    "python scripts/validate_definitions.py",
+    'python -m unittest discover -s tests -p "test_*.py"',
+)
+REQUIRED_CONFORMANCE_CASE_IDS = tuple(f"CONF-{number:03d}" for number in range(1, 11))
+REQUIRED_MUTATION_TEST_METHODS = frozenset(
+    {
+        "test_repository_is_valid",
+        "test_orchestrator_rejects_edit_tool",
+        "test_worker_rejects_agent_tool",
+        "test_missing_bundled_worker_definition_is_rejected",
+        "test_execution_bypass_frontmatter_keys_are_rejected",
+        "test_dandori_coupling_format_variants_are_rejected",
+        "test_orchestrator_invariant_must_remain_in_its_required_section",
+        "test_bundled_worker_policy_must_remain_in_strict_rules",
+        "test_workflow_actions_require_full_commit_sha",
+        "test_verification_execute_policy_is_required",
+        "test_attempt_counter_uses_source_permission_pairs",
+        "test_unchanged_contract_entities_preserve_ids",
+        "test_required_repository_files_cannot_be_removed",
+        "test_validation_workflow_requires_validator_command",
+        "test_validation_workflow_requires_mutation_test_command",
+        "test_all_conformance_cases_are_required",
+        "test_conformance_run_record_lists_every_case",
+        "test_conformance_run_record_requires_dandori_revision",
+        "test_required_mutation_test_methods_cannot_be_removed",
+        "test_new_conformance_case_requires_run_record_entry",
+    }
+)
 BOUNDARY_ENFORCEMENT_POLICY = (
     "Use a tool only when its arguments and runtime behavior can enforce the assigned boundary. "
     "If a tool can operate only on a broader scope, do not call it; return `blocked` and identify the narrower capability required."
@@ -373,6 +415,143 @@ def validate_section_markers(
                 )
 
 
+def validate_required_repository_files(root: Path, result: ValidationResult) -> None:
+    for relative_path in sorted(REQUIRED_REPOSITORY_FILES):
+        path = root / relative_path
+        if not path.is_file():
+            result.errors.append(f"missing required repository file: {relative_path}")
+
+
+def _collect_mapping_values(value: Any, key: str) -> list[Any]:
+    collected: list[Any] = []
+    if isinstance(value, dict):
+        for item_key, item_value in value.items():
+            if item_key == key:
+                collected.append(item_value)
+            collected.extend(_collect_mapping_values(item_value, key))
+    elif isinstance(value, list):
+        for item in value:
+            collected.extend(_collect_mapping_values(item, key))
+    return collected
+
+
+def validate_required_workflow_commands(root: Path, result: ValidationResult) -> None:
+    path = root / ".github" / "workflows" / "validate.yml"
+    if not path.is_file():
+        return
+    try:
+        workflow = yaml.load(path.read_text(encoding="utf-8"), Loader=UniqueKeyLoader)
+    except Exception as exc:  # noqa: BLE001 - report malformed workflow as validation failure
+        result.errors.append(f"{relative(path, root)}: invalid workflow YAML: {exc}")
+        return
+    run_values = _collect_mapping_values(workflow, "run")
+    run_lines = {
+        line.strip()
+        for value in run_values
+        if isinstance(value, str)
+        for line in value.splitlines()
+        if line.strip()
+    }
+    for command in REQUIRED_WORKFLOW_COMMANDS:
+        if command not in run_lines:
+            result.errors.append(
+                f"{relative(path, root)}: missing required validation command: {command}"
+            )
+
+
+def validate_conformance_contract(root: Path, result: ValidationResult) -> None:
+    path = root / "tests" / "conformance.md"
+    if not path.is_file():
+        return
+    text = path.read_text(encoding="utf-8")
+    headings = re.findall(r"(?m)^### (CONF-\d{3})\b", text)
+    duplicates = sorted({case_id for case_id in headings if headings.count(case_id) > 1})
+    if duplicates:
+        result.errors.append(
+            f"{relative(path, root)}: duplicate conformance case IDs: {duplicates}"
+        )
+    missing = sorted(set(REQUIRED_CONFORMANCE_CASE_IDS) - set(headings))
+    if missing:
+        result.errors.append(
+            f"{relative(path, root)}: missing required conformance cases: {missing}"
+        )
+
+    case_matches = list(re.finditer(r"(?m)^### (CONF-\d{3})\b.*$", text))
+    for index, match in enumerate(case_matches):
+        case_id = match.group(1)
+        end = case_matches[index + 1].start() if index + 1 < len(case_matches) else len(text)
+        section = text[match.end():end]
+        for marker in ("**Input**", "**Expected**"):
+            if marker not in section:
+                result.errors.append(
+                    f"{relative(path, root)}: {case_id} is missing {marker}"
+                )
+
+    run_record_match = re.search(
+        r"(?ms)^## Run record\s+.*?```yaml\s*(.*?)```",
+        text,
+    )
+    if run_record_match is None:
+        result.errors.append(f"{relative(path, root)}: missing YAML run-record template")
+        return
+    try:
+        run_record = yaml.load(run_record_match.group(1), Loader=UniqueKeyLoader)
+    except Exception as exc:  # noqa: BLE001 - report malformed template
+        result.errors.append(f"{relative(path, root)}: invalid run-record YAML: {exc}")
+        return
+    if not isinstance(run_record, dict):
+        result.errors.append(f"{relative(path, root)}: run-record template must be a mapping")
+        return
+    if "dandori_revision" not in run_record:
+        result.errors.append(f"{relative(path, root)}: run-record template is missing dandori_revision")
+    cases = run_record.get("cases")
+    if not isinstance(cases, dict):
+        result.errors.append(f"{relative(path, root)}: run-record cases must be a mapping")
+        return
+    defined_case_ids = set(headings)
+    missing_run_cases = sorted(defined_case_ids - set(cases))
+    if missing_run_cases:
+        result.errors.append(
+            f"{relative(path, root)}: run-record template is missing cases: {missing_run_cases}"
+        )
+    unknown_run_cases = sorted(set(cases) - defined_case_ids)
+    if unknown_run_cases:
+        result.errors.append(
+            f"{relative(path, root)}: run-record template contains undefined cases: {unknown_run_cases}"
+        )
+
+
+def validate_required_mutation_tests(root: Path, result: ValidationResult) -> None:
+    path = root / "tests" / "test_validate_definitions.py"
+    if not path.is_file():
+        return
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    except SyntaxError as exc:
+        result.errors.append(f"{relative(path, root)}: invalid Python syntax: {exc}")
+        return
+    classes = [
+        node
+        for node in tree.body
+        if isinstance(node, ast.ClassDef) and node.name == "ValidatorMutationTests"
+    ]
+    if len(classes) != 1:
+        result.errors.append(
+            f"{relative(path, root)}: expected exactly one ValidatorMutationTests class"
+        )
+        return
+    methods = {
+        node.name
+        for node in classes[0].body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+    missing = sorted(REQUIRED_MUTATION_TEST_METHODS - methods)
+    if missing:
+        result.errors.append(
+            f"{relative(path, root)}: missing required mutation tests: {missing}"
+        )
+
+
 def validate_workflow_action_pins(root: Path, result: ValidationResult) -> None:
     workflows_dir = root / ".github" / "workflows"
     if not workflows_dir.is_dir():
@@ -410,6 +589,8 @@ def validate_repository(root: Path) -> ValidationResult:
     result = ValidationResult()
     agents_dir = root / ".copilot" / "agents"
     skills_dir = root / ".copilot" / "skills"
+    validate_required_repository_files(root, result)
+
     readmes = (
         (root / "README.md", ("## What's included", "## Installation", "## Design principles")),
         (root / "README_ja.md", ("## 含まれるもの", "## インストール", "## 設計原則")),
@@ -731,6 +912,9 @@ def validate_repository(root: Path) -> ValidationResult:
         result.errors.append("code-review skill is missing")
 
     validate_workflow_action_pins(root, result)
+    validate_required_workflow_commands(root, result)
+    validate_conformance_contract(root, result)
+    validate_required_mutation_tests(root, result)
 
     for readme_path, required_sections in readmes:
         if not readme_path.exists():
