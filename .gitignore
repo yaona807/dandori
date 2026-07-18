@@ -10,3 +10,10 @@ node_modules/
 dist/
 build/
 coverage/
+
+# Python
+__pycache__/
+*.py[codz]
+.pytest_cache/
+.coverage
+htmlcov/

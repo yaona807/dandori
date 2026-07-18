@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -533,6 +534,7 @@ Inspect only the delegated resource. Do not call another agent.
 
     def test_required_repository_files_cannot_be_removed(self) -> None:
         required_files = (
+            ".gitignore",
             "LICENSE",
             "README.md",
             "README_ja.md",
@@ -622,6 +624,34 @@ Inspect only the delegated resource. Do not call another agent.
             end = text.index("    def test_worker_rejects_agent_tool", start)
             path.write_text(text[:start] + text[end:])
             self.assert_invalid(repo, "missing required mutation tests")
+
+    def test_python_ignore_rules_are_required(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".gitignore"
+            path.write_text(path.read_text().replace("__pycache__/\n", "", 1))
+            self.assert_invalid(repo, "missing required Python ignore patterns")
+
+    def test_validate_workflow_disables_python_bytecode(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".github/workflows/validate.yml"
+            path.write_text(path.read_text().replace('      PYTHONDONTWRITEBYTECODE: "1"\n', "", 1))
+            self.assert_invalid(repo, "must set PYTHONDONTWRITEBYTECODE to 1")
+
+    def test_tracked_python_generated_artifact_is_rejected(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            subprocess.run(["git", "init", "-q", str(repo)], check=True)
+            subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True)
+            generated = repo / "scripts/__pycache__/generated.pyc"
+            generated.parent.mkdir(parents=True, exist_ok=True)
+            generated.write_bytes(b"generated")
+            subprocess.run(
+                ["git", "-C", str(repo), "add", "-f", "scripts/__pycache__/generated.pyc"],
+                check=True,
+            )
+            self.assert_invalid(repo, "tracked generated artifacts are forbidden")
 
     def test_list_style_workflow_action_requires_full_commit_sha(self) -> None:
         temp, repo = self.make_repo()

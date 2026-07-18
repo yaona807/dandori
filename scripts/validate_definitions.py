@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import ast
 import re
+import subprocess
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -34,6 +35,18 @@ REQUIRED_WORKFLOW_COMMANDS = (
     'python -m unittest discover -s tests -p "test_*.py"',
 )
 REQUIRED_CONFORMANCE_CASE_IDS = tuple(f"CONF-{number:03d}" for number in range(1, 11))
+REQUIRED_GITIGNORE_MARKERS = frozenset(
+    {
+        "__pycache__/",
+        "*.py[codz]",
+        ".pytest_cache/",
+        ".coverage",
+        "htmlcov/",
+    }
+)
+FORBIDDEN_TRACKED_PATH_PARTS = frozenset({"__pycache__", ".pytest_cache", "htmlcov"})
+FORBIDDEN_TRACKED_FILENAMES = frozenset({".coverage"})
+FORBIDDEN_TRACKED_SUFFIXES = frozenset({".pyc", ".pyo"})
 REQUIRED_MUTATION_TEST_METHODS = frozenset(
     {
         "test_repository_is_valid",
@@ -56,6 +69,9 @@ REQUIRED_MUTATION_TEST_METHODS = frozenset(
         "test_conformance_run_record_requires_dandori_revision",
         "test_required_mutation_test_methods_cannot_be_removed",
         "test_new_conformance_case_requires_run_record_entry",
+        "test_python_ignore_rules_are_required",
+        "test_validate_workflow_disables_python_bytecode",
+        "test_tracked_python_generated_artifact_is_rejected",
     }
 )
 BOUNDARY_ENFORCEMENT_POLICY = (
@@ -415,6 +431,52 @@ def validate_section_markers(
                 )
 
 
+def validate_gitignore_policy(root: Path, result: ValidationResult) -> None:
+    path = root / ".gitignore"
+    if not path.is_file():
+        return
+    entries = {
+        line.strip()
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    }
+    missing = sorted(REQUIRED_GITIGNORE_MARKERS - entries)
+    if missing:
+        result.errors.append(
+            f"{relative(path, root)}: missing required Python ignore patterns: {missing}"
+        )
+
+
+def _is_forbidden_generated_path(path_text: str) -> bool:
+    path = Path(path_text)
+    return (
+        bool(FORBIDDEN_TRACKED_PATH_PARTS.intersection(path.parts))
+        or path.name in FORBIDDEN_TRACKED_FILENAMES
+        or path.suffix.lower() in FORBIDDEN_TRACKED_SUFFIXES
+    )
+
+
+def validate_tracked_generated_artifacts(root: Path, result: ValidationResult) -> None:
+    git_metadata = root / ".git"
+    if not git_metadata.exists():
+        return
+    try:
+        completed = subprocess.run(
+            ["git", "-C", str(root), "ls-files", "-z"],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+    except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+        result.errors.append(f"unable to inspect tracked files with git: {exc}")
+        return
+    tracked = [entry for entry in completed.stdout.split("\0") if entry]
+    forbidden = sorted(path for path in tracked if _is_forbidden_generated_path(path))
+    if forbidden:
+        result.errors.append(f"tracked generated artifacts are forbidden: {forbidden}")
+
+
 def validate_required_repository_files(root: Path, result: ValidationResult) -> None:
     for relative_path in sorted(REQUIRED_REPOSITORY_FILES):
         path = root / relative_path
@@ -457,6 +519,13 @@ def validate_required_workflow_commands(root: Path, result: ValidationResult) ->
             result.errors.append(
                 f"{relative(path, root)}: missing required validation command: {command}"
             )
+    jobs = workflow.get("jobs") if isinstance(workflow, dict) else None
+    validate_job = jobs.get("validate") if isinstance(jobs, dict) else None
+    environment = validate_job.get("env") if isinstance(validate_job, dict) else None
+    if not isinstance(environment, dict) or str(environment.get("PYTHONDONTWRITEBYTECODE")) != "1":
+        result.errors.append(
+            f"{relative(path, root)}: validate job must set PYTHONDONTWRITEBYTECODE to 1"
+        )
 
 
 def validate_conformance_contract(root: Path, result: ValidationResult) -> None:
@@ -590,6 +659,9 @@ def validate_repository(root: Path) -> ValidationResult:
     agents_dir = root / ".copilot" / "agents"
     skills_dir = root / ".copilot" / "skills"
     validate_required_repository_files(root, result)
+
+    validate_gitignore_policy(root, result)
+    validate_tracked_generated_artifacts(root, result)
 
     readmes = (
         (root / "README.md", ("## What's included", "## Installation", "## Design principles")),
