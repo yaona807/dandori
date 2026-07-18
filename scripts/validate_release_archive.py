@@ -20,6 +20,12 @@ from validate_definitions import (
 
 MAX_RELEASE_ENTRIES = 500
 MAX_RELEASE_UNCOMPRESSED_BYTES = 25_000_000
+WINDOWS_FORBIDDEN_CHARACTERS = frozenset('<>:"\\|?*')
+WINDOWS_RESERVED_BASENAMES = frozenset(
+    {"CON", "PRN", "AUX", "NUL"}
+    | {f"COM{number}" for number in range(1, 10)}
+    | {f"LPT{number}" for number in range(1, 10)}
+)
 ALLOWED_TOP_LEVEL_ENTRIES = frozenset(
     {
         ".copilot",
@@ -45,6 +51,29 @@ def _is_forbidden_generated_path(path: PurePosixPath) -> bool:
 
 def _entry_kind(info: zipfile.ZipInfo) -> int:
     return stat.S_IFMT(info.external_attr >> 16)
+
+
+def _windows_portability_error(component: str) -> str | None:
+    if component.endswith((" ", ".")):
+        return "path components must not end with a space or period"
+    forbidden = sorted(
+        {character for character in component if character in WINDOWS_FORBIDDEN_CHARACTERS}
+    )
+    if forbidden:
+        return f"path component contains Windows-forbidden characters: {forbidden}"
+    if any(ord(character) < 32 for character in component):
+        return "path component contains a Windows-forbidden control character"
+    basename = component.split(".", 1)[0].upper()
+    if basename in WINDOWS_RESERVED_BASENAMES:
+        return f"Windows-reserved path component is forbidden: {component}"
+    return None
+
+
+def _portable_path_key(parts: list[str]) -> str:
+    return "/".join(
+        unicodedata.normalize("NFKC", component).casefold()
+        for component in parts
+    )
 
 
 def validate_release_archive(archive_path: Path) -> list[str]:
@@ -79,11 +108,6 @@ def validate_release_archive(archive_path: Path) -> list[str]:
                 errors.append(f"duplicate ZIP entry is forbidden: {name}")
                 continue
             seen_names.add(name)
-            portable_name = unicodedata.normalize("NFC", name).casefold()
-            if portable_name in seen_portable_names:
-                errors.append(f"portable-name collision is forbidden in release ZIP: {name}")
-                continue
-            seen_portable_names.add(portable_name)
             if not name or "\\" in name or "\x00" in name:
                 errors.append(f"invalid ZIP entry name: {name!r}")
                 continue
@@ -98,6 +122,19 @@ def validate_release_archive(archive_path: Path) -> list[str]:
             ):
                 errors.append(f"unsafe ZIP entry path: {name}")
                 continue
+            portability_errors = [
+                error
+                for component in raw_parts
+                if (error := _windows_portability_error(component)) is not None
+            ]
+            if portability_errors:
+                errors.extend(f"non-portable ZIP entry name {name!r}: {error}" for error in portability_errors)
+                continue
+            portable_name = _portable_path_key(raw_parts)
+            if portable_name in seen_portable_names:
+                errors.append(f"portable-name collision is forbidden in release ZIP: {name}")
+                continue
+            seen_portable_names.add(portable_name)
             if path.parts[0] not in ALLOWED_TOP_LEVEL_ENTRIES:
                 errors.append(f"unexpected top-level release entry: {path.parts[0]}")
             if _is_forbidden_generated_path(path):
