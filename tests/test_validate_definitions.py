@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import importlib.util
-import os
 import shutil
 import subprocess
 import sys
@@ -586,8 +585,11 @@ Inspect only the delegated resource. Do not call another agent.
             "README_ja.md",
             ".github/workflows/validate.yml",
             "scripts/validate_definitions.py",
+            "scripts/validate_release_archive.py",
+            "scripts/run_tests.py",
             "tests/conformance.md",
             "tests/test_validate_definitions.py",
+            "tests/test_validate_release_archive.py",
         )
         for relative_path in required_files:
             with self.subTest(path=relative_path):
@@ -615,7 +617,7 @@ Inspect only the delegated resource. Do not call another agent.
             path = repo / ".github/workflows/validate.yml"
             path.write_text(
                 path.read_text().replace(
-                    'run: python -m unittest discover -s tests -p "test_*.py"',
+                    'run: python scripts/run_tests.py',
                     "run: echo tests skipped",
                     1,
                 )
@@ -735,7 +737,7 @@ Inspect only the delegated resource. Do not call another agent.
             text = path.read_text()
             text = text.replace("run: python scripts/validate_definitions.py", "run: echo validator skipped", 1)
             text = text.replace(
-                'run: python -m unittest discover -s tests -p "test_*.py"',
+                'run: python scripts/run_tests.py',
                 "run: echo tests skipped",
                 1,
             )
@@ -911,7 +913,7 @@ Inspect only the delegated resource. Do not call another agent.
             start = text.index("    def test_orchestrator_rejects_edit_tool")
             end = text.index("    def test_worker_rejects_agent_tool", start)
             path.write_text(text[:start] + text[end:])
-            self.assert_invalid(repo, "missing required mutation tests")
+            self.assert_invalid(repo, "missing required tests in ValidatorMutationTests")
 
     def test_required_mutation_test_bodies_cannot_be_empty(self) -> None:
         temp, repo = self.make_repo()
@@ -922,7 +924,7 @@ Inspect only the delegated resource. Do not call another agent.
             end = text.index("    def test_worker_rejects_agent_tool", start)
             replacement = "    def test_orchestrator_rejects_edit_tool(self) -> None:\n        pass\n\n"
             path.write_text(text[:start] + replacement + text[end:])
-            self.assert_invalid(repo, "required mutation test body is incomplete")
+            self.assert_invalid(repo, "required test body is incomplete")
 
     def test_required_mutation_test_helpers_cannot_be_empty(self) -> None:
         temp, repo = self.make_repo()
@@ -933,9 +935,8 @@ Inspect only the delegated resource. Do not call another agent.
             end = text.index("    def test_repository_is_valid", start)
             replacement = "    def assert_invalid(self, repo: Path, needle: str) -> None:\n        pass\n\n"
             path.write_text(text[:start] + replacement + text[end:])
-            self.assert_invalid(repo, "required mutation test helper is incomplete")
+            self.assert_invalid(repo, "required test helper is incomplete")
 
-    @unittest.skipUnless(hasattr(os, "symlink"), "symlink support is required")
     def test_repository_symlinks_are_rejected(self) -> None:
         temp, repo = self.make_repo()
         with temp:
@@ -945,6 +946,93 @@ Inspect only the delegated resource. Do not call another agent.
             path.unlink()
             path.symlink_to(external)
             self.assert_invalid(repo, "repository symlinks are forbidden")
+
+    def test_required_mutation_test_class_cannot_be_skipped(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / "tests/test_validate_definitions.py"
+            path.write_text(
+                path.read_text().replace(
+                    "class ValidatorMutationTests(unittest.TestCase):",
+                    '@unittest.skip("disabled")\nclass ValidatorMutationTests(unittest.TestCase):',
+                    1,
+                )
+            )
+            self.assert_invalid(repo, "required test class must not be skipped")
+
+    def test_required_mutation_test_method_cannot_be_skipped(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / "tests/test_validate_definitions.py"
+            path.write_text(
+                path.read_text().replace(
+                    "    def test_orchestrator_rejects_edit_tool",
+                    '    @unittest.skip("disabled")\n    def test_orchestrator_rejects_edit_tool',
+                    1,
+                )
+            )
+            self.assert_invalid(repo, "required test method must not be skipped")
+
+    def test_required_release_test_class_cannot_be_skipped(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / "tests/test_validate_release_archive.py"
+            path.write_text(
+                path.read_text().replace(
+                    "class ReleaseArchiveValidationTests(unittest.TestCase):",
+                    '@unittest.skip("disabled")\nclass ReleaseArchiveValidationTests(unittest.TestCase):',
+                    1,
+                )
+            )
+            self.assert_invalid(repo, "required test class must not be skipped")
+
+    def test_required_release_test_methods_cannot_be_removed(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / "tests/test_validate_release_archive.py"
+            text = path.read_text()
+            start = text.index("    def test_release_archive_rejects_path_traversal")
+            end = text.index("    def test_release_archive_rejects_absolute_path", start)
+            path.write_text(text[:start] + text[end:])
+            self.assert_invalid(repo, "missing required tests in ReleaseArchiveValidationTests")
+
+    def test_required_release_test_bodies_cannot_be_empty(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / "tests/test_validate_release_archive.py"
+            text = path.read_text()
+            start = text.index("    def test_release_archive_rejects_path_traversal")
+            end = text.index("    def test_release_archive_rejects_absolute_path", start)
+            replacement = (
+                "    def test_release_archive_rejects_path_traversal(self) -> None:\n"
+                "        pass\n\n"
+            )
+            path.write_text(text[:start] + replacement + text[end:])
+            self.assert_invalid(repo, "required test body is incomplete")
+
+    def test_required_release_test_helpers_cannot_be_empty(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / "tests/test_validate_release_archive.py"
+            text = path.read_text()
+            start = text.index("    def assert_invalid")
+            end = text.index("    def test_release_archive_is_valid", start)
+            replacement = "    def assert_invalid(self, archive_path: Path, needle: str) -> None:\n        pass\n\n"
+            path.write_text(text[:start] + replacement + text[end:])
+            self.assert_invalid(repo, "required test helper is incomplete")
+
+    def test_test_runner_skip_guard_is_required(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / "scripts/run_tests.py"
+            path.write_text(
+                path.read_text().replace(
+                    "if result.skipped and not arguments.allow_skips:",
+                    "if not arguments.allow_skips:",
+                    1,
+                )
+            )
+            self.assert_invalid(repo, "test runner must fail closed on missing or skipped tests")
 
     def test_python_ignore_rules_are_required(self) -> None:
         temp, repo = self.make_repo()
