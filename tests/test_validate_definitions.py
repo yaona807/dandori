@@ -801,12 +801,12 @@ Inspect only the delegated resource. Do not call another agent.
             path = repo / ".github/workflows/validate.yml"
             path.write_text(
                 path.read_text().replace(
-                    "        uses: actions/checkout@",
-                    "        with:\n          repository: attacker/repository\n        uses: actions/checkout@",
+                    "          persist-credentials: false\n",
+                    "          persist-credentials: false\n          repository: attacker/repository\n",
                     1,
                 )
             )
-            self.assert_invalid(repo, "checkout step contains unsupported keys")
+            self.assert_invalid(repo, "checkout step must set persist-credentials: false")
 
     def test_all_conformance_cases_are_required(self) -> None:
         temp, repo = self.make_repo()
@@ -948,6 +948,52 @@ Inspect only the delegated resource. Do not call another agent.
                 "name: Extra\non: push\njobs:\n  check:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: docker://alpine:latest\n"
             )
             self.assert_invalid(repo, "Docker action must be pinned to a sha256 digest")
+
+    def test_validation_workflow_rejects_unapproved_trigger(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".github/workflows/validate.yml"
+            path.write_text(path.read_text().replace("  push:\n", "  workflow_dispatch:\n  push:\n", 1))
+            self.assert_invalid(repo, "workflow triggers must be exactly")
+
+    def test_validation_workflow_rejects_additional_job(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".github/workflows/validate.yml"
+            path.write_text(
+                path.read_text()
+                + "\n  publish:\n    runs-on: ubuntu-latest\n    permissions:\n      contents: write\n    steps:\n      - run: echo publish\n"
+            )
+            self.assert_invalid(repo, "validation workflow jobs must be exactly")
+
+    def test_additional_workflow_is_rejected(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".github/workflows/unsafe.yml"
+            path.write_text("name: Unsafe\non: push\njobs: {}\n")
+            self.assert_invalid(repo, "unapproved workflow files are forbidden")
+
+    def test_local_github_actions_are_rejected(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".github/actions/demo/action.yml"
+            path.parent.mkdir(parents=True)
+            path.write_text("name: Demo\nruns:\n  using: composite\n  steps: []\n")
+            self.assert_invalid(repo, "local GitHub Actions are forbidden")
+
+    def test_checkout_disables_persisted_credentials(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".github/workflows/validate.yml"
+            path.write_text(path.read_text().replace("          persist-credentials: false\n", "", 1))
+            self.assert_invalid(repo, "checkout step must set persist-credentials: false")
+
+    def test_validate_job_requires_timeout(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".github/workflows/validate.yml"
+            path.write_text(path.read_text().replace("    timeout-minutes: 15\n", "", 1))
+            self.assert_invalid(repo, "validate job timeout-minutes must be 15")
 
     def test_list_style_workflow_action_requires_full_commit_sha(self) -> None:
         temp, repo = self.make_repo()
