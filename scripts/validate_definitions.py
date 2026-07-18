@@ -44,6 +44,9 @@ REQUIRED_RELEASE_ARCHIVE_VALIDATION_COMMAND = "python scripts/validate_release_a
 REQUIRED_WORKFLOW_PUSH_BRANCH = "master"
 REQUIRED_WORKFLOW_PYTHON_VERSION = "3.12"
 REQUIRED_WORKFLOW_RUNNER = "ubuntu-latest"
+REQUIRED_WORKFLOW_TIMEOUT_MINUTES = 15
+ALLOWED_WORKFLOW_FILES = frozenset({"validate.yml"})
+ALLOWED_WORKFLOW_TRIGGERS = frozenset({"pull_request", "push"})
 REQUIRED_CONFORMANCE_CASE_IDS = tuple(f"CONF-{number:03d}" for number in range(1, 14))
 REQUIRED_GITIGNORE_MARKERS = frozenset(
     {
@@ -110,6 +113,12 @@ REQUIRED_MUTATION_TEST_METHODS = frozenset(
         "test_python_ignore_rules_are_required",
         "test_validate_workflow_disables_python_bytecode",
         "test_tracked_python_generated_artifact_is_rejected",
+        "test_validation_workflow_rejects_unapproved_trigger",
+        "test_validation_workflow_rejects_additional_job",
+        "test_additional_workflow_is_rejected",
+        "test_local_github_actions_are_rejected",
+        "test_checkout_disables_persisted_credentials",
+        "test_validate_job_requires_timeout",
     }
 )
 BOUNDARY_ENFORCEMENT_POLICY = (
@@ -587,6 +596,33 @@ def _validate_required_trigger(
     return config
 
 
+def validate_github_actions_inventory(root: Path, result: ValidationResult) -> None:
+    workflows_dir = root / ".github" / "workflows"
+    if not workflows_dir.is_dir():
+        return
+    workflow_files = {
+        path.name
+        for path in workflows_dir.iterdir()
+        if path.is_file() and path.suffix in {".yml", ".yaml"}
+    }
+    unexpected_workflows = sorted(workflow_files - ALLOWED_WORKFLOW_FILES)
+    missing_workflows = sorted(ALLOWED_WORKFLOW_FILES - workflow_files)
+    if unexpected_workflows:
+        result.errors.append(
+            f".github/workflows: unapproved workflow files are forbidden: {unexpected_workflows}"
+        )
+    if missing_workflows:
+        result.errors.append(
+            f".github/workflows: missing approved workflow files: {missing_workflows}"
+        )
+
+    actions_dir = root / ".github" / "actions"
+    if actions_dir.exists():
+        result.errors.append(
+            ".github/actions: local GitHub Actions are forbidden in the closed validation workflow"
+        )
+
+
 def validate_required_workflow_commands(root: Path, result: ValidationResult) -> None:
     path = root / ".github" / "workflows" / "validate.yml"
     if not path.is_file():
@@ -596,6 +632,12 @@ def validate_required_workflow_commands(root: Path, result: ValidationResult) ->
         return
 
     triggers = workflow.get("on")
+    if isinstance(triggers, dict):
+        trigger_names = {str(name) for name in triggers}
+        if trigger_names != ALLOWED_WORKFLOW_TRIGGERS:
+            result.errors.append(
+                f"{relative(path, root)}: workflow triggers must be exactly {sorted(ALLOWED_WORKFLOW_TRIGGERS)}"
+            )
     pull_request = _validate_required_trigger(triggers, "pull_request", path, root, result)
     push = _validate_required_trigger(triggers, "push", path, root, result)
     if isinstance(push, dict):
@@ -619,6 +661,10 @@ def validate_required_workflow_commands(root: Path, result: ValidationResult) ->
         )
 
     jobs = workflow.get("jobs")
+    if isinstance(jobs, dict) and set(jobs) != {"validate"}:
+        result.errors.append(
+            f"{relative(path, root)}: validation workflow jobs must be exactly ['validate']"
+        )
     validate_job = jobs.get("validate") if isinstance(jobs, dict) else None
     if not isinstance(validate_job, dict):
         result.errors.append(f"{relative(path, root)}: missing jobs.validate mapping")
@@ -629,7 +675,7 @@ def validate_required_workflow_commands(root: Path, result: ValidationResult) ->
         result.errors.append(f"{relative(path, root)}: validate job must not continue on error")
     if "needs" in validate_job:
         result.errors.append(f"{relative(path, root)}: validate job must not depend on another job")
-    allowed_job_keys = {"runs-on", "env", "steps", "if", "continue-on-error", "needs"}
+    allowed_job_keys = {"runs-on", "timeout-minutes", "env", "steps", "if", "continue-on-error", "needs"}
     unexpected_job_keys = sorted(set(validate_job) - allowed_job_keys)
     if unexpected_job_keys:
         result.errors.append(
@@ -638,6 +684,10 @@ def validate_required_workflow_commands(root: Path, result: ValidationResult) ->
     if validate_job.get("runs-on") != REQUIRED_WORKFLOW_RUNNER:
         result.errors.append(
             f"{relative(path, root)}: validate job must run on {REQUIRED_WORKFLOW_RUNNER}"
+        )
+    if validate_job.get("timeout-minutes") != REQUIRED_WORKFLOW_TIMEOUT_MINUTES:
+        result.errors.append(
+            f"{relative(path, root)}: validate job timeout-minutes must be {REQUIRED_WORKFLOW_TIMEOUT_MINUTES}"
         )
 
     environment = validate_job.get("env")
@@ -675,7 +725,7 @@ def validate_required_workflow_commands(root: Path, result: ValidationResult) ->
         archive_validation_step,
     ) = steps
     action_specs = (
-        (checkout_step, "actions/checkout@", "checkout", {"name", "uses"}),
+        (checkout_step, "actions/checkout@", "checkout", {"name", "uses", "with"}),
         (python_step, "actions/setup-python@", "setup-python", {"name", "uses", "with"}),
     )
     for step, prefix, label, allowed_keys in action_specs:
@@ -689,6 +739,12 @@ def validate_required_workflow_commands(root: Path, result: ValidationResult) ->
             result.errors.append(
                 f"{relative(path, root)}: validate job {label} step must use {prefix}<full-commit-sha>"
             )
+    checkout_with = checkout_step.get("with")
+    if checkout_with != {"persist-credentials": False}:
+        result.errors.append(
+            f"{relative(path, root)}: checkout step must set persist-credentials: false and no other options"
+        )
+
     python_with = python_step.get("with")
     if python_with != {"python-version": REQUIRED_WORKFLOW_PYTHON_VERSION}:
         result.errors.append(
@@ -962,6 +1018,7 @@ def validate_repository(root: Path) -> ValidationResult:
 
     validate_gitignore_policy(root, result)
     validate_tracked_generated_artifacts(root, result)
+    validate_github_actions_inventory(root, result)
 
     readmes = (
         (root / "README.md", ("## What's included", "## Installation", "## Design principles")),
