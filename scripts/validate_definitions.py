@@ -29,6 +29,7 @@ REQUIRED_REPOSITORY_FILES = frozenset(
         ".github/workflows/validate.yml",
         "scripts/validate_definitions.py",
         "scripts/validate_release_archive.py",
+        "scripts/run_tests.py",
         "tests/conformance.md",
         "tests/test_validate_definitions.py",
         "tests/test_validate_release_archive.py",
@@ -36,7 +37,7 @@ REQUIRED_REPOSITORY_FILES = frozenset(
 )
 REQUIRED_WORKFLOW_COMMANDS = (
     "python scripts/validate_definitions.py",
-    'python -m unittest discover -s tests -p "test_*.py"',
+    "python scripts/run_tests.py",
 )
 REQUIRED_WORKFLOW_INSTALL_COMMAND = "python -m pip install --disable-pip-version-check PyYAML==6.0.3"
 REQUIRED_RELEASE_ARCHIVE_BUILD_COMMAND = "git archive --format=zip --output=dandori-release.zip HEAD"
@@ -60,6 +61,28 @@ REQUIRED_GITIGNORE_MARKERS = frozenset(
 FORBIDDEN_TRACKED_PATH_PARTS = frozenset({"__pycache__", ".pytest_cache", "htmlcov"})
 FORBIDDEN_TRACKED_FILENAMES = frozenset({".coverage"})
 FORBIDDEN_TRACKED_SUFFIXES = frozenset({".pyc", ".pyo"})
+REQUIRED_RELEASE_ARCHIVE_TEST_METHODS = frozenset(
+    {
+        "test_release_archive_is_valid",
+        "test_release_archive_rejects_path_traversal",
+        "test_release_archive_rejects_absolute_path",
+        "test_release_archive_rejects_backslash_path",
+        "test_release_archive_rejects_dot_segment",
+        "test_release_archive_rejects_symlink",
+        "test_release_archive_rejects_generated_artifact",
+        "test_release_archive_rejects_missing_required_file",
+        "test_release_archive_rejects_unexpected_top_level_entry",
+        "test_release_archive_rejects_duplicate_entry",
+        "test_release_archive_rejects_portable_name_collision",
+        "test_release_archive_rejects_windows_reserved_names",
+        "test_release_archive_rejects_windows_forbidden_characters",
+        "test_release_archive_rejects_trailing_space_or_period",
+        "test_release_archive_rejects_nfkc_portable_name_collision",
+        "test_release_archive_rejects_invalid_extracted_repository",
+    }
+)
+SKIP_DECORATOR_NAMES = frozenset({"skip", "skipIf", "skipUnless", "expectedFailure"})
+
 REQUIRED_MUTATION_TEST_METHODS = frozenset(
     {
         "test_repository_is_valid",
@@ -121,6 +144,13 @@ REQUIRED_MUTATION_TEST_METHODS = frozenset(
         "test_validate_job_requires_timeout",
         "test_pull_request_trigger_configuration_is_exact",
         "test_push_trigger_configuration_is_exact",
+        "test_required_mutation_test_class_cannot_be_skipped",
+        "test_required_mutation_test_method_cannot_be_skipped",
+        "test_required_release_test_class_cannot_be_skipped",
+        "test_required_release_test_methods_cannot_be_removed",
+        "test_required_release_test_bodies_cannot_be_empty",
+        "test_required_release_test_helpers_cannot_be_empty",
+        "test_test_runner_skip_guard_is_required",
     }
 )
 BOUNDARY_ENFORCEMENT_POLICY = (
@@ -878,8 +908,52 @@ def validate_conformance_contract(root: Path, result: ValidationResult) -> None:
         )
 
 
-def validate_required_mutation_tests(root: Path, result: ValidationResult) -> None:
-    path = root / "tests" / "test_validate_definitions.py"
+def _decorator_name(decorator: ast.expr) -> str | None:
+    target = decorator.func if isinstance(decorator, ast.Call) else decorator
+    if isinstance(target, ast.Attribute):
+        return target.attr
+    if isinstance(target, ast.Name):
+        return target.id
+    return None
+
+
+def _has_skip_decorator(node: ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
+    return any(_decorator_name(decorator) in SKIP_DECORATOR_NAMES for decorator in node.decorator_list)
+
+
+def _class_forces_skip(node: ast.ClassDef) -> bool:
+    for statement in node.body:
+        if not isinstance(statement, (ast.Assign, ast.AnnAssign)):
+            continue
+        targets = statement.targets if isinstance(statement, ast.Assign) else [statement.target]
+        if any(isinstance(target, ast.Name) and target.id == "__unittest_skip__" for target in targets):
+            return True
+    return False
+
+
+def _called_names(node: ast.AST) -> set[str]:
+    return {
+        call.func.attr if isinstance(call.func, ast.Attribute) else call.func.id
+        for call in ast.walk(node)
+        if isinstance(call, ast.Call) and isinstance(call.func, (ast.Attribute, ast.Name))
+    }
+
+
+def _validate_required_test_class(
+    *,
+    path: Path,
+    root: Path,
+    result: ValidationResult,
+    class_name: str,
+    required_methods: frozenset[str],
+    helper_requirements: dict[str, set[str]],
+    valid_method_name: str,
+    valid_assertion: str,
+    valid_factory: str | None,
+    mutation_factory: str,
+    mutation_assertion: str,
+    mutation_calls: set[str],
+) -> None:
     if not path.is_file():
         return
     try:
@@ -890,76 +964,148 @@ def validate_required_mutation_tests(root: Path, result: ValidationResult) -> No
     classes = [
         node
         for node in tree.body
-        if isinstance(node, ast.ClassDef) and node.name == "ValidatorMutationTests"
+        if isinstance(node, ast.ClassDef) and node.name == class_name
     ]
     if len(classes) != 1:
-        result.errors.append(
-            f"{relative(path, root)}: expected exactly one ValidatorMutationTests class"
-        )
+        result.errors.append(f"{relative(path, root)}: expected exactly one {class_name} class")
         return
-    methods = {
-        node.name: node
-        for node in classes[0].body
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-    }
-    missing = sorted(REQUIRED_MUTATION_TEST_METHODS - set(methods))
-    if missing:
+    test_class = classes[0]
+    if _has_skip_decorator(test_class) or _class_forces_skip(test_class):
         result.errors.append(
-            f"{relative(path, root)}: missing required mutation tests: {missing}"
+            f"{relative(path, root)}: required test class must not be skipped: {class_name}"
         )
 
-    helper_requirements = {
-        "make_repo": {"TemporaryDirectory", "copytree"},
-        "assert_valid": {"validate_repository", "assertEqual"},
-        "assert_invalid": {"validate_repository", "assertTrue"},
-        "mutate_workflow": {"load", "write_text"},
+    methods = {
+        node.name: node
+        for node in test_class.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
     }
+    missing = sorted(required_methods - set(methods))
+    if missing:
+        result.errors.append(
+            f"{relative(path, root)}: missing required tests in {class_name}: {missing}"
+        )
+
     for helper_name, required_calls in helper_requirements.items():
         helper = methods.get(helper_name)
         if helper is None:
             result.errors.append(
-                f"{relative(path, root)}: missing required mutation test helper: {helper_name}"
+                f"{relative(path, root)}: missing required test helper in {class_name}: {helper_name}"
             )
             continue
-        called_names = {
-            call.func.attr if isinstance(call.func, ast.Attribute) else call.func.id
-            for call in ast.walk(helper)
-            if isinstance(call, ast.Call) and isinstance(call.func, (ast.Attribute, ast.Name))
-        }
-        if not required_calls.issubset(called_names):
+        if _has_skip_decorator(helper):
             result.errors.append(
-                f"{relative(path, root)}: required mutation test helper is incomplete: {helper_name}"
+                f"{relative(path, root)}: required test helper must not be skipped: {helper_name}"
+            )
+        if not required_calls.issubset(_called_names(helper)):
+            result.errors.append(
+                f"{relative(path, root)}: required test helper is incomplete: {helper_name}"
             )
 
-    mutation_calls = {
-        "write_text",
-        "write_bytes",
-        "unlink",
-        "rmtree",
-        "symlink_to",
-        "mkdir",
-        "run",
-        "mutate_workflow",
-    }
-    for method_name in sorted(REQUIRED_MUTATION_TEST_METHODS & set(methods)):
+    for method_name in sorted(required_methods & set(methods)):
         method = methods[method_name]
-        called_names = {
-            call.func.attr if isinstance(call.func, ast.Attribute) else call.func.id
-            for call in ast.walk(method)
-            if isinstance(call, ast.Call) and isinstance(call.func, (ast.Attribute, ast.Name))
-        }
-        if method_name == "test_repository_is_valid":
-            complete = "assert_valid" in called_names
+        if _has_skip_decorator(method):
+            result.errors.append(
+                f"{relative(path, root)}: required test method must not be skipped: {method_name}"
+            )
+        called_names = _called_names(method)
+        if method_name == valid_method_name:
+            complete = valid_assertion in called_names and (
+                valid_factory is None or valid_factory in called_names
+            )
         else:
             complete = (
-                "make_repo" in called_names
-                and "assert_invalid" in called_names
+                mutation_factory in called_names
+                and mutation_assertion in called_names
                 and bool(mutation_calls.intersection(called_names))
             )
         if not complete:
             result.errors.append(
-                f"{relative(path, root)}: required mutation test body is incomplete: {method_name}"
+                f"{relative(path, root)}: required test body is incomplete: {method_name}"
             )
+
+
+def validate_required_mutation_tests(root: Path, result: ValidationResult) -> None:
+    _validate_required_test_class(
+        path=root / "tests" / "test_validate_definitions.py",
+        root=root,
+        result=result,
+        class_name="ValidatorMutationTests",
+        required_methods=REQUIRED_MUTATION_TEST_METHODS,
+        helper_requirements={
+            "make_repo": {"TemporaryDirectory", "copytree"},
+            "assert_valid": {"validate_repository", "assertEqual"},
+            "assert_invalid": {"validate_repository", "assertTrue"},
+            "mutate_workflow": {"load", "write_text"},
+        },
+        valid_method_name="test_repository_is_valid",
+        valid_assertion="assert_valid",
+        valid_factory=None,
+        mutation_factory="make_repo",
+        mutation_assertion="assert_invalid",
+        mutation_calls={
+            "write_text",
+            "write_bytes",
+            "unlink",
+            "rmtree",
+            "symlink_to",
+            "mkdir",
+            "run",
+            "mutate_workflow",
+        },
+    )
+    _validate_required_test_class(
+        path=root / "tests" / "test_validate_release_archive.py",
+        root=root,
+        result=result,
+        class_name="ReleaseArchiveValidationTests",
+        required_methods=REQUIRED_RELEASE_ARCHIVE_TEST_METHODS,
+        helper_requirements={
+            "make_archive": {"TemporaryDirectory", "ZipFile", "write"},
+            "assert_invalid": {"validate_release_archive", "assertTrue"},
+        },
+        valid_method_name="test_release_archive_is_valid",
+        valid_assertion="assertEqual",
+        valid_factory="make_archive",
+        mutation_factory="make_archive",
+        mutation_assertion="assert_invalid",
+        mutation_calls={"writestr", "write", "unlink"},
+    )
+
+
+def validate_test_runner_contract(root: Path, result: ValidationResult) -> None:
+    path = root / "scripts" / "run_tests.py"
+    if not path.is_file():
+        return
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    except SyntaxError as exc:
+        result.errors.append(f"{relative(path, root)}: invalid Python syntax: {exc}")
+        return
+    main_functions = [
+        node
+        for node in tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "main"
+    ]
+    if len(main_functions) != 1:
+        result.errors.append(f"{relative(path, root)}: expected exactly one main test-runner function")
+        return
+    main_function = main_functions[0]
+    calls = _called_names(main_function)
+    attributes = {node.attr for node in ast.walk(main_function) if isinstance(node, ast.Attribute)}
+    if not {"discover", "run", "wasSuccessful"}.issubset(calls):
+        result.errors.append(f"{relative(path, root)}: test runner must discover, run, and evaluate the suite")
+    skip_guard_present = any(
+        isinstance(node, ast.If)
+        and {"skipped", "allow_skips"}.issubset(
+            {attribute.attr for attribute in ast.walk(node.test) if isinstance(attribute, ast.Attribute)}
+        )
+        for node in ast.walk(main_function)
+    )
+    if not {"testsRun", "skipped"}.issubset(attributes) or not skip_guard_present:
+        result.errors.append(f"{relative(path, root)}: test runner must fail closed on missing or skipped tests")
+    if "--allow-skips" not in path.read_text(encoding="utf-8"):
+        result.errors.append(f"{relative(path, root)}: test runner must expose only the explicit local allow-skips override")
 
 
 def _iter_key_values(value: Any, key: str, location: str = "") -> list[tuple[str, Any]]:
@@ -1355,6 +1501,7 @@ def validate_repository(root: Path) -> ValidationResult:
     validate_required_workflow_commands(root, result)
     validate_conformance_contract(root, result)
     validate_required_mutation_tests(root, result)
+    validate_test_runner_contract(root, result)
 
     for readme_path, required_sections in readmes:
         if not readme_path.exists():
