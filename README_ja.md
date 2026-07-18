@@ -382,11 +382,118 @@ git archive --format=zip --output=dandori.zip HEAD
 python scripts/validate_release_archive.py dandori.zip
 ```
 
-配布ZIPのValidatorは、path traversal、symlink、生成物、重複または移植性上衝突する名前、想定外のtop-level entry、必須ファイル欠落、展開後の定義検証失敗を拒否します。移植性検査ではUnicode NFKCとcase-fold後の衝突、Windows予約デバイス名、禁止文字・制御文字、末尾が空白またはピリオドのpath componentも拒否します。
+### 配布ZIPの検証
 
-GitHub Actionsでは、すべてのPull Requestと`master`へのpush時に、決定論的な定義検証、Mutation Test、配布ZIP検証を実行します。許可するWorkflowは`.github/workflows/validate.yml`、Jobは`validate`、Triggerは`pull_request`と`push`だけで、`.github/actions`配下のローカルActionは禁止します。checkout後の資格情報は保持せず、検証Jobには15分のtimeoutを設定します。Validatorは無条件のJobと、その配下の正確なfail-closed検証StepをYAML構造として検査し、別Jobへの移動、追加Job／Workflow、未承認Trigger、`if`、`needs`、`continue-on-error`、path filterによる迂回を認めません。Step ActionとReusable Workflowの`uses`もYAMLから解析し、外部参照は完全長commit SHAに限定します。CIではPython bytecode生成を無効化し、Validatorはtagやbranchを参照する`uses`、repository symlink、Python向けignore規則の欠落、追跡済み生成物を拒否します。Validatorは同梱定義をclosed release inventoryとして扱い、Agentディレクトリでは`*.agent.md`以外を拒否し、`hooks`、`handoffs`、`mcp-servers`などTool境界を迂回し得るfrontmatterを禁止します。同梱Agentのfrontmatter、Tool、ファイル名、必須Section、安全Policy anchor、十分な圧縮余地を持つ本文回帰下限を固定し、Orchestratorの中核Invariantが意図したSection内に残っていることを検査します。同梱`code-review` Skillは宣言済みMarkdownだけを許可し、すべてのSkill Markdownに対して、大文字小文字や空白・ハイフン・アンダースコアの表記揺れを正規化したDANDORI固有依存と、Reviewerに属するWorker Policyの再流入を検査します。追加のローカルWorkerは`*.agent.md`として追加できますが、共通runtime、再委譲禁止、禁止frontmatter、DANDORI固有依存の検査対象となり、手動Policy／Diagnostics確認を要求するwarningを出します。リポジトリ外の外部Workerも定義を静的検査できないため、引き続きDiagnostics確認を要求するwarningとします。専用Test Runnerは、テストが0件の場合やCIで1件でもskipされた場合に失敗します。必須Mutation Testと配布ZIP Testは、許可されたClass・Method、実際の変異、Validator失敗Assertion、空でない共通helperを保持する必要があります。各Conformance Caseは、空でないInputと少なくとも1件の具体的なExpected bulletを保持しなければなりません。静的ファイルからLLM挙動は推定せず、モデル、Worker Tool、VS Code更新時は`tests/conformance.md`の構造化Caseと実行記録templateを使用します。
+配布ZIPのValidatorは、次の問題を拒否します。
 
-Validatorが証明するのは、構造制約、Tool境界、必須Policy anchor、宣言された検証契約の完全性です。Agent定義全体に含まれる自然言語の意味的一貫性や、静的ファイルから実際のモデル挙動を証明するものではありません。そのためPolicy文言の変更は人間がレビューし、runtime挙動は対象となるVS Code、Copilot Chat、モデル、拡張機能VersionごとにConformance Caseで確認します。
+- path traversal
+- symlink
+- 生成物
+- 重複する名前、または移植性上衝突する名前
+- 想定外のtop-level entry
+- 必須ファイルの欠落
+- 展開後の定義検証失敗
+
+移植性検査では、次の問題も拒否します。
+
+- Unicode NFKCとcase-fold後の名前衝突
+- Windows予約デバイス名
+- 禁止文字・制御文字
+- 末尾が空白またはピリオドのpath component
+
+### GitHub Actionsの検証契約
+
+GitHub Actionsでは、すべてのPull Requestと`master`へのpush時に、次の検証を実行します。
+
+- 決定論的な定義検証
+- Mutation Test
+- 配布ZIP検証
+
+Workflow構成は、次の内容に限定します。
+
+- Workflow: `.github/workflows/validate.yml`
+- Job: `validate`
+- Trigger: `pull_request`、`push`
+- `.github/actions`配下のローカルActionは禁止
+- checkout後の資格情報は保持しない
+- 検証Jobのtimeoutは15分
+
+Validatorは、無条件のJobと、その配下にある正確なfail-closed検証StepをYAML構造として検査します。次のような迂回は認めません。
+
+- 検証コマンドを別Jobへ移動する
+- JobまたはWorkflowを追加する
+- 未承認のTriggerを追加する
+- `if`、`needs`、`continue-on-error`を追加する
+- path filterで検証対象を限定する
+
+Step ActionとReusable Workflowの`uses`もYAMLから解析し、外部参照は完全長commit SHAに限定します。
+
+CIではPython bytecode生成を無効化します。Validatorは、次の状態も拒否します。
+
+- tagまたはbranchを参照する`uses`
+- repository symlink
+- Python向けignore規則の欠落
+- 追跡済み生成物
+
+### Agent・Skill定義の検証
+
+Validatorは、同梱定義をclosed release inventoryとして扱います。
+
+Agent定義では、次の制約を検査します。
+
+- Agentディレクトリでは`*.agent.md`以外を拒否する
+- `hooks`、`handoffs`、`mcp-servers`など、Tool境界を迂回し得るfrontmatterを禁止する
+- 同梱Agentのfrontmatter、Tool、ファイル名、必須Section、安全Policy anchorを固定する
+- 十分な圧縮余地を持つ本文回帰下限を固定する
+- Orchestratorの中核Invariantが、意図したSection内に残っていることを検査する
+
+同梱`code-review` Skillでは、宣言済みMarkdownだけを許可します。また、すべてのSkill Markdownに対して、次の内容を検査します。
+
+- 大文字小文字や空白・ハイフン・アンダースコアの表記揺れを正規化したDANDORI固有依存
+- Reviewerに属するWorker Policyの再流入
+
+追加のローカルWorkerは`*.agent.md`として追加できますが、次の検査対象となります。
+
+- 共通runtime
+- 再委譲禁止
+- 禁止frontmatter
+- DANDORI固有依存
+
+追加のローカルWorkerには、手動Policy／Diagnostics確認を要求するwarningを出します。リポジトリ外の外部Workerも定義を静的検査できないため、引き続きDiagnostics確認を要求するwarningとします。
+
+### Test・Conformanceの検証
+
+専用Test Runnerは、次の場合に失敗します。
+
+- テストが0件
+- CIでテストが1件でもskipされた
+
+必須Mutation Testと配布ZIP Testは、次の要件を保持する必要があります。
+
+- 許可されたClass・Method
+- 実際の変異
+- Validator失敗Assertion
+- 空でない共通helper
+
+各Conformance Caseは、空でないInputと、少なくとも1件の具体的なExpected bulletを保持しなければなりません。
+
+静的ファイルからLLM挙動は推定しません。モデル、Worker Tool、VS Code更新時は、`tests/conformance.md`の構造化Caseと実行記録templateを使用します。
+
+### Validatorが保証する範囲
+
+Validatorが証明するのは、次の内容です。
+
+- 構造制約
+- Tool境界
+- 必須Policy anchor
+- 宣言された検証契約の完全性
+
+一方、次の内容は証明しません。
+
+- Agent定義全体に含まれる自然言語の意味的一貫性
+- 静的ファイルから推定した実際のモデル挙動
+
+そのため、Policy文言の変更は人間がレビューします。runtime挙動は、対象となるVS Code、Copilot Chat、モデル、拡張機能VersionごとにConformance Caseで確認します。
 
 ## 設計原則
 
