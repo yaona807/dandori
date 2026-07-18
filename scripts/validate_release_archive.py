@@ -63,7 +63,8 @@ def _windows_portability_error(component: str) -> str | None:
         return f"path component contains Windows-forbidden characters: {forbidden}"
     if any(ord(character) < 32 for character in component):
         return "path component contains a Windows-forbidden control character"
-    basename = component.split(".", 1)[0].upper()
+    normalized_component = unicodedata.normalize("NFKC", component)
+    basename = normalized_component.split(".", 1)[0].upper()
     if basename in WINDOWS_RESERVED_BASENAMES:
         return f"Windows-reserved path component is forbidden: {component}"
     return None

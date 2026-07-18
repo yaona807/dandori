@@ -131,6 +131,22 @@ class ReleaseArchiveValidationTests(unittest.TestCase):
                         archive.writestr(entry_name, "reserved")
                     self.assert_invalid(archive_path, "Windows-reserved path component")
 
+    def test_release_archive_rejects_nfkc_windows_reserved_names(self) -> None:
+        for entry_name in (
+            "assets/COM¹",
+            "assets/COM².txt",
+            "assets/COM³.log",
+            "assets/LPT¹",
+            "assets/LPT².txt",
+            "assets/LPT³.log",
+        ):
+            with self.subTest(entry=entry_name):
+                temporary, archive_path = self.make_archive()
+                with temporary:
+                    with zipfile.ZipFile(archive_path, "a") as archive:
+                        archive.writestr(entry_name, "reserved")
+                    self.assert_invalid(archive_path, "Windows-reserved path component")
+
     def test_release_archive_rejects_windows_forbidden_characters(self) -> None:
         for entry_name in ("assets/a:b", "assets/a?b", "assets/a|b", "assets/a\x1fb"):
             with self.subTest(entry=entry_name):

@@ -75,6 +75,7 @@ REQUIRED_RELEASE_ARCHIVE_TEST_METHODS = frozenset(
         "test_release_archive_rejects_duplicate_entry",
         "test_release_archive_rejects_portable_name_collision",
         "test_release_archive_rejects_windows_reserved_names",
+        "test_release_archive_rejects_nfkc_windows_reserved_names",
         "test_release_archive_rejects_windows_forbidden_characters",
         "test_release_archive_rejects_trailing_space_or_period",
         "test_release_archive_rejects_nfkc_portable_name_collision",
