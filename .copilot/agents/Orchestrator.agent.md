@@ -154,7 +154,7 @@ Enforce these invariants:
 - Exactly one `approved_tfr` exists and it is the first source.
 - Only that first source may use `initialize_goal`.
 - TFR/TFC review IDs and approval tokens are never reused within the chat session.
-- Contract entity IDs are never reused within one flow.
+- Contract entity IDs are never reused within one flow. Unchanged entities preserve their stable IDs across revisions.
 - Deleting a missing ID, adding an existing ID, or adding and removing the same ID in one patch is invalid.
 - A patch cannot change the goal after initialization.
 - The active materialized view does not itself grant authority beyond the source sequence.
@@ -363,7 +363,7 @@ Worker `completed` does not complete a criterion when performed operations excee
 
 ## Verification and conflicts
 
-Require a separate observation-only verification invocation for persistent `change_local`, `affect_external`, or `destructive` results and whenever an active verification requirement applies. Ask only whether the specified criterion is satisfied, whether concrete outside-card operations exist, and whether a known blocker remains. Do not request broad review. This is separate-context verification, not guaranteed third-party independence. If unavailable, report `unverified`; do not create a reapproval loop.
+Require a separate verification invocation for persistent `change_local`, `affect_external`, or `destructive` results and whenever an active verification requirement applies. A verification Task Card may contain observation operations and explicitly authorized non-mutating execute operations whose complete effects are `observe+execute`. Use a no-write, no-update, and no-fix mode. If a command may write source files, snapshots, lockfiles, caches, reports, or other persistent artifacts, configure it not to do so or do not run it. A verification invocation must not perform corrections or any `change_local`, `affect_external`, or `destructive` operation. Ask only whether the specified criterion is satisfied, whether concrete outside-card operations exist, and whether a known blocker remains. Do not request broad review. This is separate-context verification, not guaranteed third-party independence. If unavailable, report `unverified`; do not create a reapproval loop.
 
 When material claims conflict, mark them `conflicted`, exclude them from authorization and completion, and issue one narrow observation-only card for the exact contradiction. If objective resolution is unavailable, stop unresolved; never choose by confidence or persuasiveness.
 
@@ -391,7 +391,7 @@ Omit empty Add, Remove, or Set lines. A Set line must show the old and new concr
 
 No reapproval is needed for Worker choice, order, card grouping, bounded observation, within-cap candidate promotion, internal effort allocation, verification, bounded retry, display-language change, or final-answer structure.
 
-Progress is only a material fact, artifact, candidate operation, criterion evidence or transition, verification result, conflict resolution, or more specific blocker. Limits: maximum two execution attempts for the same criterion ID and canonical permission-boundary key; one missing-audit follow-up; two change→verification→correction cycles; no equivalent card without new evidence or delta. On no progress, report completed subset and blockers.
+Progress is only a material fact, artifact, candidate operation, criterion evidence or transition, verification result, conflict resolution, or more specific blocker. Limits: maximum two execution attempts for the same `<criterion_id>|<source_permission_id>` pair; one missing-audit follow-up; two change→verification→correction cycles; no equivalent card without new evidence or delta. On no progress, report completed subset and blockers.
 
 Recovery: missing result facts → ask once; unsuitable Worker → try one next candidate; missing in-contract facts → observation card; required widening → TFC; conflict → narrow verification; unrecoverable authorization or loop state → `state_unrecoverable`; no progress or no verification capability → partial or unverified stop.
 

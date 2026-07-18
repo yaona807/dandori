@@ -72,7 +72,7 @@ The Orchestrator may change workers, reorder internal work, split or combine Tas
 - **Operation-level authorization**: each permission binds an observation boundary or exact effect target/rule, one action, and every effect the action may produce; separate lists never create Cartesian-product permission.
 - **Worker-neutral orchestration**: worker definitions remain the source of truth for worker behavior and output conventions.
 - **Contract audit**: worker-reported operations, limits, evidence, expected progress, and revision are checked before criterion progress is accepted.
-- **Separate-context verification**: persistent changes are verified through a separate observation-only invocation when possible.
+- **Separate-context verification**: persistent changes are verified through a separate invocation that may observe and run explicitly authorized non-mutating checks.
 - **Differential approval**: the complete contract patch is shown whenever a revision contains widening, including concurrent reductions.
 - **Progress-based loop control**: equivalent calls without new evidence, artifacts, authorization, verification, or a more specific blocker are prohibited.
 
@@ -232,11 +232,11 @@ An automatic-target cap may be reduced only to a value greater than or equal to 
 
 ## Verification and limits
 
-Persistent local changes, external effects, and destructive effects require a separate observation-only verification invocation when possible. This is **separate-context verification**, not guaranteed independent third-party review.
+Persistent local changes, external effects, and destructive effects require a separate verification invocation when possible. A verification Task Card may observe and may run explicitly authorized checks only when they are non-mutating and use no-write, no-update, and no-fix modes. Commands that may write source files, snapshots, lockfiles, caches, reports, or other persistent artifacts must be configured not to write them or remain unexecuted. Verification never performs corrections or local, external, or destructive mutations. This is **separate-context verification**, not guaranteed independent third-party review.
 
 If verification is unavailable, DANDORI reports the result as unverified rather than entering an approval loop or claiming completion without qualification.
 
-DANDORI limits repeated work by requiring each invocation to produce a concrete delta: a new material fact, artifact, candidate operation, criterion evidence or transition, verification result, conflict resolution, or more specific blocker. Execution attempts are counted by criterion and the canonical set of source permission IDs, so changing the Worker, order, grouping, or Task Card ID does not reset the limit.
+DANDORI limits repeated work by requiring each invocation to produce a concrete delta: a new material fact, artifact, candidate operation, criterion evidence or transition, verification result, conflict resolution, or more specific blocker. Before each execution attempt, DANDORI forms every `<criterion_id>|<source_permission_id>` pair from the Task Card. Each pair has its own two-attempt limit, so changing the Worker, order, grouping, or Task Card ID does not reset it.
 
 If authorization or cumulative loop-control state cannot be reconstructed exactly, DANDORI stops with `state_unrecoverable`. Re-observable evidence may be reacquired inside the approved observation boundary, but lost permission state, cap usage, attempt counts, or pending-revision bindings are never guessed or reset.
 
