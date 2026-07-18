@@ -1204,5 +1204,46 @@ Inspect only the delegated resource. Do not call another agent.
             )
             self.assert_invalid(repo, "test runner exit status must follow wasSuccessful")
 
+    def test_required_test_modules_cannot_define_load_tests(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / "tests/test_validate_definitions.py"
+            path.write_text(path.read_text().replace("class ValidatorMutationTests", "def load_tests(loader, tests, pattern):\n    return tests\n\nclass ValidatorMutationTests", 1))
+            self.assert_invalid(repo, "required test module must not define load_tests")
+
+    def test_required_test_classes_must_inherit_unittest_testcase(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / "tests/test_validate_definitions.py"
+            path.write_text(path.read_text().replace("class ValidatorMutationTests(unittest.TestCase):", "class ValidatorMutationTests:", 1))
+            self.assert_invalid(repo, "must inherit exactly unittest.TestCase")
+
+    def test_required_test_methods_must_be_synchronous(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / "tests/test_validate_release_archive.py"
+            path.write_text(path.read_text().replace("    def test_release_archive_is_valid", "    async def test_release_archive_is_valid", 1))
+            self.assert_invalid(repo, "required test method must be synchronous")
+
+    def test_test_runner_requires_all_required_test_ids(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / "scripts/run_tests.py"
+            path.write_text(path.read_text().replace('        "test_repository_is_valid",\n', "", 1))
+            self.assert_invalid(repo, "test runner required test IDs must be exact")
+
+    def test_test_runner_rejects_duplicate_test_ids(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / "scripts/run_tests.py"
+            path.write_text(
+                path.read_text().replace(
+                    "    if len(identities) != len(set(identities)):\n",
+                    "    if False:\n",
+                    1,
+                )
+            )
+            self.assert_invalid(repo, "test runner must reject duplicate or missing test IDs")
+
 if __name__ == "__main__":
     unittest.main()
