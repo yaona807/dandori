@@ -7,6 +7,8 @@ import subprocess
 import sys
 import tempfile
 import unittest
+
+import yaml
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -32,6 +34,12 @@ class ValidatorMutationTests(unittest.TestCase):
         result = validator.validate_repository(repo)
         self.assertTrue(result.errors, "expected validation failure")
         self.assertTrue(any(needle in error for error in result.errors), "\n".join(result.errors))
+
+    def mutate_workflow(self, repo: Path, mutation) -> None:
+        path = repo / ".github/workflows/validate.yml"
+        workflow = yaml.load(path.read_text(), Loader=validator.UniqueKeyLoader)
+        mutation(workflow)
+        path.write_text(yaml.safe_dump(workflow, sort_keys=False, allow_unicode=True))
 
     def test_repository_is_valid(self) -> None:
         self.assert_valid(ROOT)
@@ -643,29 +651,55 @@ Inspect only the delegated resource. Do not call another agent.
     def test_validation_workflow_requires_pull_request_trigger(self) -> None:
         temp, repo = self.make_repo()
         with temp:
-            path = repo / ".github/workflows/validate.yml"
-            path.write_text(path.read_text().replace("  pull_request:\n", "", 1))
+            self.mutate_workflow(repo, lambda workflow: workflow["on"].pop("pull_request"))
             self.assert_invalid(repo, "workflow must trigger on pull_request")
 
     def test_validation_workflow_requires_master_push_trigger(self) -> None:
         temp, repo = self.make_repo()
         with temp:
-            path = repo / ".github/workflows/validate.yml"
-            path.write_text(path.read_text().replace("      - master\n", "      - develop\n", 1))
-            self.assert_invalid(repo, "push trigger must include branch 'master'")
+            self.mutate_workflow(
+                repo,
+                lambda workflow: workflow["on"].__setitem__("push", {"branches": ["develop"]}),
+            )
+            self.assert_invalid(repo, "push trigger must be exactly")
 
     def test_validation_workflow_rejects_path_filters(self) -> None:
         temp, repo = self.make_repo()
         with temp:
-            path = repo / ".github/workflows/validate.yml"
-            path.write_text(
-                path.read_text().replace(
-                    "  pull_request:\n",
-                    "  pull_request:\n    paths-ignore:\n      - 'docs/**'\n",
-                    1,
-                )
+            self.mutate_workflow(
+                repo,
+                lambda workflow: workflow["on"].__setitem__(
+                    "pull_request", {"paths-ignore": ["docs/**"]}
+                ),
             )
             self.assert_invalid(repo, "pull_request trigger must not filter paths")
+
+    def test_pull_request_trigger_configuration_is_exact(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            self.mutate_workflow(
+                repo,
+                lambda workflow: workflow["on"].__setitem__(
+                    "pull_request", {"types": ["closed"]}
+                ),
+            )
+            self.assert_invalid(repo, "pull_request trigger must be empty and unfiltered")
+
+    def test_push_trigger_configuration_is_exact(self) -> None:
+        invalid_configs = (
+            {"branches": ["master", "!master"]},
+            {"branches": ["master"], "branches-ignore": ["master"]},
+            {"branches": ["master", "develop"]},
+        )
+        for config in invalid_configs:
+            with self.subTest(config=config):
+                temp, repo = self.make_repo()
+                with temp:
+                    self.mutate_workflow(
+                        repo,
+                        lambda workflow, config=config: workflow["on"].__setitem__("push", config),
+                    )
+                    self.assert_invalid(repo, "push trigger must be exactly")
 
     def test_validate_job_cannot_be_conditionally_skipped(self) -> None:
         temp, repo = self.make_repo()
@@ -952,8 +986,10 @@ Inspect only the delegated resource. Do not call another agent.
     def test_validation_workflow_rejects_unapproved_trigger(self) -> None:
         temp, repo = self.make_repo()
         with temp:
-            path = repo / ".github/workflows/validate.yml"
-            path.write_text(path.read_text().replace("  push:\n", "  workflow_dispatch:\n  push:\n", 1))
+            self.mutate_workflow(
+                repo,
+                lambda workflow: workflow["on"].__setitem__("workflow_dispatch", None),
+            )
             self.assert_invalid(repo, "workflow triggers must be exactly")
 
     def test_validation_workflow_rejects_additional_job(self) -> None:
