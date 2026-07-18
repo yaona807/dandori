@@ -122,6 +122,41 @@ class ReleaseArchiveValidationTests(unittest.TestCase):
                 archive.writestr("scripts/Validate_Definitions.py", "collision")
             self.assert_invalid(archive_path, "portable-name collision is forbidden")
 
+    def test_release_archive_rejects_windows_reserved_names(self) -> None:
+        for entry_name in ("assets/CON", "assets/con.txt", "assets/COM1.log", "assets/LPT9"):
+            with self.subTest(entry=entry_name):
+                temporary, archive_path = self.make_archive()
+                with temporary:
+                    with zipfile.ZipFile(archive_path, "a") as archive:
+                        archive.writestr(entry_name, "reserved")
+                    self.assert_invalid(archive_path, "Windows-reserved path component")
+
+    def test_release_archive_rejects_windows_forbidden_characters(self) -> None:
+        for entry_name in ("assets/a:b", "assets/a?b", "assets/a|b", "assets/a\x1fb"):
+            with self.subTest(entry=entry_name):
+                temporary, archive_path = self.make_archive()
+                with temporary:
+                    with zipfile.ZipFile(archive_path, "a") as archive:
+                        archive.writestr(entry_name, "forbidden")
+                    self.assert_invalid(archive_path, "non-portable ZIP entry name")
+
+    def test_release_archive_rejects_trailing_space_or_period(self) -> None:
+        for entry_name in ("assets/name.", "assets/name "):
+            with self.subTest(entry=entry_name):
+                temporary, archive_path = self.make_archive()
+                with temporary:
+                    with zipfile.ZipFile(archive_path, "a") as archive:
+                        archive.writestr(entry_name, "trailing")
+                    self.assert_invalid(archive_path, "must not end with a space or period")
+
+    def test_release_archive_rejects_nfkc_portable_name_collision(self) -> None:
+        temporary, archive_path = self.make_archive()
+        with temporary:
+            with zipfile.ZipFile(archive_path, "a") as archive:
+                archive.writestr("assets/Ａudit.txt", "collision")
+                archive.writestr("assets/Audit.txt", "collision")
+            self.assert_invalid(archive_path, "portable-name collision is forbidden")
+
     def test_release_archive_rejects_invalid_extracted_repository(self) -> None:
         temporary, archive_path = self.make_archive()
         with temporary:
