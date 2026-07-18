@@ -3,11 +3,16 @@
 
 from __future__ import annotations
 
-import ast
 import os
+import sys
+
+_SCRIPT_DIRECTORY = os.path.dirname(os.path.abspath(__file__))
+if sys.path and os.path.abspath(sys.path[0]) == _SCRIPT_DIRECTORY:
+    del sys.path[0]
+
+import ast
 import re
 import subprocess
-import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -35,6 +40,21 @@ REQUIRED_REPOSITORY_FILES = frozenset(
         "tests/test_validate_release_archive.py",
     }
 )
+ALLOWED_SCRIPT_INVENTORY = frozenset(
+    {
+        "run_tests.py",
+        "validate_definitions.py",
+        "validate_release_archive.py",
+    }
+)
+ALLOWED_TEST_INVENTORY = frozenset(
+    {
+        "conformance.md",
+        "test_validate_definitions.py",
+        "test_validate_release_archive.py",
+    }
+)
+
 REQUIRED_WORKFLOW_COMMANDS = (
     "python scripts/validate_definitions.py",
     "python scripts/run_tests.py",
@@ -161,6 +181,9 @@ REQUIRED_MUTATION_TEST_METHODS = frozenset(
         "test_required_test_methods_must_be_synchronous",
         "test_test_runner_requires_all_required_test_ids",
         "test_test_runner_rejects_duplicate_test_ids",
+        "test_scripts_inventory_rejects_module_shadowing",
+        "test_tests_inventory_rejects_additional_test_module",
+        "test_python_execution_inventory_rejects_nested_packages",
     }
 )
 BOUNDARY_ENFORCEMENT_POLICY = (
@@ -603,6 +626,30 @@ def validate_required_repository_files(root: Path, result: ValidationResult) -> 
         path = root / relative_path
         if not path.is_file():
             result.errors.append(f"missing required repository file: {relative_path}")
+
+
+def validate_python_execution_inventory(root: Path, result: ValidationResult) -> None:
+    inventories = (
+        (root / "scripts", ALLOWED_SCRIPT_INVENTORY),
+        (root / "tests", ALLOWED_TEST_INVENTORY),
+    )
+    for directory, allowed in inventories:
+        if not directory.is_dir():
+            continue
+        unexpected: list[str] = []
+        for path in directory.rglob("*"):
+            relative_path = path.relative_to(directory)
+            if "__pycache__" in relative_path.parts or path.suffix.lower() in FORBIDDEN_TRACKED_SUFFIXES:
+                continue
+            if path.is_dir():
+                unexpected.append(relative_path.as_posix() + "/")
+                continue
+            if relative_path.as_posix() not in allowed:
+                unexpected.append(relative_path.as_posix())
+        if unexpected:
+            result.errors.append(
+                f"{relative(directory, root)}: Python execution inventory contains unexpected entries: {sorted(unexpected)}"
+            )
 
 
 def _load_workflow(path: Path, root: Path, result: ValidationResult) -> Any | None:
@@ -1327,6 +1374,7 @@ def validate_repository(root: Path) -> ValidationResult:
     skills_dir = root / ".copilot" / "skills"
     validate_repository_symlinks(root, result)
     validate_required_repository_files(root, result)
+    validate_python_execution_inventory(root, result)
 
     validate_gitignore_policy(root, result)
     validate_tracked_generated_artifacts(root, result)
