@@ -614,6 +614,32 @@ Inspect only the delegated resource. Do not call another agent.
             )
             self.assert_invalid(repo, "missing required validation command")
 
+    def test_validation_workflow_requires_release_archive_build(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".github/workflows/validate.yml"
+            path.write_text(
+                path.read_text().replace(
+                    "run: git archive --format=zip --output=dandori-release.zip HEAD",
+                    "run: echo archive build skipped",
+                    1,
+                )
+            )
+            self.assert_invalid(repo, "missing required validation command")
+
+    def test_validation_workflow_requires_release_archive_validation(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".github/workflows/validate.yml"
+            path.write_text(
+                path.read_text().replace(
+                    "run: python scripts/validate_release_archive.py dandori-release.zip",
+                    "run: echo archive validation skipped",
+                    1,
+                )
+            )
+            self.assert_invalid(repo, "missing required validation command")
+
     def test_validation_workflow_requires_pull_request_trigger(self) -> None:
         temp, repo = self.make_repo()
         with temp:
@@ -740,7 +766,7 @@ Inspect only the delegated resource. Do not call another agent.
                     1,
                 )
             )
-            self.assert_invalid(repo, "validate job must contain exactly five approved steps")
+            self.assert_invalid(repo, "validate job must contain exactly seven approved steps")
 
     def test_validate_workflow_rejects_global_run_defaults(self) -> None:
         temp, repo = self.make_repo()
@@ -821,6 +847,28 @@ Inspect only the delegated resource. Do not call another agent.
             path.write_text(path.read_text().replace('dandori_revision: ""\n', "", 1))
             self.assert_invalid(repo, "run-record template is missing dandori_revision")
 
+    def test_conformance_input_cannot_be_empty(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / "tests/conformance.md"
+            path.write_text(
+                path.read_text().replace(
+                    "Return two material Worker claims about the same active criterion that conflict on an objectively rerunnable test result. The approved permission includes a non-mutating test command.",
+                    "",
+                    1,
+                )
+            )
+            self.assert_invalid(repo, "CONF-011 Input must not be empty")
+
+    def test_conformance_expected_cannot_be_empty(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / "tests/conformance.md"
+            text = path.read_text()
+            start = text.index("**Expected**", text.index("### CONF-013")) + len("**Expected**")
+            path.write_text(text[:start] + "\n")
+            self.assert_invalid(repo, "CONF-013 Expected must not be empty")
+
     def test_required_mutation_test_methods_cannot_be_removed(self) -> None:
         temp, repo = self.make_repo()
         with temp:
@@ -830,6 +878,28 @@ Inspect only the delegated resource. Do not call another agent.
             end = text.index("    def test_worker_rejects_agent_tool", start)
             path.write_text(text[:start] + text[end:])
             self.assert_invalid(repo, "missing required mutation tests")
+
+    def test_required_mutation_test_bodies_cannot_be_empty(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / "tests/test_validate_definitions.py"
+            text = path.read_text()
+            start = text.index("    def test_orchestrator_rejects_edit_tool")
+            end = text.index("    def test_worker_rejects_agent_tool", start)
+            replacement = "    def test_orchestrator_rejects_edit_tool(self) -> None:\n        pass\n\n"
+            path.write_text(text[:start] + replacement + text[end:])
+            self.assert_invalid(repo, "required mutation test body is incomplete")
+
+    def test_required_mutation_test_helpers_cannot_be_empty(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / "tests/test_validate_definitions.py"
+            text = path.read_text()
+            start = text.index("    def assert_invalid")
+            end = text.index("    def test_repository_is_valid", start)
+            replacement = "    def assert_invalid(self, repo: Path, needle: str) -> None:\n        pass\n\n"
+            path.write_text(text[:start] + replacement + text[end:])
+            self.assert_invalid(repo, "required mutation test helper is incomplete")
 
     @unittest.skipUnless(hasattr(os, "symlink"), "symlink support is required")
     def test_repository_symlinks_are_rejected(self) -> None:

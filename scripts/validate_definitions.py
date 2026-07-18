@@ -28,8 +28,10 @@ REQUIRED_REPOSITORY_FILES = frozenset(
         "README_ja.md",
         ".github/workflows/validate.yml",
         "scripts/validate_definitions.py",
+        "scripts/validate_release_archive.py",
         "tests/conformance.md",
         "tests/test_validate_definitions.py",
+        "tests/test_validate_release_archive.py",
     }
 )
 REQUIRED_WORKFLOW_COMMANDS = (
@@ -37,6 +39,8 @@ REQUIRED_WORKFLOW_COMMANDS = (
     'python -m unittest discover -s tests -p "test_*.py"',
 )
 REQUIRED_WORKFLOW_INSTALL_COMMAND = "python -m pip install --disable-pip-version-check PyYAML==6.0.3"
+REQUIRED_RELEASE_ARCHIVE_BUILD_COMMAND = "git archive --format=zip --output=dandori-release.zip HEAD"
+REQUIRED_RELEASE_ARCHIVE_VALIDATION_COMMAND = "python scripts/validate_release_archive.py dandori-release.zip"
 REQUIRED_WORKFLOW_PUSH_BRANCH = "master"
 REQUIRED_WORKFLOW_PYTHON_VERSION = "3.12"
 REQUIRED_WORKFLOW_RUNNER = "ubuntu-latest"
@@ -76,6 +80,8 @@ REQUIRED_MUTATION_TEST_METHODS = frozenset(
         "test_required_repository_files_cannot_be_removed",
         "test_validation_workflow_requires_validator_command",
         "test_validation_workflow_requires_mutation_test_command",
+        "test_validation_workflow_requires_release_archive_build",
+        "test_validation_workflow_requires_release_archive_validation",
         "test_validation_workflow_requires_pull_request_trigger",
         "test_validation_workflow_requires_master_push_trigger",
         "test_validate_job_cannot_be_conditionally_skipped",
@@ -95,7 +101,11 @@ REQUIRED_MUTATION_TEST_METHODS = frozenset(
         "test_all_conformance_cases_are_required",
         "test_conformance_run_record_lists_every_case",
         "test_conformance_run_record_requires_dandori_revision",
+        "test_conformance_input_cannot_be_empty",
+        "test_conformance_expected_cannot_be_empty",
         "test_required_mutation_test_methods_cannot_be_removed",
+        "test_required_mutation_test_bodies_cannot_be_empty",
+        "test_required_mutation_test_helpers_cannot_be_empty",
         "test_new_conformance_case_requires_run_record_entry",
         "test_python_ignore_rules_are_required",
         "test_validate_workflow_disables_python_bytecode",
@@ -646,16 +656,24 @@ def validate_required_workflow_commands(root: Path, result: ValidationResult) ->
     if not isinstance(steps, list):
         result.errors.append(f"{relative(path, root)}: validate job steps must be a list")
         return
-    if len(steps) != 5:
+    if len(steps) != 7:
         result.errors.append(
-            f"{relative(path, root)}: validate job must contain exactly five approved steps"
+            f"{relative(path, root)}: validate job must contain exactly seven approved steps"
         )
         return
     if not all(isinstance(step, dict) for step in steps):
         result.errors.append(f"{relative(path, root)}: every validate job step must be a mapping")
         return
 
-    checkout_step, python_step, install_step, validator_step, mutation_step = steps
+    (
+        checkout_step,
+        python_step,
+        install_step,
+        validator_step,
+        mutation_step,
+        archive_build_step,
+        archive_validation_step,
+    ) = steps
     action_specs = (
         (checkout_step, "actions/checkout@", "checkout", {"name", "uses"}),
         (python_step, "actions/setup-python@", "setup-python", {"name", "uses", "with"}),
@@ -681,6 +699,8 @@ def validate_required_workflow_commands(root: Path, result: ValidationResult) ->
         (install_step, REQUIRED_WORKFLOW_INSTALL_COMMAND, "dependency installation"),
         (validator_step, REQUIRED_WORKFLOW_COMMANDS[0], "definition validation"),
         (mutation_step, REQUIRED_WORKFLOW_COMMANDS[1], "mutation tests"),
+        (archive_build_step, REQUIRED_RELEASE_ARCHIVE_BUILD_COMMAND, "release archive build"),
+        (archive_validation_step, REQUIRED_RELEASE_ARCHIVE_VALIDATION_COMMAND, "release archive validation"),
     )
     for step, command, label in run_specs:
         if "if" in step:
@@ -728,11 +748,35 @@ def validate_conformance_contract(root: Path, result: ValidationResult) -> None:
         case_id = match.group(1)
         end = case_matches[index + 1].start() if index + 1 < len(case_matches) else len(text)
         section = text[match.end():end]
-        for marker in ("**Input**", "**Expected**"):
-            if marker not in section:
-                result.errors.append(
-                    f"{relative(path, root)}: {case_id} is missing {marker}"
-                )
+        input_count = section.count("**Input**")
+        expected_count = section.count("**Expected**")
+        if input_count != 1:
+            result.errors.append(
+                f"{relative(path, root)}: {case_id} must contain exactly one **Input** section"
+            )
+        if expected_count != 1:
+            result.errors.append(
+                f"{relative(path, root)}: {case_id} must contain exactly one **Expected** section"
+            )
+        if input_count != 1 or expected_count != 1:
+            continue
+        input_start = section.index("**Input**") + len("**Input**")
+        expected_start = section.index("**Expected**")
+        if input_start > expected_start:
+            result.errors.append(
+                f"{relative(path, root)}: {case_id} must place **Input** before **Expected**"
+            )
+            continue
+        input_text = section[input_start:expected_start].strip()
+        expected_text = section[expected_start + len("**Expected**"):].strip()
+        if not input_text:
+            result.errors.append(f"{relative(path, root)}: {case_id} Input must not be empty")
+        if not expected_text:
+            result.errors.append(f"{relative(path, root)}: {case_id} Expected must not be empty")
+        elif re.search(r"(?m)^-\s+\S", expected_text) is None:
+            result.errors.append(
+                f"{relative(path, root)}: {case_id} Expected must contain at least one concrete bullet"
+            )
 
     run_record_match = re.search(
         r"(?ms)^## Run record\s+.*?```yaml\s*(.*?)```",
@@ -766,6 +810,15 @@ def validate_conformance_contract(root: Path, result: ValidationResult) -> None:
         result.errors.append(
             f"{relative(path, root)}: run-record template contains undefined cases: {unknown_run_cases}"
         )
+    invalid_placeholders = sorted(
+        case_id
+        for case_id, value in cases.items()
+        if value != "pass|fail|blocked|not_run"
+    )
+    if invalid_placeholders:
+        result.errors.append(
+            f"{relative(path, root)}: run-record cases must use the standard placeholder: {invalid_placeholders}"
+        )
 
 
 def validate_required_mutation_tests(root: Path, result: ValidationResult) -> None:
@@ -788,15 +841,58 @@ def validate_required_mutation_tests(root: Path, result: ValidationResult) -> No
         )
         return
     methods = {
-        node.name
+        node.name: node
         for node in classes[0].body
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
     }
-    missing = sorted(REQUIRED_MUTATION_TEST_METHODS - methods)
+    missing = sorted(REQUIRED_MUTATION_TEST_METHODS - set(methods))
     if missing:
         result.errors.append(
             f"{relative(path, root)}: missing required mutation tests: {missing}"
         )
+
+    helper_requirements = {
+        "make_repo": {"TemporaryDirectory", "copytree"},
+        "assert_valid": {"validate_repository", "assertEqual"},
+        "assert_invalid": {"validate_repository", "assertTrue"},
+    }
+    for helper_name, required_calls in helper_requirements.items():
+        helper = methods.get(helper_name)
+        if helper is None:
+            result.errors.append(
+                f"{relative(path, root)}: missing required mutation test helper: {helper_name}"
+            )
+            continue
+        called_names = {
+            call.func.attr if isinstance(call.func, ast.Attribute) else call.func.id
+            for call in ast.walk(helper)
+            if isinstance(call, ast.Call) and isinstance(call.func, (ast.Attribute, ast.Name))
+        }
+        if not required_calls.issubset(called_names):
+            result.errors.append(
+                f"{relative(path, root)}: required mutation test helper is incomplete: {helper_name}"
+            )
+
+    mutation_calls = {"write_text", "write_bytes", "unlink", "rmtree", "symlink_to", "mkdir", "run"}
+    for method_name in sorted(REQUIRED_MUTATION_TEST_METHODS & set(methods)):
+        method = methods[method_name]
+        called_names = {
+            call.func.attr if isinstance(call.func, ast.Attribute) else call.func.id
+            for call in ast.walk(method)
+            if isinstance(call, ast.Call) and isinstance(call.func, (ast.Attribute, ast.Name))
+        }
+        if method_name == "test_repository_is_valid":
+            complete = "assert_valid" in called_names
+        else:
+            complete = (
+                "make_repo" in called_names
+                and "assert_invalid" in called_names
+                and bool(mutation_calls.intersection(called_names))
+            )
+        if not complete:
+            result.errors.append(
+                f"{relative(path, root)}: required mutation test body is incomplete: {method_name}"
+            )
 
 
 def _iter_key_values(value: Any, key: str, location: str = "") -> list[tuple[str, Any]]:
