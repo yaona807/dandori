@@ -119,6 +119,8 @@ REQUIRED_MUTATION_TEST_METHODS = frozenset(
         "test_local_github_actions_are_rejected",
         "test_checkout_disables_persisted_credentials",
         "test_validate_job_requires_timeout",
+        "test_pull_request_trigger_configuration_is_exact",
+        "test_push_trigger_configuration_is_exact",
     }
 )
 BOUNDARY_ENFORCEMENT_POLICY = (
@@ -640,15 +642,14 @@ def validate_required_workflow_commands(root: Path, result: ValidationResult) ->
             )
     pull_request = _validate_required_trigger(triggers, "pull_request", path, root, result)
     push = _validate_required_trigger(triggers, "push", path, root, result)
-    if isinstance(push, dict):
-        branches = push.get("branches")
-        if not isinstance(branches, list) or REQUIRED_WORKFLOW_PUSH_BRANCH not in branches:
-            result.errors.append(
-                f"{relative(path, root)}: push trigger must include branch {REQUIRED_WORKFLOW_PUSH_BRANCH!r}"
-            )
-    elif push is None and isinstance(triggers, dict) and "push" in triggers:
+    if pull_request not in (None, {}):
         result.errors.append(
-            f"{relative(path, root)}: push trigger must explicitly include branch {REQUIRED_WORKFLOW_PUSH_BRANCH!r}"
+            f"{relative(path, root)}: pull_request trigger must be empty and unfiltered"
+        )
+    expected_push = {"branches": [REQUIRED_WORKFLOW_PUSH_BRANCH]}
+    if push != expected_push:
+        result.errors.append(
+            f"{relative(path, root)}: push trigger must be exactly {expected_push!r}"
         )
 
     if "defaults" in workflow:
@@ -911,6 +912,7 @@ def validate_required_mutation_tests(root: Path, result: ValidationResult) -> No
         "make_repo": {"TemporaryDirectory", "copytree"},
         "assert_valid": {"validate_repository", "assertEqual"},
         "assert_invalid": {"validate_repository", "assertTrue"},
+        "mutate_workflow": {"load", "write_text"},
     }
     for helper_name, required_calls in helper_requirements.items():
         helper = methods.get(helper_name)
@@ -929,7 +931,16 @@ def validate_required_mutation_tests(root: Path, result: ValidationResult) -> No
                 f"{relative(path, root)}: required mutation test helper is incomplete: {helper_name}"
             )
 
-    mutation_calls = {"write_text", "write_bytes", "unlink", "rmtree", "symlink_to", "mkdir", "run"}
+    mutation_calls = {
+        "write_text",
+        "write_bytes",
+        "unlink",
+        "rmtree",
+        "symlink_to",
+        "mkdir",
+        "run",
+        "mutate_workflow",
+    }
     for method_name in sorted(REQUIRED_MUTATION_TEST_METHODS & set(methods)):
         method = methods[method_name]
         called_names = {
