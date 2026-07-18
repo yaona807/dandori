@@ -372,7 +372,15 @@ python -m pip install PyYAML==6.0.3
 python scripts/validate_definitions.py
 ```
 
-GitHub Actionsでは、Pull Requestと`master`へのpush時に決定論的な定義検証とValidatorのMutation Testを実行します。外部Actionは完全長commit SHAへ固定し、tagやbranchを参照する`uses`はValidatorで拒否します。Validatorは同梱定義をclosed release inventoryとして扱い、Agentディレクトリでは`*.agent.md`以外を拒否し、`hooks`、`handoffs`、`mcp-servers`などTool境界を迂回し得るfrontmatterを禁止します。同梱Agentのfrontmatter、Tool、ファイル名、必須Section、安全Policy anchor、十分な圧縮余地を持つ本文回帰下限を固定し、Orchestratorの中核Invariantが意図したSection内に残っていることを検査します。同梱`code-review` Skillは宣言済みMarkdownだけを許可し、すべてのSkill Markdownに対して、大文字小文字や空白・ハイフン・アンダースコアの表記揺れを正規化したDANDORI固有依存と、Reviewerに属するWorker Policyの再流入を検査します。追加のローカルWorkerは`*.agent.md`として追加できますが、共通runtime、再委譲禁止、禁止frontmatter、DANDORI固有依存の検査対象となり、手動Policy／Diagnostics確認を要求するwarningを出します。リポジトリ外の外部Workerも定義を静的検査できないため、引き続きDiagnostics確認を要求するwarningとします。静的ファイルからLLM挙動は推定せず、モデル、Worker Tool、VS Code更新時は`tests/conformance.md`の構造化Caseと実行記録templateを使用します。
+配布ZIPはworking tree全体を圧縮せず、追跡済みファイルから生成します。
+
+```bash
+git archive --format=zip --output=dandori.zip HEAD
+```
+
+これにより、ignore対象のcache、bytecode、logなどのローカル生成物が配布物へ混入することを防ぎます。
+
+GitHub Actionsでは、Pull Requestと`master`へのpush時に決定論的な定義検証とValidatorのMutation Testを実行します。外部Actionは完全長commit SHAへ固定し、CIではPython bytecode生成を無効化します。Validatorはtagやbranchを参照する`uses`、Python向けignore規則の欠落、追跡済み生成物を拒否します。Validatorは同梱定義をclosed release inventoryとして扱い、Agentディレクトリでは`*.agent.md`以外を拒否し、`hooks`、`handoffs`、`mcp-servers`などTool境界を迂回し得るfrontmatterを禁止します。同梱Agentのfrontmatter、Tool、ファイル名、必須Section、安全Policy anchor、十分な圧縮余地を持つ本文回帰下限を固定し、Orchestratorの中核Invariantが意図したSection内に残っていることを検査します。同梱`code-review` Skillは宣言済みMarkdownだけを許可し、すべてのSkill Markdownに対して、大文字小文字や空白・ハイフン・アンダースコアの表記揺れを正規化したDANDORI固有依存と、Reviewerに属するWorker Policyの再流入を検査します。追加のローカルWorkerは`*.agent.md`として追加できますが、共通runtime、再委譲禁止、禁止frontmatter、DANDORI固有依存の検査対象となり、手動Policy／Diagnostics確認を要求するwarningを出します。リポジトリ外の外部Workerも定義を静的検査できないため、引き続きDiagnostics確認を要求するwarningとします。静的ファイルからLLM挙動は推定せず、モデル、Worker Tool、VS Code更新時は`tests/conformance.md`の構造化Caseと実行記録templateを使用します。
 
 ## 設計原則
 
