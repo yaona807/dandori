@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import ast
+import os
 import re
 import subprocess
 import sys
@@ -18,6 +19,7 @@ MAX_AGENT_BODY_CHARS = 30_000
 MAX_SKILL_NAME_CHARS = 64
 MAX_SKILL_DESCRIPTION_CHARS = 1_024
 FULL_COMMIT_SHA_PATTERN = re.compile(r"^[0-9a-fA-F]{40}$")
+DOCKER_IMAGE_DIGEST_PATTERN = re.compile(r"^docker://[^@\s]+@sha256:[0-9a-fA-F]{64}$")
 REQUIRED_REPOSITORY_FILES = frozenset(
     {
         ".gitignore",
@@ -34,6 +36,10 @@ REQUIRED_WORKFLOW_COMMANDS = (
     "python scripts/validate_definitions.py",
     'python -m unittest discover -s tests -p "test_*.py"',
 )
+REQUIRED_WORKFLOW_INSTALL_COMMAND = "python -m pip install --disable-pip-version-check PyYAML==6.0.3"
+REQUIRED_WORKFLOW_PUSH_BRANCH = "master"
+REQUIRED_WORKFLOW_PYTHON_VERSION = "3.12"
+REQUIRED_WORKFLOW_RUNNER = "ubuntu-latest"
 REQUIRED_CONFORMANCE_CASE_IDS = tuple(f"CONF-{number:03d}" for number in range(1, 14))
 REQUIRED_GITIGNORE_MARKERS = frozenset(
     {
@@ -58,6 +64,9 @@ REQUIRED_MUTATION_TEST_METHODS = frozenset(
         "test_orchestrator_invariant_must_remain_in_its_required_section",
         "test_bundled_worker_policy_must_remain_in_strict_rules",
         "test_workflow_actions_require_full_commit_sha",
+        "test_inline_workflow_action_requires_full_commit_sha",
+        "test_reusable_workflow_requires_full_commit_sha",
+        "test_repository_symlinks_are_rejected",
         "test_verification_execute_policy_is_required",
         "test_attempt_counter_uses_source_permission_pairs",
         "test_unchanged_contract_entities_preserve_ids",
@@ -67,6 +76,22 @@ REQUIRED_MUTATION_TEST_METHODS = frozenset(
         "test_required_repository_files_cannot_be_removed",
         "test_validation_workflow_requires_validator_command",
         "test_validation_workflow_requires_mutation_test_command",
+        "test_validation_workflow_requires_pull_request_trigger",
+        "test_validation_workflow_requires_master_push_trigger",
+        "test_validate_job_cannot_be_conditionally_skipped",
+        "test_validate_job_cannot_ignore_failures",
+        "test_required_validation_commands_must_stay_in_validate_job",
+        "test_required_validation_step_cannot_be_conditionally_skipped",
+        "test_required_validation_step_cannot_ignore_failures",
+        "test_validation_workflow_rejects_path_filters",
+        "test_validate_job_cannot_depend_on_another_job",
+        "test_validate_workflow_rejects_extra_steps",
+        "test_required_validation_step_rejects_shell_override",
+        "test_validate_workflow_rejects_global_run_defaults",
+        "test_validate_job_requires_github_hosted_runner",
+        "test_validation_workflow_requires_read_only_permissions",
+        "test_checkout_step_cannot_override_repository",
+        "test_docker_action_requires_digest",
         "test_all_conformance_cases_are_required",
         "test_conformance_run_record_lists_every_case",
         "test_conformance_run_record_requires_dandori_revision",
@@ -305,7 +330,24 @@ SKILL_WORKER_POLICY_PATTERNS = {
 
 
 class UniqueKeyLoader(yaml.SafeLoader):
-    """Safe YAML loader that rejects duplicate mapping keys."""
+    """Safe YAML loader that rejects duplicate keys and preserves YAML 1.2-style `on` keys."""
+
+
+UniqueKeyLoader.yaml_implicit_resolvers = {
+    key: list(resolvers)
+    for key, resolvers in yaml.SafeLoader.yaml_implicit_resolvers.items()
+}
+for resolver_key, resolvers in UniqueKeyLoader.yaml_implicit_resolvers.items():
+    UniqueKeyLoader.yaml_implicit_resolvers[resolver_key] = [
+        (tag, pattern)
+        for tag, pattern in resolvers
+        if tag != "tag:yaml.org,2002:bool"
+    ]
+UniqueKeyLoader.add_implicit_resolver(
+    "tag:yaml.org,2002:bool",
+    re.compile(r"^(?:true|false)$", re.IGNORECASE),
+    list("tTfF"),
+)
 
 
 def _construct_unique_mapping(
@@ -437,6 +479,18 @@ def validate_section_markers(
                 )
 
 
+def validate_repository_symlinks(root: Path, result: ValidationResult) -> None:
+    """Reject symlinks so reviewed repository paths cannot resolve to external content."""
+
+    for current_root, directory_names, file_names in os.walk(root, topdown=True, followlinks=False):
+        current = Path(current_root)
+        directory_names[:] = [name for name in directory_names if name != ".git"]
+        for name in (*directory_names, *file_names):
+            path = current / name
+            if path.is_symlink():
+                result.errors.append(f"repository symlinks are forbidden: {relative(path, root)}")
+
+
 def validate_gitignore_policy(root: Path, result: ValidationResult) -> None:
     path = root / ".gitignore"
     if not path.is_file():
@@ -490,48 +544,166 @@ def validate_required_repository_files(root: Path, result: ValidationResult) -> 
             result.errors.append(f"missing required repository file: {relative_path}")
 
 
-def _collect_mapping_values(value: Any, key: str) -> list[Any]:
-    collected: list[Any] = []
-    if isinstance(value, dict):
-        for item_key, item_value in value.items():
-            if item_key == key:
-                collected.append(item_value)
-            collected.extend(_collect_mapping_values(item_value, key))
-    elif isinstance(value, list):
-        for item in value:
-            collected.extend(_collect_mapping_values(item, key))
-    return collected
+def _load_workflow(path: Path, root: Path, result: ValidationResult) -> Any | None:
+    try:
+        workflow = yaml.load(path.read_text(encoding="utf-8"), Loader=UniqueKeyLoader)
+    except Exception as exc:  # noqa: BLE001 - report malformed workflow as validation failure
+        result.errors.append(f"{relative(path, root)}: invalid workflow YAML: {exc}")
+        return None
+    if not isinstance(workflow, dict):
+        result.errors.append(f"{relative(path, root)}: workflow must be a mapping")
+        return None
+    return workflow
+
+
+def _validate_required_trigger(
+    trigger_config: Any,
+    trigger_name: str,
+    path: Path,
+    root: Path,
+    result: ValidationResult,
+) -> Any | None:
+    if not isinstance(trigger_config, dict) or trigger_name not in trigger_config:
+        result.errors.append(f"{relative(path, root)}: workflow must trigger on {trigger_name}")
+        return None
+    config = trigger_config[trigger_name]
+    if config is not None and not isinstance(config, dict):
+        result.errors.append(f"{relative(path, root)}: {trigger_name} trigger must be a mapping or null")
+        return None
+    if isinstance(config, dict) and any(key in config for key in ("paths", "paths-ignore")):
+        result.errors.append(
+            f"{relative(path, root)}: {trigger_name} trigger must not filter paths"
+        )
+    return config
 
 
 def validate_required_workflow_commands(root: Path, result: ValidationResult) -> None:
     path = root / ".github" / "workflows" / "validate.yml"
     if not path.is_file():
         return
-    try:
-        workflow = yaml.load(path.read_text(encoding="utf-8"), Loader=UniqueKeyLoader)
-    except Exception as exc:  # noqa: BLE001 - report malformed workflow as validation failure
-        result.errors.append(f"{relative(path, root)}: invalid workflow YAML: {exc}")
+    workflow = _load_workflow(path, root, result)
+    if workflow is None:
         return
-    run_values = _collect_mapping_values(workflow, "run")
-    run_lines = {
-        line.strip()
-        for value in run_values
-        if isinstance(value, str)
-        for line in value.splitlines()
-        if line.strip()
-    }
-    for command in REQUIRED_WORKFLOW_COMMANDS:
-        if command not in run_lines:
+
+    triggers = workflow.get("on")
+    pull_request = _validate_required_trigger(triggers, "pull_request", path, root, result)
+    push = _validate_required_trigger(triggers, "push", path, root, result)
+    if isinstance(push, dict):
+        branches = push.get("branches")
+        if not isinstance(branches, list) or REQUIRED_WORKFLOW_PUSH_BRANCH not in branches:
             result.errors.append(
-                f"{relative(path, root)}: missing required validation command: {command}"
+                f"{relative(path, root)}: push trigger must include branch {REQUIRED_WORKFLOW_PUSH_BRANCH!r}"
             )
-    jobs = workflow.get("jobs") if isinstance(workflow, dict) else None
-    validate_job = jobs.get("validate") if isinstance(jobs, dict) else None
-    environment = validate_job.get("env") if isinstance(validate_job, dict) else None
-    if not isinstance(environment, dict) or str(environment.get("PYTHONDONTWRITEBYTECODE")) != "1":
+    elif push is None and isinstance(triggers, dict) and "push" in triggers:
         result.errors.append(
-            f"{relative(path, root)}: validate job must set PYTHONDONTWRITEBYTECODE to 1"
+            f"{relative(path, root)}: push trigger must explicitly include branch {REQUIRED_WORKFLOW_PUSH_BRANCH!r}"
         )
+
+    if "defaults" in workflow:
+        result.errors.append(f"{relative(path, root)}: validation workflow must not define global defaults")
+    if "env" in workflow:
+        result.errors.append(f"{relative(path, root)}: validation workflow must not define global env")
+    if workflow.get("permissions") != {"contents": "read"}:
+        result.errors.append(
+            f"{relative(path, root)}: validation workflow permissions must be exactly contents: read"
+        )
+
+    jobs = workflow.get("jobs")
+    validate_job = jobs.get("validate") if isinstance(jobs, dict) else None
+    if not isinstance(validate_job, dict):
+        result.errors.append(f"{relative(path, root)}: missing jobs.validate mapping")
+        return
+    if "if" in validate_job:
+        result.errors.append(f"{relative(path, root)}: validate job must not define if")
+    if "continue-on-error" in validate_job:
+        result.errors.append(f"{relative(path, root)}: validate job must not continue on error")
+    if "needs" in validate_job:
+        result.errors.append(f"{relative(path, root)}: validate job must not depend on another job")
+    allowed_job_keys = {"runs-on", "env", "steps", "if", "continue-on-error", "needs"}
+    unexpected_job_keys = sorted(set(validate_job) - allowed_job_keys)
+    if unexpected_job_keys:
+        result.errors.append(
+            f"{relative(path, root)}: validate job contains unsupported keys: {unexpected_job_keys}"
+        )
+    if validate_job.get("runs-on") != REQUIRED_WORKFLOW_RUNNER:
+        result.errors.append(
+            f"{relative(path, root)}: validate job must run on {REQUIRED_WORKFLOW_RUNNER}"
+        )
+
+    environment = validate_job.get("env")
+    expected_environment = {"PYTHONDONTWRITEBYTECODE": "1"}
+    normalized_environment = (
+        {str(key): str(value) for key, value in environment.items()}
+        if isinstance(environment, dict)
+        else None
+    )
+    if normalized_environment != expected_environment:
+        result.errors.append(
+            f"{relative(path, root)}: validate job must set PYTHONDONTWRITEBYTECODE to 1 and define no other env values"
+        )
+
+    steps = validate_job.get("steps")
+    if not isinstance(steps, list):
+        result.errors.append(f"{relative(path, root)}: validate job steps must be a list")
+        return
+    if len(steps) != 5:
+        result.errors.append(
+            f"{relative(path, root)}: validate job must contain exactly five approved steps"
+        )
+        return
+    if not all(isinstance(step, dict) for step in steps):
+        result.errors.append(f"{relative(path, root)}: every validate job step must be a mapping")
+        return
+
+    checkout_step, python_step, install_step, validator_step, mutation_step = steps
+    action_specs = (
+        (checkout_step, "actions/checkout@", "checkout", {"name", "uses"}),
+        (python_step, "actions/setup-python@", "setup-python", {"name", "uses", "with"}),
+    )
+    for step, prefix, label, allowed_keys in action_specs:
+        unexpected_keys = sorted(set(step) - allowed_keys)
+        if unexpected_keys:
+            result.errors.append(
+                f"{relative(path, root)}: {label} step contains unsupported keys: {unexpected_keys}"
+            )
+        action_ref = step.get("uses")
+        if not isinstance(action_ref, str) or not action_ref.startswith(prefix):
+            result.errors.append(
+                f"{relative(path, root)}: validate job {label} step must use {prefix}<full-commit-sha>"
+            )
+    python_with = python_step.get("with")
+    if python_with != {"python-version": REQUIRED_WORKFLOW_PYTHON_VERSION}:
+        result.errors.append(
+            f"{relative(path, root)}: setup-python step must select Python {REQUIRED_WORKFLOW_PYTHON_VERSION}"
+        )
+
+    run_specs = (
+        (install_step, REQUIRED_WORKFLOW_INSTALL_COMMAND, "dependency installation"),
+        (validator_step, REQUIRED_WORKFLOW_COMMANDS[0], "definition validation"),
+        (mutation_step, REQUIRED_WORKFLOW_COMMANDS[1], "mutation tests"),
+    )
+    for step, command, label in run_specs:
+        if "if" in step:
+            result.errors.append(
+                f"{relative(path, root)}: required validation step must not define if: {command}"
+            )
+        if "continue-on-error" in step:
+            result.errors.append(
+                f"{relative(path, root)}: required validation step must not continue on error: {command}"
+            )
+        if "shell" in step:
+            result.errors.append(
+                f"{relative(path, root)}: required validation step must not override shell: {command}"
+            )
+        unexpected_keys = sorted(set(step) - {"name", "run", "if", "continue-on-error", "shell"})
+        if unexpected_keys:
+            result.errors.append(
+                f"{relative(path, root)}: {label} step contains unsupported keys: {unexpected_keys}"
+            )
+        if not isinstance(step.get("run"), str) or step["run"].strip() != command:
+            result.errors.append(
+                f"{relative(path, root)}: missing required validation command in jobs.validate: {command}"
+            )
 
 
 def validate_conformance_contract(root: Path, result: ValidationResult) -> None:
@@ -627,6 +799,21 @@ def validate_required_mutation_tests(root: Path, result: ValidationResult) -> No
         )
 
 
+def _iter_key_values(value: Any, key: str, location: str = "") -> list[tuple[str, Any]]:
+    found: list[tuple[str, Any]] = []
+    if isinstance(value, dict):
+        for item_key, item_value in value.items():
+            item_location = f"{location}.{item_key}" if location else str(item_key)
+            if item_key == key:
+                found.append((item_location, item_value))
+            found.extend(_iter_key_values(item_value, key, item_location))
+    elif isinstance(value, list):
+        for index, item in enumerate(value):
+            item_location = f"{location}[{index}]"
+            found.extend(_iter_key_values(item, key, item_location))
+    return found
+
+
 def validate_workflow_action_pins(root: Path, result: ValidationResult) -> None:
     workflows_dir = root / ".github" / "workflows"
     if not workflows_dir.is_dir():
@@ -639,23 +826,33 @@ def validate_workflow_action_pins(root: Path, result: ValidationResult) -> None:
         return
 
     for path in workflow_files:
-        for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
-            content = line.split("#", 1)[0].strip()
-            match = re.fullmatch(r"(?:-\s*)?uses:\s*(.+)", content)
-            if match is None:
+        workflow = _load_workflow(path, root, result)
+        if workflow is None:
+            continue
+        for location, raw_action_ref in _iter_key_values(workflow, "uses"):
+            if not isinstance(raw_action_ref, str) or not raw_action_ref.strip():
+                result.errors.append(
+                    f"{relative(path, root)}:{location}: uses must be a non-empty string"
+                )
                 continue
-            action_ref = match.group(1).strip().strip("\"'")
-            if action_ref.startswith("./") or action_ref.startswith("docker://"):
+            action_ref = raw_action_ref.strip()
+            if action_ref.startswith("./"):
+                continue
+            if action_ref.startswith("docker://"):
+                if not DOCKER_IMAGE_DIGEST_PATTERN.fullmatch(action_ref):
+                    result.errors.append(
+                        f"{relative(path, root)}:{location}: Docker action must be pinned to a sha256 digest: {action_ref}"
+                    )
                 continue
             if "@" not in action_ref:
                 result.errors.append(
-                    f"{relative(path, root)}:{line_number}: external action reference is missing @<full-commit-sha>"
+                    f"{relative(path, root)}:{location}: external action reference is missing @<full-commit-sha>"
                 )
                 continue
             _, revision = action_ref.rsplit("@", 1)
             if not FULL_COMMIT_SHA_PATTERN.fullmatch(revision):
                 result.errors.append(
-                    f"{relative(path, root)}:{line_number}: external action must be pinned to a full-length commit SHA: {action_ref}"
+                    f"{relative(path, root)}:{location}: external action must be pinned to a full-length commit SHA: {action_ref}"
                 )
 
 
@@ -664,6 +861,7 @@ def validate_repository(root: Path) -> ValidationResult:
     result = ValidationResult()
     agents_dir = root / ".copilot" / "agents"
     skills_dir = root / ".copilot" / "skills"
+    validate_repository_symlinks(root, result)
     validate_required_repository_files(root, result)
 
     validate_gitignore_policy(root, result)
