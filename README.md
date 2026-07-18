@@ -259,8 +259,10 @@ If authorization or cumulative loop-control state cannot be reconstructed exactl
     validate.yml
 scripts/
   validate_definitions.py
+  validate_release_archive.py
 tests/
   test_validate_definitions.py
+  test_validate_release_archive.py
   conformance.md
 assets/
   dandori-logo.png
@@ -367,17 +369,19 @@ Run the deterministic validator before opening a pull request:
 ```bash
 python -m pip install PyYAML==6.0.3
 python scripts/validate_definitions.py
+python -m unittest discover -s tests -p "test_*.py"
 ```
 
-Create release archives from tracked files rather than zipping the working tree:
+Create release archives from tracked files rather than zipping the working tree, then validate the actual artifact:
 
 ```bash
 git archive --format=zip --output=dandori.zip HEAD
+python scripts/validate_release_archive.py dandori.zip
 ```
 
-This prevents ignored caches, bytecode, logs, and other local artifacts from entering the distribution.
+The archive validator rejects path traversal, symlinks, generated artifacts, duplicate or portability-colliding names, unexpected top-level entries, missing release files, and extracted definitions that fail the repository validator.
 
-GitHub Actions runs deterministic definition validation and validator mutation tests for every pull request and push to `master`. The validator structurally checks the required triggers, the unconditional `jobs.validate` job, and its exact fail-closed validation steps; moving commands to another job, adding `if`, `needs`, `continue-on-error`, or path filters does not satisfy the contract. All step-level actions and reusable workflows are parsed from YAML and must use full-length commit SHAs. Python bytecode generation is disabled in CI, and the validator rejects tag- or branch-based action references, repository symlinks, missing Python ignore rules, and tracked generated artifacts. The validator treats the bundled definitions as a closed release inventory: only `*.agent.md` files are allowed in the agent directory; execution-bypass frontmatter such as `hooks`, `handoffs`, and `mcp-servers` is rejected; bundled-agent frontmatter, tools, filenames, required sections, safety-policy anchors, and conservative body-size regression floors are fixed; core Orchestrator invariants must remain in their intended sections; and the bundled `code-review` skill must contain only its declared Markdown files. DANDORI-specific coupling and Reviewer-owned worker policy are checked across every Skill Markdown file with case and separator variants normalized. Additional local workers may still be added as `*.agent.md` files, but they remain subject to the common runtime, no-subdelegation, forbidden-frontmatter, and DANDORI-coupling checks and produce a manual policy/Diagnostics review warning. External allowlisted workers also remain a Diagnostics-reviewed warning because their definitions are outside this repository. LLM behavior is not inferred from static files; use the structured cases and run-record template in `tests/conformance.md` for model, Worker-tool, and VS Code release checks.
+GitHub Actions runs deterministic definition validation, mutation tests, and release-archive validation for every pull request and push to `master`. The validator structurally checks the required triggers, the unconditional `jobs.validate` job, and its exact fail-closed validation steps; moving commands to another job, adding `if`, `needs`, `continue-on-error`, or path filters does not satisfy the contract. All step-level actions and reusable workflows are parsed from YAML and must use full-length commit SHAs. Python bytecode generation is disabled in CI, and the validator rejects tag- or branch-based action references, repository symlinks, missing Python ignore rules, and tracked generated artifacts. The validator treats the bundled definitions as a closed release inventory: only `*.agent.md` files are allowed in the agent directory; execution-bypass frontmatter such as `hooks`, `handoffs`, and `mcp-servers` is rejected; bundled-agent frontmatter, tools, filenames, required sections, safety-policy anchors, and conservative body-size regression floors are fixed; core Orchestrator invariants must remain in their intended sections; and the bundled `code-review` skill must contain only its declared Markdown files. DANDORI-specific coupling and Reviewer-owned worker policy are checked across every Skill Markdown file with case and separator variants normalized. Additional local workers may still be added as `*.agent.md` files, but they remain subject to the common runtime, no-subdelegation, forbidden-frontmatter, and DANDORI-coupling checks and produce a manual policy/Diagnostics review warning. External allowlisted workers also remain a Diagnostics-reviewed warning because their definitions are outside this repository. Required mutation tests must retain a real repository mutation and a failing-validator assertion; their shared helpers are also checked against empty replacements. Every conformance case must retain a non-empty Input and at least one concrete Expected bullet. LLM behavior is not inferred from static files; use the structured cases and run-record template in `tests/conformance.md` for model, Worker-tool, and VS Code release checks.
 
 ## Design principles
 

@@ -31,3 +31,9 @@ jobs:
 
       - name: Run validator mutation tests
         run: python -m unittest discover -s tests -p "test_*.py"
+
+      - name: Build release archive
+        run: git archive --format=zip --output=dandori-release.zip HEAD
+
+      - name: Validate release archive
+        run: python scripts/validate_release_archive.py dandori-release.zip
