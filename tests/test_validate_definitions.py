@@ -531,6 +531,98 @@ Inspect only the delegated resource. Do not call another agent.
             self.assert_invalid(repo, "bundled worker tools changed")
 
 
+    def test_required_repository_files_cannot_be_removed(self) -> None:
+        required_files = (
+            "LICENSE",
+            "README.md",
+            "README_ja.md",
+            ".github/workflows/validate.yml",
+            "scripts/validate_definitions.py",
+            "tests/conformance.md",
+            "tests/test_validate_definitions.py",
+        )
+        for relative_path in required_files:
+            with self.subTest(path=relative_path):
+                temp, repo = self.make_repo()
+                with temp:
+                    (repo / relative_path).unlink()
+                    self.assert_invalid(repo, "missing required repository file")
+
+    def test_validation_workflow_requires_validator_command(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".github/workflows/validate.yml"
+            path.write_text(
+                path.read_text().replace(
+                    "run: python scripts/validate_definitions.py",
+                    "run: echo validator skipped",
+                    1,
+                )
+            )
+            self.assert_invalid(repo, "missing required validation command")
+
+    def test_validation_workflow_requires_mutation_test_command(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".github/workflows/validate.yml"
+            path.write_text(
+                path.read_text().replace(
+                    'run: python -m unittest discover -s tests -p "test_*.py"',
+                    "run: echo tests skipped",
+                    1,
+                )
+            )
+            self.assert_invalid(repo, "missing required validation command")
+
+    def test_all_conformance_cases_are_required(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / "tests/conformance.md"
+            text = path.read_text()
+            start = text.index("### CONF-010")
+            path.write_text(text[:start])
+            self.assert_invalid(repo, "missing required conformance cases")
+
+    def test_conformance_run_record_lists_every_case(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / "tests/conformance.md"
+            path.write_text(
+                path.read_text().replace(
+                    "  CONF-010: pass|fail|blocked|not_run\n",
+                    "",
+                    1,
+                )
+            )
+            self.assert_invalid(repo, "run-record template is missing cases")
+
+    def test_new_conformance_case_requires_run_record_entry(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / "tests/conformance.md"
+            path.write_text(
+                path.read_text()
+                + "\n\n### CONF-011 — Future case\n\n**Input**\n\nFuture input.\n\n**Expected**\n\n- Future result.\n"
+            )
+            self.assert_invalid(repo, "run-record template is missing cases")
+
+    def test_conformance_run_record_requires_dandori_revision(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / "tests/conformance.md"
+            path.write_text(path.read_text().replace('dandori_revision: ""\n', "", 1))
+            self.assert_invalid(repo, "run-record template is missing dandori_revision")
+
+    def test_required_mutation_test_methods_cannot_be_removed(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / "tests/test_validate_definitions.py"
+            text = path.read_text()
+            start = text.index("    def test_orchestrator_rejects_edit_tool")
+            end = text.index("    def test_worker_rejects_agent_tool", start)
+            path.write_text(text[:start] + text[end:])
+            self.assert_invalid(repo, "missing required mutation tests")
+
     def test_list_style_workflow_action_requires_full_commit_sha(self) -> None:
         temp, repo = self.make_repo()
         with temp:
