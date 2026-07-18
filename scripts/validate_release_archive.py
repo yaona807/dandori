@@ -3,20 +3,36 @@
 
 from __future__ import annotations
 
-import stat
+import os
 import sys
+
+_SCRIPT_DIRECTORY = os.path.dirname(os.path.abspath(__file__))
+if sys.path and os.path.abspath(sys.path[0]) == _SCRIPT_DIRECTORY:
+    del sys.path[0]
+
+import importlib.util
+import stat
 import tempfile
 import unicodedata
 import zipfile
 from pathlib import Path, PurePosixPath
 
-from validate_definitions import (
-    FORBIDDEN_TRACKED_FILENAMES,
-    FORBIDDEN_TRACKED_PATH_PARTS,
-    FORBIDDEN_TRACKED_SUFFIXES,
-    REQUIRED_REPOSITORY_FILES,
-    validate_repository,
+_VALIDATOR_PATH = Path(__file__).resolve().with_name("validate_definitions.py")
+_VALIDATOR_SPEC = importlib.util.spec_from_file_location(
+    "dandori_release_definition_validator",
+    _VALIDATOR_PATH,
 )
+if _VALIDATOR_SPEC is None or _VALIDATOR_SPEC.loader is None:
+    raise RuntimeError("unable to load DANDORI definition validator")
+_validator = importlib.util.module_from_spec(_VALIDATOR_SPEC)
+sys.modules[_VALIDATOR_SPEC.name] = _validator
+_VALIDATOR_SPEC.loader.exec_module(_validator)
+
+FORBIDDEN_TRACKED_FILENAMES = _validator.FORBIDDEN_TRACKED_FILENAMES
+FORBIDDEN_TRACKED_PATH_PARTS = _validator.FORBIDDEN_TRACKED_PATH_PARTS
+FORBIDDEN_TRACKED_SUFFIXES = _validator.FORBIDDEN_TRACKED_SUFFIXES
+REQUIRED_REPOSITORY_FILES = _validator.REQUIRED_REPOSITORY_FILES
+validate_repository = _validator.validate_repository
 
 MAX_RELEASE_ENTRIES = 500
 MAX_RELEASE_UNCOMPRESSED_BYTES = 25_000_000

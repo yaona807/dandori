@@ -1245,5 +1245,27 @@ Inspect only the delegated resource. Do not call another agent.
             )
             self.assert_invalid(repo, "test runner must reject duplicate or missing test IDs")
 
+    def test_scripts_inventory_rejects_module_shadowing(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / "scripts/unittest.py"
+            path.write_text("raise RuntimeError('shadowed')\n")
+            self.assert_invalid(repo, "Python execution inventory contains unexpected entries")
+
+    def test_tests_inventory_rejects_additional_test_module(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / "tests/test_000_loader_bypass.py"
+            path.write_text("def test_dummy():\n    return None\n")
+            self.assert_invalid(repo, "Python execution inventory contains unexpected entries")
+
+    def test_python_execution_inventory_rejects_nested_packages(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            package = repo / "scripts/helpers"
+            package.mkdir()
+            (package / "__init__.py").write_text("")
+            self.assert_invalid(repo, "Python execution inventory contains unexpected entries")
+
 if __name__ == "__main__":
     unittest.main()

@@ -16,11 +16,8 @@ SPEC = importlib.util.spec_from_file_location(
 )
 assert SPEC and SPEC.loader
 release_validator = importlib.util.module_from_spec(SPEC)
-sys.path.insert(0, str(ROOT / "scripts"))
-try:
-    SPEC.loader.exec_module(release_validator)
-finally:
-    sys.path.pop(0)
+sys.modules[SPEC.name] = release_validator
+SPEC.loader.exec_module(release_validator)
 
 
 class ReleaseArchiveValidationTests(unittest.TestCase):
