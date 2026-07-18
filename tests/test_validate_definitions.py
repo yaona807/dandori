@@ -172,6 +172,45 @@ class ValidatorMutationTests(unittest.TestCase):
             )
             self.assert_invalid(repo, "missing required Orchestrator marker")
 
+    def test_verification_execute_policy_is_required(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".copilot/agents/Orchestrator.agent.md"
+            path.write_text(
+                path.read_text().replace(
+                    "explicitly authorized non-mutating execute operations",
+                    "observation operations only",
+                    1,
+                )
+            )
+            self.assert_invalid(repo, "missing required Orchestrator marker")
+
+    def test_attempt_counter_uses_source_permission_pairs(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".copilot/agents/Orchestrator.agent.md"
+            path.write_text(
+                path.read_text().replace(
+                    "<criterion_id>|<source_permission_id>` pair",
+                    "canonical permission-boundary key",
+                    1,
+                )
+            )
+            self.assert_invalid(repo, "missing required Orchestrator marker")
+
+    def test_unchanged_contract_entities_preserve_ids(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".copilot/agents/Orchestrator.agent.md"
+            path.write_text(
+                path.read_text().replace(
+                    "Unchanged entities preserve their stable IDs across revisions.",
+                    "Entity IDs may change across revisions.",
+                    1,
+                )
+            )
+            self.assert_invalid(repo, "missing required Orchestrator marker")
+
     def test_removing_all_contract_activation_markers_is_rejected(self) -> None:
         temp, repo = self.make_repo()
         with temp:

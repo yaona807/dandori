@@ -165,6 +165,9 @@ ORCHESTRATOR_REQUIRED_MARKERS = (
     "expected_delta:",
     "**Contract patch**",
     "set_auto_added_targets_max:",
+    "Unchanged entities preserve their stable IDs across revisions.",
+    "explicitly authorized non-mutating execute operations",
+    "<criterion_id>|<source_permission_id>` pair",
 )
 ORCHESTRATOR_FORBIDDEN_MARKERS = (
     "normalized_delta:",
