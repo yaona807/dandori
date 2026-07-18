@@ -156,6 +156,11 @@ REQUIRED_MUTATION_TEST_METHODS = frozenset(
         "test_test_runner_rejects_discovery_configuration",
         "test_test_runner_allow_skips_defaults_to_false",
         "test_test_runner_exit_status_tracks_test_result",
+        "test_required_test_modules_cannot_define_load_tests",
+        "test_required_test_classes_must_inherit_unittest_testcase",
+        "test_required_test_methods_must_be_synchronous",
+        "test_test_runner_requires_all_required_test_ids",
+        "test_test_runner_rejects_duplicate_test_ids",
     }
 )
 BOUNDARY_ENFORCEMENT_POLICY = (
@@ -975,6 +980,22 @@ def _validate_required_test_class(
         result.errors.append(f"{relative(path, root)}: expected exactly one {class_name} class")
         return
     test_class = classes[0]
+    valid_base = (
+        len(test_class.bases) == 1
+        and isinstance(test_class.bases[0], ast.Attribute)
+        and isinstance(test_class.bases[0].value, ast.Name)
+        and test_class.bases[0].value.id == "unittest"
+        and test_class.bases[0].attr == "TestCase"
+    )
+    if not valid_base:
+        result.errors.append(
+            f"{relative(path, root)}: {class_name} must inherit exactly unittest.TestCase"
+        )
+    if any(
+        isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "load_tests"
+        for node in tree.body
+    ):
+        result.errors.append(f"{relative(path, root)}: required test module must not define load_tests")
     if _has_skip_decorator(test_class) or _class_forces_skip(test_class):
         result.errors.append(
             f"{relative(path, root)}: required test class must not be skipped: {class_name}"
@@ -998,6 +1019,10 @@ def _validate_required_test_class(
                 f"{relative(path, root)}: missing required test helper in {class_name}: {helper_name}"
             )
             continue
+        if isinstance(helper, ast.AsyncFunctionDef):
+            result.errors.append(
+                f"{relative(path, root)}: required test helper must be synchronous: {helper_name}"
+            )
         if _has_skip_decorator(helper):
             result.errors.append(
                 f"{relative(path, root)}: required test helper must not be skipped: {helper_name}"
@@ -1009,6 +1034,10 @@ def _validate_required_test_class(
 
     for method_name in sorted(required_methods & set(methods)):
         method = methods[method_name]
+        if isinstance(method, ast.AsyncFunctionDef):
+            result.errors.append(
+                f"{relative(path, root)}: required test method must be synchronous: {method_name}"
+            )
         if _has_skip_decorator(method):
             result.errors.append(
                 f"{relative(path, root)}: required test method must not be skipped: {method_name}"
@@ -1117,6 +1146,12 @@ def validate_test_runner_contract(root: Path, result: ValidationResult) -> None:
     )
     if _literal_assignment(tree, "TEST_SUITE_SPECS") != expected_specs:
         result.errors.append(f"{relative(path, root)}: test runner suite inventory must be exact")
+    expected_methods = {
+        "ValidatorMutationTests": tuple(sorted(REQUIRED_MUTATION_TEST_METHODS)),
+        "ReleaseArchiveValidationTests": tuple(sorted(REQUIRED_RELEASE_ARCHIVE_TEST_METHODS)),
+    }
+    if _literal_assignment(tree, "REQUIRED_TEST_METHODS") != expected_methods:
+        result.errors.append(f"{relative(path, root)}: test runner required test IDs must be exact")
 
     forbidden_options = {"--start-directory", "--pattern"}
     if any(option in source for option in forbidden_options):
@@ -1161,6 +1196,41 @@ def validate_test_runner_contract(root: Path, result: ValidationResult) -> None:
     calls = _called_names(main_function)
     if not {"build_suite", "run", "wasSuccessful"}.issubset(calls) or "discover" in calls:
         result.errors.append(f"{relative(path, root)}: test runner must run the fixed suite without discovery")
+    all_calls = _called_names(tree)
+    if not {"loadTestsFromTestCase", "validate_loaded_suite"}.issubset(all_calls):
+        result.errors.append(f"{relative(path, root)}: test runner must directly load and verify required test IDs")
+    suite_validators = [
+        node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "validate_loaded_suite"
+    ]
+    duplicate_guard = False
+    missing_guard = False
+    if len(suite_validators) == 1:
+        for node in ast.walk(suite_validators[0]):
+            if not isinstance(node, ast.If):
+                continue
+            expression = ast.unparse(node.test).replace(" ", "")
+            raised_messages = {
+                argument.value
+                for child in node.body
+                for call in ast.walk(child)
+                if isinstance(call, ast.Call)
+                and isinstance(call.func, ast.Name)
+                and call.func.id == "RuntimeError"
+                for argument in call.args
+                if isinstance(argument, ast.Constant) and isinstance(argument.value, str)
+            }
+            if expression == "len(identities)!=len(set(identities))" and "duplicate test IDs are forbidden" in raised_messages:
+                duplicate_guard = True
+            if expression == "missing" and any(
+                isinstance(call, ast.Call)
+                and isinstance(call.func, ast.Name)
+                and call.func.id == "RuntimeError"
+                for child in node.body
+                for call in ast.walk(child)
+            ) and "required test IDs were not loaded" in source:
+                missing_guard = True
+    if not duplicate_guard or not missing_guard:
+        result.errors.append(f"{relative(path, root)}: test runner must reject duplicate or missing test IDs")
 
     zero_guard = False
     skip_guard = False
