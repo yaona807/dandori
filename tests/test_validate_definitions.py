@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import shutil
 import subprocess
 import sys
@@ -613,6 +614,174 @@ Inspect only the delegated resource. Do not call another agent.
             )
             self.assert_invalid(repo, "missing required validation command")
 
+    def test_validation_workflow_requires_pull_request_trigger(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".github/workflows/validate.yml"
+            path.write_text(path.read_text().replace("  pull_request:\n", "", 1))
+            self.assert_invalid(repo, "workflow must trigger on pull_request")
+
+    def test_validation_workflow_requires_master_push_trigger(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".github/workflows/validate.yml"
+            path.write_text(path.read_text().replace("      - master\n", "      - develop\n", 1))
+            self.assert_invalid(repo, "push trigger must include branch 'master'")
+
+    def test_validation_workflow_rejects_path_filters(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".github/workflows/validate.yml"
+            path.write_text(
+                path.read_text().replace(
+                    "  pull_request:\n",
+                    "  pull_request:\n    paths-ignore:\n      - 'docs/**'\n",
+                    1,
+                )
+            )
+            self.assert_invalid(repo, "pull_request trigger must not filter paths")
+
+    def test_validate_job_cannot_be_conditionally_skipped(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".github/workflows/validate.yml"
+            path.write_text(path.read_text().replace("  validate:\n", "  validate:\n    if: ${{ false }}\n", 1))
+            self.assert_invalid(repo, "validate job must not define if")
+
+    def test_validate_job_cannot_ignore_failures(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".github/workflows/validate.yml"
+            path.write_text(
+                path.read_text().replace(
+                    "  validate:\n",
+                    "  validate:\n    continue-on-error: true\n",
+                    1,
+                )
+            )
+            self.assert_invalid(repo, "validate job must not continue on error")
+
+    def test_validate_job_cannot_depend_on_another_job(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".github/workflows/validate.yml"
+            path.write_text(path.read_text().replace("  validate:\n", "  validate:\n    needs: setup\n", 1))
+            self.assert_invalid(repo, "validate job must not depend on another job")
+
+    def test_required_validation_commands_must_stay_in_validate_job(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".github/workflows/validate.yml"
+            text = path.read_text()
+            text = text.replace("run: python scripts/validate_definitions.py", "run: echo validator skipped", 1)
+            text = text.replace(
+                'run: python -m unittest discover -s tests -p "test_*.py"',
+                "run: echo tests skipped",
+                1,
+            )
+            text += """
+  dead-validation:
+    if: ${{ false }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: python scripts/validate_definitions.py
+      - run: python -m unittest discover -s tests -p \"test_*.py\"
+"""
+            path.write_text(text)
+            self.assert_invalid(repo, "missing required validation command in jobs.validate")
+
+    def test_required_validation_step_cannot_be_conditionally_skipped(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".github/workflows/validate.yml"
+            path.write_text(
+                path.read_text().replace(
+                    "      - name: Validate definitions\n        run: python scripts/validate_definitions.py",
+                    "      - name: Validate definitions\n        if: ${{ false }}\n        run: python scripts/validate_definitions.py",
+                    1,
+                )
+            )
+            self.assert_invalid(repo, "required validation step must not define if")
+
+    def test_required_validation_step_cannot_ignore_failures(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".github/workflows/validate.yml"
+            path.write_text(
+                path.read_text().replace(
+                    "      - name: Validate definitions\n        run: python scripts/validate_definitions.py",
+                    "      - name: Validate definitions\n        continue-on-error: true\n        run: python scripts/validate_definitions.py",
+                    1,
+                )
+            )
+            self.assert_invalid(repo, "required validation step must not continue on error")
+
+    def test_required_validation_step_rejects_shell_override(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".github/workflows/validate.yml"
+            path.write_text(
+                path.read_text().replace(
+                    "      - name: Validate definitions\n        run: python scripts/validate_definitions.py",
+                    "      - name: Validate definitions\n        shell: bash {0} || true\n        run: python scripts/validate_definitions.py",
+                    1,
+                )
+            )
+            self.assert_invalid(repo, "required validation step must not override shell")
+
+    def test_validate_workflow_rejects_extra_steps(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".github/workflows/validate.yml"
+            path.write_text(
+                path.read_text().replace(
+                    "      - name: Validate definitions\n",
+                    "      - name: Mutate validation inputs\n        run: echo tamper\n\n      - name: Validate definitions\n",
+                    1,
+                )
+            )
+            self.assert_invalid(repo, "validate job must contain exactly five approved steps")
+
+    def test_validate_workflow_rejects_global_run_defaults(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".github/workflows/validate.yml"
+            path.write_text(
+                path.read_text().replace(
+                    "permissions:\n",
+                    "defaults:\n  run:\n    shell: bash {0} || true\n\npermissions:\n",
+                    1,
+                )
+            )
+            self.assert_invalid(repo, "validation workflow must not define global defaults")
+
+    def test_validate_job_requires_github_hosted_runner(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".github/workflows/validate.yml"
+            path.write_text(path.read_text().replace("runs-on: ubuntu-latest", "runs-on: self-hosted", 1))
+            self.assert_invalid(repo, "validate job must run on ubuntu-latest")
+
+    def test_validation_workflow_requires_read_only_permissions(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".github/workflows/validate.yml"
+            path.write_text(path.read_text().replace("  contents: read", "  contents: write", 1))
+            self.assert_invalid(repo, "validation workflow permissions must be exactly contents: read")
+
+    def test_checkout_step_cannot_override_repository(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".github/workflows/validate.yml"
+            path.write_text(
+                path.read_text().replace(
+                    "        uses: actions/checkout@",
+                    "        with:\n          repository: attacker/repository\n        uses: actions/checkout@",
+                    1,
+                )
+            )
+            self.assert_invalid(repo, "checkout step contains unsupported keys")
+
     def test_all_conformance_cases_are_required(self) -> None:
         temp, repo = self.make_repo()
         with temp:
@@ -662,6 +831,17 @@ Inspect only the delegated resource. Do not call another agent.
             path.write_text(text[:start] + text[end:])
             self.assert_invalid(repo, "missing required mutation tests")
 
+    @unittest.skipUnless(hasattr(os, "symlink"), "symlink support is required")
+    def test_repository_symlinks_are_rejected(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            external = repo.parent / "external-writer.agent.md"
+            external.write_text((repo / ".copilot/agents/Writer.agent.md").read_text())
+            path = repo / ".copilot/agents/Writer.agent.md"
+            path.unlink()
+            path.symlink_to(external)
+            self.assert_invalid(repo, "repository symlinks are forbidden")
+
     def test_python_ignore_rules_are_required(self) -> None:
         temp, repo = self.make_repo()
         with temp:
@@ -690,12 +870,39 @@ Inspect only the delegated resource. Do not call another agent.
             )
             self.assert_invalid(repo, "tracked generated artifacts are forbidden")
 
+    def test_docker_action_requires_digest(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".github/workflows/extra.yml"
+            path.write_text(
+                "name: Extra\non: push\njobs:\n  check:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: docker://alpine:latest\n"
+            )
+            self.assert_invalid(repo, "Docker action must be pinned to a sha256 digest")
+
     def test_list_style_workflow_action_requires_full_commit_sha(self) -> None:
         temp, repo = self.make_repo()
         with temp:
             path = repo / ".github/workflows/extra.yml"
             path.write_text(
                 "name: Extra\non: push\njobs:\n  check:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/cache@v4\n"
+            )
+            self.assert_invalid(repo, "external action must be pinned to a full-length commit SHA")
+
+    def test_inline_workflow_action_requires_full_commit_sha(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".github/workflows/extra.yml"
+            path.write_text(
+                "name: Extra\non: push\njobs:\n  check:\n    runs-on: ubuntu-latest\n    steps:\n      - { name: Cache, uses: actions/cache@v4 }\n"
+            )
+            self.assert_invalid(repo, "external action must be pinned to a full-length commit SHA")
+
+    def test_reusable_workflow_requires_full_commit_sha(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".github/workflows/extra.yml"
+            path.write_text(
+                "name: Extra\non: push\njobs:\n  reusable:\n    uses: owner/repository/.github/workflows/check.yml@main\n"
             )
             self.assert_invalid(repo, "external action must be pinned to a full-length commit SHA")
 
