@@ -152,6 +152,10 @@ REQUIRED_MUTATION_TEST_METHODS = frozenset(
         "test_required_release_test_bodies_cannot_be_empty",
         "test_required_release_test_helpers_cannot_be_empty",
         "test_test_runner_skip_guard_is_required",
+        "test_test_runner_suite_inventory_is_fixed",
+        "test_test_runner_rejects_discovery_configuration",
+        "test_test_runner_allow_skips_defaults_to_false",
+        "test_test_runner_exit_status_tracks_test_result",
     }
 )
 BOUNDARY_ENFORCEMENT_POLICY = (
@@ -1074,39 +1078,119 @@ def validate_required_mutation_tests(root: Path, result: ValidationResult) -> No
     )
 
 
+def _literal_assignment(tree: ast.Module, name: str) -> Any | None:
+    for statement in tree.body:
+        if isinstance(statement, (ast.Assign, ast.AnnAssign)):
+            targets = statement.targets if isinstance(statement, ast.Assign) else [statement.target]
+            if any(isinstance(target, ast.Name) and target.id == name for target in targets):
+                value = statement.value
+                try:
+                    return ast.literal_eval(value)
+                except (TypeError, ValueError):
+                    return None
+    return None
+
+
+def _return_constant(node: ast.If, value: int) -> bool:
+    return any(
+        isinstance(statement, ast.Return)
+        and isinstance(statement.value, ast.Constant)
+        and statement.value.value == value
+        for statement in node.body
+    )
+
+
 def validate_test_runner_contract(root: Path, result: ValidationResult) -> None:
     path = root / "scripts" / "run_tests.py"
     if not path.is_file():
         return
+    source = path.read_text(encoding="utf-8")
     try:
-        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        tree = ast.parse(source, filename=str(path))
     except SyntaxError as exc:
         result.errors.append(f"{relative(path, root)}: invalid Python syntax: {exc}")
         return
-    main_functions = [
-        node
+
+    expected_specs = (
+        ("tests/test_validate_definitions.py", "ValidatorMutationTests"),
+        ("tests/test_validate_release_archive.py", "ReleaseArchiveValidationTests"),
+    )
+    if _literal_assignment(tree, "TEST_SUITE_SPECS") != expected_specs:
+        result.errors.append(f"{relative(path, root)}: test runner suite inventory must be exact")
+
+    forbidden_options = {"--start-directory", "--pattern"}
+    if any(option in source for option in forbidden_options):
+        result.errors.append(f"{relative(path, root)}: test runner must not expose discovery configuration")
+
+    add_argument_calls = [
+        call
+        for call in ast.walk(tree)
+        if isinstance(call, ast.Call)
+        and isinstance(call.func, ast.Attribute)
+        and call.func.attr == "add_argument"
+    ]
+    allow_skip_calls = [
+        call
+        for call in add_argument_calls
+        if any(isinstance(argument, ast.Constant) and argument.value == "--allow-skips" for argument in call.args)
+    ]
+    if len(allow_skip_calls) != 1:
+        result.errors.append(f"{relative(path, root)}: test runner must define exactly one --allow-skips option")
+    else:
+        keywords = {keyword.arg: keyword.value for keyword in allow_skip_calls[0].keywords if keyword.arg}
+        action = keywords.get("action")
+        default = keywords.get("default")
+        if not (isinstance(action, ast.Constant) and action.value == "store_true"):
+            result.errors.append(f"{relative(path, root)}: --allow-skips must use store_true")
+        if default is not None and not (isinstance(default, ast.Constant) and default.value is False):
+            result.errors.append(f"{relative(path, root)}: --allow-skips must default to false")
+
+    if any(
+        isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "load_tests"
         for node in tree.body
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "main"
+    ):
+        result.errors.append(f"{relative(path, root)}: test runner must not define load_tests")
+
+    main_functions = [
+        node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "main"
     ]
     if len(main_functions) != 1:
-        result.errors.append(f"{relative(path, root)}: expected exactly one main test-runner function")
+        result.errors.append(f"{relative(path, root)}: expected exactly one synchronous main test-runner function")
         return
     main_function = main_functions[0]
     calls = _called_names(main_function)
-    attributes = {node.attr for node in ast.walk(main_function) if isinstance(node, ast.Attribute)}
-    if not {"discover", "run", "wasSuccessful"}.issubset(calls):
-        result.errors.append(f"{relative(path, root)}: test runner must discover, run, and evaluate the suite")
-    skip_guard_present = any(
-        isinstance(node, ast.If)
-        and {"skipped", "allow_skips"}.issubset(
-            {attribute.attr for attribute in ast.walk(node.test) if isinstance(attribute, ast.Attribute)}
-        )
-        for node in ast.walk(main_function)
-    )
-    if not {"testsRun", "skipped"}.issubset(attributes) or not skip_guard_present:
+    if not {"build_suite", "run", "wasSuccessful"}.issubset(calls) or "discover" in calls:
+        result.errors.append(f"{relative(path, root)}: test runner must run the fixed suite without discovery")
+
+    zero_guard = False
+    skip_guard = False
+    for node in ast.walk(main_function):
+        if not isinstance(node, ast.If):
+            continue
+        names = {item.id for item in ast.walk(node.test) if isinstance(item, ast.Name)}
+        attrs = {item.attr for item in ast.walk(node.test) if isinstance(item, ast.Attribute)}
+        constants = {item.value for item in ast.walk(node.test) if isinstance(item, ast.Constant)}
+        if "testsRun" in attrs and 0 in constants and _return_constant(node, 1):
+            zero_guard = True
+        if {"skipped", "allow_skips"}.issubset(attrs) and _return_constant(node, 1):
+            skip_guard = True
+    if not zero_guard or not skip_guard:
         result.errors.append(f"{relative(path, root)}: test runner must fail closed on missing or skipped tests")
-    if "--allow-skips" not in path.read_text(encoding="utf-8"):
-        result.errors.append(f"{relative(path, root)}: test runner must expose only the explicit local allow-skips override")
+
+    valid_exit = any(
+        isinstance(node, ast.Return)
+        and isinstance(node.value, ast.IfExp)
+        and isinstance(node.value.test, ast.Call)
+        and isinstance(node.value.test.func, ast.Attribute)
+        and node.value.test.func.attr == "wasSuccessful"
+        and isinstance(node.value.body, ast.Constant)
+        and node.value.body.value == 0
+        and isinstance(node.value.orelse, ast.Constant)
+        and node.value.orelse.value == 1
+        for node in main_function.body
+    )
+    if not valid_exit:
+        result.errors.append(f"{relative(path, root)}: test runner exit status must follow wasSuccessful")
 
 
 def _iter_key_values(value: Any, key: str, location: str = "") -> list[tuple[str, Any]]:

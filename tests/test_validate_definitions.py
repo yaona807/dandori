@@ -1158,5 +1158,51 @@ Inspect only the delegated resource. Do not call another agent.
             path.write_text(text)
             self.assert_invalid(repo, "external action must be pinned to a full-length commit SHA")
 
+    def test_test_runner_suite_inventory_is_fixed(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / "scripts/run_tests.py"
+            path.write_text(
+                path.read_text().replace(
+                    '("tests/test_validate_definitions.py", "ValidatorMutationTests"),',
+                    '("tests/dummy.py", "DummyTests"),',
+                    1,
+                )
+            )
+            self.assert_invalid(repo, "test runner suite inventory must be exact")
+
+    def test_test_runner_rejects_discovery_configuration(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / "scripts/run_tests.py"
+            path.write_text(path.read_text().replace('        "--allow-skips",', '        "--pattern",', 1))
+            self.assert_invalid(repo, "must not expose discovery configuration")
+
+    def test_test_runner_allow_skips_defaults_to_false(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / "scripts/run_tests.py"
+            path.write_text(
+                path.read_text().replace(
+                    '        action="store_true",',
+                    '        action="store_true",\n        default=True,',
+                    1,
+                )
+            )
+            self.assert_invalid(repo, "--allow-skips must default to false")
+
+    def test_test_runner_exit_status_tracks_test_result(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / "scripts/run_tests.py"
+            path.write_text(
+                path.read_text().replace(
+                    "    return 0 if result.wasSuccessful() else 1",
+                    "    result.wasSuccessful()\n    return 0",
+                    1,
+                )
+            )
+            self.assert_invalid(repo, "test runner exit status must follow wasSuccessful")
+
 if __name__ == "__main__":
     unittest.main()
