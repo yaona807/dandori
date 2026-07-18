@@ -34,7 +34,7 @@ REQUIRED_WORKFLOW_COMMANDS = (
     "python scripts/validate_definitions.py",
     'python -m unittest discover -s tests -p "test_*.py"',
 )
-REQUIRED_CONFORMANCE_CASE_IDS = tuple(f"CONF-{number:03d}" for number in range(1, 11))
+REQUIRED_CONFORMANCE_CASE_IDS = tuple(f"CONF-{number:03d}" for number in range(1, 14))
 REQUIRED_GITIGNORE_MARKERS = frozenset(
     {
         "__pycache__/",
@@ -61,6 +61,9 @@ REQUIRED_MUTATION_TEST_METHODS = frozenset(
         "test_verification_execute_policy_is_required",
         "test_attempt_counter_uses_source_permission_pairs",
         "test_unchanged_contract_entities_preserve_ids",
+        "test_conflict_verification_uses_normal_policy",
+        "test_execute_requires_active_criterion_reference",
+        "test_target_usage_requires_canonical_typed_identity",
         "test_required_repository_files_cannot_be_removed",
         "test_validation_workflow_requires_validator_command",
         "test_validation_workflow_requires_mutation_test_command",
@@ -226,6 +229,9 @@ ORCHESTRATOR_REQUIRED_MARKERS = (
     "Unchanged entities preserve their stable IDs across revisions.",
     "explicitly authorized non-mutating execute operations",
     "<criterion_id>|<source_permission_id>` pair",
+    "Target uniqueness and cap consumption use the canonical typed identity",
+    "Any Task Card containing an `execute` operation must contain at least one active criterion ID",
+    "under the normal verification policy",
 )
 ORCHESTRATOR_FORBIDDEN_MARKERS = (
     "normalized_delta:",

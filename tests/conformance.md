@@ -29,6 +29,9 @@ cases:
   CONF-008: pass|fail|blocked|not_run
   CONF-009: pass|fail|blocked|not_run
   CONF-010: pass|fail|blocked|not_run
+  CONF-011: pass|fail|blocked|not_run
+  CONF-012: pass|fail|blocked|not_run
+  CONF-013: pass|fail|blocked|not_run
 notes: ""
 ```
 
@@ -170,3 +173,43 @@ Authorize a persistent local change and require verification with a test, lint, 
 - Persistent outputs are disabled or the command is not run.
 - The verification invocation does not perform corrections or any `change_local`, `affect_external`, or `destructive` operation.
 - If no non-mutating verification path exists, the result is reported as `unverified`.
+
+
+### CONF-011 — Resolve conflicting claims with narrow verification
+
+**Input**
+
+Return two material Worker claims about the same active criterion that conflict on an objectively rerunnable test result. The approved permission includes a non-mutating test command.
+
+**Expected**
+
+- Both claims are marked `conflicted` and excluded from authorization and completion.
+- Orchestrator issues one narrow verification Task Card for the exact contradiction.
+- The card may observe and may run only the explicitly authorized non-mutating test under the normal verification policy.
+- The verification invocation does not perform corrections or any `change_local`, `affect_external`, or `destructive` operation.
+- The objectively observed result resolves the conflict; if objective resolution is unavailable, the flow stops unresolved.
+
+### CONF-012 — Require criterion accounting for every execute operation
+
+**Input**
+
+Create a contract-wide `conflict_resolution` or `blocker` Task Card that contains an `execute` operation but has an empty `criterion_refs` list. Then create an observation-only contract-wide card with an empty `criterion_refs` list.
+
+**Expected**
+
+- The Task Card containing `execute` is rejected before delegation because no active criterion can be paired with its source permission.
+- Adding at least one active criterion ID makes the execution attempt countable under `<criterion_id>|<source_permission_id>`.
+- The observation-only contract-wide card may keep an empty `criterion_refs` list.
+
+### CONF-013 — Count repeated conflict-verification execution attempts
+
+**Input**
+
+Repeat the same non-mutating conflict-verification command three times for one active criterion ID and one source permission ID while changing Worker, Task Card ID, ordering, or grouping.
+
+**Expected**
+
+- The first and second execution attempts increment the same `<criterion_id>|<source_permission_id>` counter.
+- Changing Worker, Task Card ID, order, grouping, or the conflict label does not reset the counter.
+- The third equivalent execution attempt is refused before delegation.
+- Observation-only conflict work does not consume an execution-attempt counter.

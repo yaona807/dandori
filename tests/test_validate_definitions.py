@@ -181,7 +181,6 @@ class ValidatorMutationTests(unittest.TestCase):
                 path.read_text().replace(
                     "explicitly authorized non-mutating execute operations",
                     "observation operations only",
-                    1,
                 )
             )
             self.assert_invalid(repo, "missing required Orchestrator marker")
@@ -194,7 +193,6 @@ class ValidatorMutationTests(unittest.TestCase):
                 path.read_text().replace(
                     "<criterion_id>|<source_permission_id>` pair",
                     "canonical permission-boundary key",
-                    1,
                 )
             )
             self.assert_invalid(repo, "missing required Orchestrator marker")
@@ -207,6 +205,45 @@ class ValidatorMutationTests(unittest.TestCase):
                 path.read_text().replace(
                     "Unchanged entities preserve their stable IDs across revisions.",
                     "Entity IDs may change across revisions.",
+                    1,
+                )
+            )
+            self.assert_invalid(repo, "missing required Orchestrator marker")
+
+    def test_conflict_verification_uses_normal_policy(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".copilot/agents/Orchestrator.agent.md"
+            path.write_text(
+                path.read_text().replace(
+                    "under the normal verification policy",
+                    "with observation only",
+                    1,
+                )
+            )
+            self.assert_invalid(repo, "missing required Orchestrator marker")
+
+    def test_execute_requires_active_criterion_reference(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".copilot/agents/Orchestrator.agent.md"
+            path.write_text(
+                path.read_text().replace(
+                    "Any Task Card containing an `execute` operation must contain at least one active criterion ID",
+                    "A Task Card containing an `execute` operation may omit criterion IDs",
+                    1,
+                )
+            )
+            self.assert_invalid(repo, "missing required Orchestrator marker")
+
+    def test_target_usage_requires_canonical_typed_identity(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".copilot/agents/Orchestrator.agent.md"
+            path.write_text(
+                path.read_text().replace(
+                    "Target uniqueness and cap consumption use the canonical typed identity",
+                    "Target uniqueness uses the displayed identifier",
                     1,
                 )
             )
@@ -581,7 +618,7 @@ Inspect only the delegated resource. Do not call another agent.
         with temp:
             path = repo / "tests/conformance.md"
             text = path.read_text()
-            start = text.index("### CONF-010")
+            start = text.index("### CONF-013")
             path.write_text(text[:start])
             self.assert_invalid(repo, "missing required conformance cases")
 
@@ -591,7 +628,7 @@ Inspect only the delegated resource. Do not call another agent.
             path = repo / "tests/conformance.md"
             path.write_text(
                 path.read_text().replace(
-                    "  CONF-010: pass|fail|blocked|not_run\n",
+                    "  CONF-013: pass|fail|blocked|not_run\n",
                     "",
                     1,
                 )
@@ -604,7 +641,7 @@ Inspect only the delegated resource. Do not call another agent.
             path = repo / "tests/conformance.md"
             path.write_text(
                 path.read_text()
-                + "\n\n### CONF-011 — Future case\n\n**Input**\n\nFuture input.\n\n**Expected**\n\n- Future result.\n"
+                + "\n\n### CONF-014 — Future case\n\n**Input**\n\nFuture input.\n\n**Expected**\n\n- Future result.\n"
             )
             self.assert_invalid(repo, "run-record template is missing cases")
 

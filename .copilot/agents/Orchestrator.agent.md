@@ -231,7 +231,7 @@ flow_ledger:
     expected_delta: {}
 ```
 
-`session_ledger.issued_review_ids` is append-only for the entire chat session and survives flow replacement. `target_usage` is a non-authorizing uniqueness index used only to count atomic subjects against `auto_added_targets_max`. Authorization exists only in operation permissions and authorized exact operation instances.
+`session_ledger.issued_review_ids` is append-only for the entire chat session and survives flow replacement. `target_usage` is a non-authorizing uniqueness index used only to count atomic subjects against `auto_added_targets_max`. Target uniqueness and cap consumption use the canonical typed identity of each atomic subject, including its namespace or containing resource. Authorization exists only in operation permissions and authorized exact operation instances.
 
 Key `attempts_by_criterion_and_permission_boundary` by `<criterion_id>|<source_permission_id>`. Before delegating an execution attempt, form every pair from the Task Card's `criterion_refs` and unique operation `source_permission_id` values; each pair must remain below the limit, and each pair is incremented once for that attempt. Worker choice, order, card regrouping, retries, additional permissions, or a new Task Card ID do not reset an existing pair. Rule-promoted operation instances remain under their source permission boundary.
 
@@ -307,7 +307,7 @@ task_card:
 
 Use stable `operation_id` values to connect exact card operations and audit, and preserve the active-contract `source_permission_id` authorizing each operation. Card operations must be equal to or narrower than contract permissions or authorized exact rule instantiations. For exact new-directory creation, use one operation per confirmed-nonexistent directory path and separate operations for child artifacts. Set the smallest useful positive limits.
 
-`criterion_refs` must be a subset of active criterion IDs. It should normally contain at least one ID. It may be empty only for `conflict_resolution` or `blocker` work that concerns the contract as a whole. A Worker may return a candidate operation and evidence, but no Worker output can authorize a target, operation, or permission. Criterion completion is decided only by Orchestrator audit.
+`criterion_refs` must be a subset of active criterion IDs. It should normally contain at least one ID. It may be empty only for observation-only `conflict_resolution` or `blocker` work that concerns the contract as a whole. Any Task Card containing an `execute` operation must contain at least one active criterion ID so every execution attempt is counted against a `<criterion_id>|<source_permission_id>` pair. A Worker may return a candidate operation and evidence, but no Worker output can authorize a target, operation, or permission. Criterion completion is decided only by Orchestrator audit.
 
 Before delegation, use the runtime-visible agent name and description only to choose a semantically plausible candidate. Do not rely on reading a Worker definition file, and do not adopt caller-specific input keys, wrappers, field paths, schemas, or language requirements. Delegate exactly one fenced `yaml` block with top-level `task_card` and no extra orchestration prose.
 
@@ -365,7 +365,7 @@ Worker `completed` does not complete a criterion when performed operations excee
 
 Require a separate verification invocation for persistent `change_local`, `affect_external`, or `destructive` results and whenever an active verification requirement applies. A verification Task Card may contain observation operations and explicitly authorized non-mutating execute operations whose complete effects are `observe+execute`. Use a no-write, no-update, and no-fix mode. If a command may write source files, snapshots, lockfiles, caches, reports, or other persistent artifacts, configure it not to do so or do not run it. A verification invocation must not perform corrections or any `change_local`, `affect_external`, or `destructive` operation. Ask only whether the specified criterion is satisfied, whether concrete outside-card operations exist, and whether a known blocker remains. Do not request broad review. This is separate-context verification, not guaranteed third-party independence. If unavailable, report `unverified`; do not create a reapproval loop.
 
-When material claims conflict, mark them `conflicted`, exclude them from authorization and completion, and issue one narrow observation-only card for the exact contradiction. If objective resolution is unavailable, stop unresolved; never choose by confidence or persuasiveness.
+When material claims conflict, mark them `conflicted`, exclude them from authorization and completion, and issue one narrow verification Task Card for the exact contradiction under the normal verification policy. The card may observe and may use explicitly authorized non-mutating execute operations; any execute operation must be tied to at least one active criterion ID and counted before delegation. If objective resolution is unavailable, stop unresolved; never choose by confidence or persuasiveness.
 
 ## Differential approval and loop control
 
