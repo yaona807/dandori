@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "defaults": {
+    "timeoutMs": 300000,
+    "maxOutputBytes": 1048576
+  },
+  "commands": {
+    "validate-definitions": {
+      "description": "Validate the repository definitions.",
+      "run": [
+        "python",
+        "scripts/validate_definitions.py"
+      ],
+      "cwd": ".",
+      "arguments": {}
+    },
+    "test": {
+      "description": "Run the fixed repository test suites.",
+      "run": [
+        "python",
+        "scripts/run_tests.py"
+      ],
+      "cwd": ".",
+      "arguments": {
+        "allowSkips": {
+          "kind": "flag",
+          "token": "--allow-skips"
+        }
+      }
+    }
+  }
+}
