@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import path from 'node:path';
 import process from 'node:process';
 
 const TERMINAL_TOOL_NAMES = new Set([
@@ -117,6 +118,7 @@ function normalizePossiblePath(value) {
     }
   }
   normalized = normalized.replaceAll('\\', '/');
+  normalized = path.posix.normalize(normalized);
   while (normalized.startsWith('./')) normalized = normalized.slice(2);
   return normalized;
 }
