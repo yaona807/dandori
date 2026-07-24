@@ -12,6 +12,7 @@ if sys.path and os.path.abspath(sys.path[0]) == _SCRIPT_DIRECTORY:
 
 import argparse
 import importlib.util
+import subprocess
 import unittest
 from collections.abc import Iterator
 from pathlib import Path
@@ -186,6 +187,25 @@ def build_suite() -> unittest.TestSuite:
     return suite
 
 
+def run_command_runner_tests() -> bool:
+    try:
+        completed = subprocess.run(
+            ["node", "--test", ".github/command-runner/command-runner.test.mjs"],
+            cwd=ROOT,
+            check=False,
+        )
+    except OSError as exc:
+        print(f"DANDORI command-runner test execution failed: {exc}", file=sys.stderr)
+        return False
+    if completed.returncode != 0:
+        print(
+            f"DANDORI command-runner tests failed with exit code {completed.returncode}.",
+            file=sys.stderr,
+        )
+        return False
+    return True
+
+
 def main(argv: list[str] | None = None) -> int:
     arguments = build_parser().parse_args(argv)
     try:
@@ -205,6 +225,8 @@ def main(argv: list[str] | None = None) -> int:
         )
         for test, reason in result.skipped:
             print(f"- {test}: {reason}", file=sys.stderr)
+        return 1
+    if result.wasSuccessful() and not run_command_runner_tests():
         return 1
     return 0 if result.wasSuccessful() else 1
 
