@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 const SOURCE_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
 const RUNNER_SOURCE = path.join(SOURCE_DIRECTORY, 'command-runner.mjs');
 const HOOK_SOURCE = path.join(SOURCE_DIRECTORY, 'command-runner-hook.mjs');
+const AGENT_SOURCE = path.join(SOURCE_DIRECTORY, '..', 'agents', 'CommandRunner.agent.md');
 
 async function makeWorkspace(configure = (configuration) => configuration) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'command-runner-test-'));
@@ -99,6 +100,17 @@ async function withWorkspace(callback, configure) {
     await rm(root, { recursive: true, force: true });
   }
 }
+
+test('workspace agent remains caller-agnostic and fixed-runner-only', async () => {
+  const source = await readFile(AGENT_SOURCE, 'utf8');
+  assert.match(source, /^name: CommandRunner$/mu);
+  assert.match(source, /^user-invocable: false$/mu);
+  assert.match(source, /^disable-model-invocation: true$/mu);
+  assert.match(source, /tools:\n  - execute\/runInTerminal\nagents: \[\]/u);
+  assert.match(source, /node \.github\/command-runner\/command-runner\.mjs list/u);
+  assert.match(source, /Do not execute a raw project command\./u);
+  assert.doesNotMatch(source, /\b(?:DANDORI|Orchestrator|Task Card|TFR|TFC|Flow Ledger)\b/u);
+});
 
 test('list exposes IDs and argument constraints without fixed argv', async () => {
   await withWorkspace(async (root) => {
