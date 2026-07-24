@@ -308,10 +308,11 @@ async function workspacePath(root, value, spec, kind) {
       throw new RunnerError('invalid_argument', `workspace path is not a ${kind}: ${value}`);
     }
   }
-  if (spec.extensions && !spec.extensions.some((extension) => value.endsWith(extension))) {
-    throw new RunnerError('invalid_argument', `workspace path has a disallowed extension: ${value}`);
+  const canonicalRelative = path.relative(canonicalRoot, canonical) || '.';
+  if (spec.extensions && !spec.extensions.some((extension) => canonicalRelative.endsWith(extension))) {
+    throw new RunnerError('invalid_argument', `workspace path resolves to a file with a disallowed extension: ${value}`);
   }
-  return path.relative(root, canonical) || '.';
+  return canonicalRelative;
 }
 
 async function valueFor(raw, spec, root, name) {
@@ -367,7 +368,7 @@ async function invocation(id, command, supplied, root) {
   const canonicalRoot = await realpath(root);
   const cwd = await realpath(lexicalCwd);
   if (!inside(canonicalRoot, cwd) || !(await stat(cwd)).isDirectory()) throw new RunnerError('invalid_config', `commands.${id}.cwd is outside the workspace or not a directory`);
-  return { executable: command.run[0], args, cwd, normalized };
+  return { executable: command.run[0], args, cwd, reportedCwd: path.relative(canonicalRoot, cwd) || '.', normalized };
 }
 
 function append(chunks, state, chunk, max) {
@@ -378,7 +379,7 @@ function append(chunks, state, chunk, max) {
   if (chunk.length > remaining) state.truncated = true;
 }
 
-function execute(id, command, job, root) {
+function execute(id, command, job) {
   return new Promise((resolve, reject) => {
     const out = [], err = [], outState = { bytes: 0 }, errState = { bytes: 0 };
     const started = Date.now();
@@ -398,7 +399,7 @@ function execute(id, command, job, root) {
       const completed = Date.now();
       resolve({
         status: timedOut ? 'timed_out' : 'completed', commandId: id, arguments: job.normalized,
-        cwd: path.relative(root, job.cwd) || '.', exitCode, signal, timedOut,
+        cwd: job.reportedCwd, exitCode, signal, timedOut,
         stdout: Buffer.concat(out).toString('utf8'), stderr: Buffer.concat(err).toString('utf8'),
         truncated: Boolean(outState.truncated || errState.truncated), durationMs: completed - started,
       });
@@ -421,7 +422,7 @@ async function main(argv = process.argv.slice(2)) {
   }
   if (operation === 'run') {
     const command = config.commands[id];
-    const result = await execute(id, command, await invocation(id, command, parseArguments(tokens), root), root);
+    const result = await execute(id, command, await invocation(id, command, parseArguments(tokens), root));
     emit(result);
     if (result.timedOut) return 124;
     return Number.isInteger(result.exitCode) && result.exitCode >= 0 && result.exitCode <= 125 ? result.exitCode : 1;
