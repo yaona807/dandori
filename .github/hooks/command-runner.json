@@ -1,0 +1,11 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "type": "command",
+        "command": "node .github/command-runner/command-runner-hook.mjs",
+        "timeout": 5
+      }
+    ]
+  }
+}
