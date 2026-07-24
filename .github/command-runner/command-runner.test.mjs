@@ -160,16 +160,17 @@ test('unknown arguments and out-of-range values are denied', async () => {
   });
 });
 
-test('workspace path traversal and symlink escape are denied', async (t) => {
+test('workspace path traversal and symlink escapes are denied', async (t) => {
   await withWorkspace(async (root) => {
     const traversal = runRunner(root, ['run', 'sample', 'file=..%2Foutside.test.js']);
     assert.equal(traversal.status, 2);
     assert.match(traversal.stderr, /escapes the workspace root/u);
 
-    const outside = path.join(path.dirname(root), `outside-${path.basename(root)}.test.js`);
-    await writeFile(outside, 'export {};\n');
+    const internalTarget = path.join(root, 'tests', 'secret.txt');
+    const internalAlias = path.join(root, 'tests', 'alias.test.js');
+    await writeFile(internalTarget, 'secret\n');
     try {
-      await symlink(outside, path.join(root, 'tests', 'linked.test.js'));
+      await symlink(internalTarget, internalAlias);
     } catch (error) {
       if (error?.code === 'EPERM' || error?.code === 'EACCES') {
         t.skip('symlink creation is unavailable on this platform');
@@ -177,6 +178,13 @@ test('workspace path traversal and symlink escape are denied', async (t) => {
       }
       throw error;
     }
+    const disguisedExtension = runRunner(root, ['run', 'sample', 'file=tests%2Falias.test.js']);
+    assert.equal(disguisedExtension.status, 2);
+    assert.match(disguisedExtension.stderr, /disallowed extension/u);
+
+    const outside = path.join(path.dirname(root), `outside-${path.basename(root)}.test.js`);
+    await writeFile(outside, 'export {};\n');
+    await symlink(outside, path.join(root, 'tests', 'linked.test.js'));
     const escaped = runRunner(root, ['run', 'sample', 'file=tests%2Flinked.test.js']);
     assert.equal(escaped.status, 2);
     assert.match(escaped.stderr, /resolves outside the workspace root/u);
@@ -260,6 +268,20 @@ test('hook denies agent writes to command-runner control files', async () => {
       },
     });
     assert.equal(JSON.parse(result.stdout).hookSpecificOutput.permissionDecision, 'deny');
+
+    const traversalPath = runHook(root, {
+      hook_event_name: 'PreToolUse',
+      tool_name: 'edit/editFiles',
+      tool_input: {
+        files: [
+          {
+            path: '.github/command-runner/../command-runner.json',
+            replacement: '{}',
+          },
+        ],
+      },
+    });
+    assert.equal(JSON.parse(traversalPath.stdout).hookSpecificOutput.permissionDecision, 'deny');
 
     const unrelated = runHook(root, {
       hook_event_name: 'PreToolUse',
