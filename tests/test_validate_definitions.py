@@ -90,8 +90,8 @@ class ValidatorMutationTests(unittest.TestCase):
         with temp:
             path = repo / ".copilot/agents/Orchestrator.agent.md"
             text = path.read_text().replace(
-                "agents: [Researcher, PullRequestResearcher, Writer, Reviewer, BrowserQA]",
-                "agents: [Researcher, PullRequestResearcher, Writer, Reviewer, BrowserQA, ExternalWorker]",
+                "agents: [Researcher, PullRequestResearcher, Writer, CommandRunner, Reviewer, BrowserQA]",
+                "agents: [Researcher, PullRequestResearcher, Writer, CommandRunner, Reviewer, BrowserQA, ExternalWorker]",
                 1,
             )
             path.write_text(text)
@@ -500,8 +500,8 @@ Inspect only the delegated resource. Do not call another agent.
             orchestrator = repo / ".copilot/agents/Orchestrator.agent.md"
             orchestrator.write_text(
                 orchestrator.read_text().replace(
-                    "agents: [Researcher, PullRequestResearcher, Writer, Reviewer, BrowserQA]",
-                    "agents: [Researcher, PullRequestResearcher, Writer, Reviewer, BrowserQA, CustomInspector]",
+                    "agents: [Researcher, PullRequestResearcher, Writer, CommandRunner, Reviewer, BrowserQA]",
+                    "agents: [Researcher, PullRequestResearcher, Writer, CommandRunner, Reviewer, BrowserQA, CustomInspector]",
                     1,
                 )
             )
@@ -747,7 +747,7 @@ Inspect only the delegated resource. Do not call another agent.
     runs-on: ubuntu-latest
     steps:
       - run: python scripts/validate_definitions.py
-      - run: python -m unittest discover -s tests -p \"test_*.py\"
+      - run: python -m unittest discover -s tests -p "test_*.py"
 """
             path.write_text(text)
             self.assert_invalid(repo, "missing required validation command in jobs.validate")

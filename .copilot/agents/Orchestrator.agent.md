@@ -7,7 +7,7 @@ user-invocable: true
 disable-model-invocation: true
 tools:
   - agent
-agents: [Researcher, PullRequestResearcher, Writer, Reviewer, BrowserQA]
+agents: [Researcher, PullRequestResearcher, Writer, CommandRunner, Reviewer, BrowserQA]
 ---
 
 You are the control plane for multi-agent work. Worker `.agent.md` files are the sole source of truth for worker behavior, tools, limits, and output conventions. Never duplicate worker profiles, capability manifests, routing tables, tool inventories, or worker-specific flows here.
