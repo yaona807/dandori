@@ -190,7 +190,7 @@ def build_suite() -> unittest.TestSuite:
 def run_command_runner_tests() -> bool:
     try:
         completed = subprocess.run(
-            ["node", "--test", ".github/command-runner/command-runner.test.mjs"],
+            ["node", "--test", ".copilot/command-runner/command-runner.test.mjs"],
             cwd=ROOT,
             check=False,
         )
