@@ -2,9 +2,9 @@
 
 [English](./README.md)
 
-このディレクトリには、ユーザーレベルで利用する `CommandRunner` Agent、固定Node.js Runner、Agent固有の `PreToolUse` Hookの配布元を格納しています。
+このディレクトリには、固定Node.jsコマンド本体、そのbounded interface、Agent固有の `PreToolUse` Hook、個人用Workspace設定のサンプルを格納します。`CommandRunner` Agent定義は、他のDANDORI Agentと同じ `../agents/CommandRunner.agent.md` に配置します。
 
-実際の利用ファイルは `~/.copilot/` 配下へインストールします。CommandRunner関連ファイルや個人用の許可コマンド設定を、対象プロジェクトのリポジトリへ追加する必要はありません。
+実際の利用ファイルは `~/.copilot/` 配下へインストールします。CommandRunnerの制御ファイルや個人用の許可コマンド設定を、対象プロジェクトのリポジトリへ追加する必要はありません。
 
 ## 対応環境
 
@@ -14,12 +14,13 @@ Hookと固定Runnerの呼び出しには `~/.copilot/...` を使用するため�
 
 ## インストール
 
-DANDORI本体のAgentとSkillに加えて、このコンポーネントをインストールします。
+Agentは他のDANDORI Agentと一緒に配置し、固定RunnerとHookを追加でインストールします。
 
 ```bash
 mkdir -p ~/.copilot/agents ~/.copilot/command-runner
-cp .copilot/command-runner/CommandRunner.agent.md ~/.copilot/agents/
+cp .copilot/agents/CommandRunner.agent.md ~/.copilot/agents/
 cp .copilot/command-runner/command-runner.mjs ~/.copilot/command-runner/
+cp .copilot/command-runner/command-runner-interface.mjs ~/.copilot/command-runner/
 cp .copilot/command-runner/command-runner-hook.mjs ~/.copilot/command-runner/
 test -f ~/.copilot/command-runner/workspaces.json \
   || cp .copilot/command-runner/workspaces.example.json ~/.copilot/command-runner/workspaces.json
@@ -29,7 +30,7 @@ test -f ~/.copilot/command-runner/workspaces.json \
 
 Agent固有HookはPreview機能のため、VS Codeの `chat.useCustomAgentHooks` を `true` にします。Chat Diagnosticsで、`CommandRunner`が `~/.copilot/agents/CommandRunner.agent.md` から読み込まれていることを確認してください。
 
-`COPILOT_HOME`を設定した場合、変更されるのは設定ファイルの検索先だけです。Runnerは `$COPILOT_HOME/command-runner/workspaces.json` を読み込みますが、Agent・Runner・Hook本体の配置先は引き続き `~/.copilot/` です。
+`COPILOT_HOME`を設定した場合、Runnerの設定・データ参照先だけが変わります。Runnerは `$COPILOT_HOME/command-runner/workspaces.json` を読み、実行出力を `$COPILOT_HOME/command-runner/executions/` 配下へ保存します。Agent・Runner・Hook本体のインストール先は引き続き `~/.copilot/` です。
 
 ## Workspaceの選択
 
@@ -78,27 +79,46 @@ Runnerは実行時に次の処理を行います。
 
 `workspace-file`と`workspace-directory`は、symlink解決後のパスを検証します。`mustExist`が `false` の場合も、最も近い既存の親ディレクトリを先に解決するため、Workspace外を指すsymlink配下の未作成パスは拒否されます。
 
+1コマンドの公開 `describe` 定義にもサイズ上限を設けます。安全なサイズで返せない場合は、その `describe` 要求をfail-closedで拒否します。
+
 ## Runnerのインターフェース
 
 現在のWorkspace内から実行します。
 
 ```bash
-node ~/.copilot/command-runner/command-runner.mjs list
-node ~/.copilot/command-runner/command-runner.mjs describe test
-node ~/.copilot/command-runner/command-runner.mjs run test runInBand=true
+node ~/.copilot/command-runner/command-runner-interface.mjs list [query=<encoded-id-fragment>] [offset=<n>]
+node ~/.copilot/command-runner/command-runner-interface.mjs describe test
+node ~/.copilot/command-runner/command-runner-interface.mjs run test runInBand=true
+node ~/.copilot/command-runner/command-runner-interface.mjs output <execution-id> stream=stdout|stderr [offset=<n>]
 ```
 
 引数値にはURI component encodingを使用します。Workspace path型の引数は、選択されたroot配下へ解決できない場合に拒否されます。
 
-`run`の結果には次を含めます。
+AgentとHookが直接呼べるのは `command-runner-interface.mjs` だけです。このinterfaceが既存の固定 `command-runner.mjs` にコマンド検証と実行を委譲し、terminalへ返す情報だけをboundedにします。
 
-- 選択されたWorkspace ID
-- command IDと正規化済みの指定引数
+Runnerがterminalへ返すレスポンスはすべて固定上限以下です。`list`はcommand IDだけを1回最大100件返し、続きがある場合は `nextOffset` を返します。`query`はcommand IDの単純な部分一致です。`describe`は1コマンドだけを返します。
+
+`run`はstdout/stderrの全文をRunner管理の実行キャッシュへ保存し、terminalには次の小さい結果だけを返します。
+
+- 選択されたWorkspace IDとcommand ID
+- 推測困難なtimestamp付き `executionId`
 - 設定されたWorkspace相対 `cwd`
 - exit codeとsignal
-- `timedOut`
-- `outputTruncated`
-- stdoutとstderr
+- `timedOut` と `outputTruncated`
+- stdout/stderrのバイト数
+- stdout/stderr末尾の短いpreview
+
+指定引数の値は結果へ再掲しません。追加出力は `output` だけで取得します。`output`はファイルパスではなくexecution IDを受け取り、固定サイズのチャンクと `nextOffset` / `eof` を返します。
+
+実行出力は次の場所へ保存します。
+
+```text
+$COPILOT_HOME/command-runner/executions/<workspace-id>/<UTC-timestamp>_<UUID>/
+  stdout.log
+  stderr.log
+```
+
+このキャッシュは一時的な観測データであり、監査ログではありません。新しい `run` の前に24時間を超えた管理対象executionを削除し、必要な場合は管理キャッシュ全体が256 MiB以内になるまで古いexecutionを削除します。容量整理では61分より新しい結果を削除しません。これはcommandの最大timeout 1時間より長いためです。最近の結果だけで容量上限に達している場合は、実行中の可能性がある出力を消さず、新しい `run` をfail-closedで拒否します。
 
 ## セキュリティ境界
 
@@ -108,6 +128,8 @@ node ~/.copilot/command-runner/command-runner.mjs run test runInBand=true
 - Hookは、ターミナルのcwd・環境変数・shell・profile・バックグラウンド実行の上書きを拒否します。
 - コマンドは `spawn(..., shell: false)` で起動します。
 - Agent固有Hookは固定Runnerのインターフェースだけを許可し、ユーザーレベルの制御ファイルを保護します。
+- `output`は有効なexecution IDだけを受け取り、現在のWorkspaceのexecution領域配下だけを解決します。任意ファイルパスは受け付けません。
+- 実行出力は信頼できないデータとして扱い、後続コマンドの権限にはなりません。
 
 Hookは追加のガードであり、OS sandboxではありません。登録済みコマンドはプロジェクトコードを実行し、そのコマンド固有の副作用を発生させる可能性があります。個人設定をレビューし、より強い分離が必要な場合はWorkspace Trust、通常の承認、コンテナなどを併用してください。
 
@@ -117,5 +139,5 @@ VS CodeのHookはタイムアウト時にfail-openとなります。偶発的な
 
 ```bash
 node --test .copilot/command-runner/command-runner.test.mjs
-COPILOT_HOME=/path/to/test-home node .copilot/command-runner/command-runner.mjs list
+COPILOT_HOME=/path/to/test-home node .copilot/command-runner/command-runner-interface.mjs list
 ```

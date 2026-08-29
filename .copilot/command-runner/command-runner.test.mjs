@@ -15,8 +15,9 @@ import { fileURLToPath } from 'node:url';
 
 const SOURCE_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
 const RUNNER_SOURCE = path.join(SOURCE_DIRECTORY, 'command-runner.mjs');
+const INTERFACE_SOURCE = path.join(SOURCE_DIRECTORY, 'command-runner-interface.mjs');
 const HOOK_SOURCE = path.join(SOURCE_DIRECTORY, 'command-runner-hook.mjs');
-const AGENT_SOURCE = path.join(SOURCE_DIRECTORY, 'CommandRunner.agent.md');
+const AGENT_SOURCE = path.join(SOURCE_DIRECTORY, '..', 'agents', 'CommandRunner.agent.md');
 
 async function makeFixture(configure = (configuration) => configuration) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'command-runner-test-'));
@@ -32,6 +33,10 @@ async function makeFixture(configure = (configuration) => configuration) {
   await writeFile(
     path.join(home, 'command-runner', 'command-runner.mjs'),
     await readFile(RUNNER_SOURCE),
+  );
+  await writeFile(
+    path.join(home, 'command-runner', 'command-runner-interface.mjs'),
+    await readFile(INTERFACE_SOURCE),
   );
   await writeFile(
     path.join(home, 'command-runner', 'command-runner-hook.mjs'),
@@ -155,6 +160,18 @@ function runRunner(fixture, cwd, args) {
   );
 }
 
+function runInterface(fixture, cwd, args) {
+  return spawnSync(
+    process.execPath,
+    [path.join(fixture.home, 'command-runner', 'command-runner-interface.mjs'), ...args],
+    {
+      cwd,
+      encoding: 'utf8',
+      env: { ...process.env, COPILOT_HOME: fixture.home },
+    },
+  );
+}
+
 function runHook(fixture, input) {
   return spawnSync(
     process.execPath,
@@ -184,7 +201,8 @@ test('distributed agent is user-level, agent-scoped, and fixed-runner-only', asy
   assert.match(source, /tools:\n  - execute\/runInTerminal\nagents: \[\]\nhooks:/u);
   assert.match(source, /command: node ~\/\.copilot\/command-runner\/command-runner-hook\.mjs/u);
   assert.match(source, /timeout: 30/u);
-  assert.match(source, /node ~\/\.copilot\/command-runner\/command-runner\.mjs list/u);
+  assert.match(source, /node ~\/\.copilot\/command-runner\/command-runner-interface\.mjs list/u);
+  assert.match(source, /node ~\/\.copilot\/command-runner\/command-runner-interface\.mjs output/u);
   assert.match(source, /Do not execute a raw project command\./u);
   assert.match(source, /Do not specify, override, or infer a workspace ID/u);
   assert.match(source, /Never request a terminal working-directory/u);
@@ -453,20 +471,31 @@ test('timeout is reported separately from exit and signal state', async () => {
   });
 });
 
-test('hook permits canonical runner calls and denies raw or compound commands', async () => {
+test('hook permits canonical bounded-interface calls and denies direct core or compound commands', async () => {
   await withFixture(async (fixture) => {
     const allowed = runHook(fixture, {
       hook_event_name: 'PreToolUse',
       cwd: fixture.alpha,
       tool_name: 'execute/runInTerminal',
       tool_input: {
-        command: 'node ~/.copilot/command-runner/command-runner.mjs run sample count=4',
+        command: 'node ~/.copilot/command-runner/command-runner-interface.mjs run sample count=4',
       },
     });
     assert.equal(allowed.status, 0, allowed.stderr);
     assert.equal(
       JSON.parse(allowed.stdout).hookSpecificOutput.permissionDecision,
       'allow',
+    );
+
+    const directCore = runHook(fixture, {
+      hook_event_name: 'PreToolUse',
+      cwd: fixture.alpha,
+      tool_name: 'execute/runInTerminal',
+      tool_input: { command: 'node ~/.copilot/command-runner/command-runner.mjs list' },
+    });
+    assert.equal(
+      JSON.parse(directCore.stdout).hookSpecificOutput.permissionDecision,
+      'deny',
     );
 
     const raw = runHook(fixture, {
@@ -486,7 +515,7 @@ test('hook permits canonical runner calls and denies raw or compound commands', 
       tool_name: 'execute/runInTerminal',
       tool_input: {
         command:
-          'node ~/.copilot/command-runner/command-runner.mjs list && npm publish',
+          'node ~/.copilot/command-runner/command-runner-interface.mjs list && npm publish',
       },
     });
     assert.equal(
@@ -500,15 +529,15 @@ test('hook denies terminal execution overrides and background execution', async 
   await withFixture(async (fixture) => {
     for (const toolInput of [
       {
-        command: 'node ~/.copilot/command-runner/command-runner.mjs list',
+        command: 'node ~/.copilot/command-runner/command-runner-interface.mjs list',
         cwd: fixture.beta,
       },
       {
-        command: 'node ~/.copilot/command-runner/command-runner.mjs list',
+        command: 'node ~/.copilot/command-runner/command-runner-interface.mjs list',
         env: { TEST: '1' },
       },
       {
-        command: 'node ~/.copilot/command-runner/command-runner.mjs list',
+        command: 'node ~/.copilot/command-runner/command-runner-interface.mjs list',
         isBackground: true,
       },
     ]) {

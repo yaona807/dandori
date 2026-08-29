@@ -252,8 +252,15 @@ DANDORI は、次の累積効果タグを使用します。
     Researcher.agent.md
     PullRequestResearcher.agent.md
     Writer.agent.md
+    CommandRunner.agent.md
     Reviewer.agent.md
     BrowserQA.agent.md
+  command-runner/
+    command-runner.mjs
+    command-runner-interface.mjs
+    command-runner-hook.mjs
+    command-runner.test.mjs
+    workspaces.example.json
   skills/
     code-review/
       SKILL.md
@@ -275,6 +282,7 @@ assets/
 | --- | --- |
 | `Orchestrator` | 要求整理、短い承認、契約管理、Task Card作成、Worker選択、監査、ループ制御、最終統合を担当するcontrol-plane agent |
 | Reference workers | 調査、Pull Request確認、実装、レビュー、ブラウザ確認用の任意Worker |
+| `CommandRunner` | 登録済みcommandだけを固定bounded interface経由で実行し、大きな出力を自身の一時execution cacheへ保持する任意の実行Worker |
 | `code-review` skill | Reference Reviewerが使用するfocused review guidance |
 
 ## 互換性と前提条件
@@ -285,7 +293,7 @@ assets/
 - `BrowserQA`には設定済みのbrowser Tool群が必要です。
 - 利用できない、または認識されないTool名はruntimeに無視される場合があるため、実際のTool可用性を確認してください。
 - 同梱Workerは、Toolの引数とruntime挙動で委譲境界を強制できる場合だけ、そのToolを呼び出します。利用可能なToolがより広い範囲でしか動作できない場合は、実行せず`blocked`を返し、必要な狭いcapabilityを示します。
-- 同梱Reference Workerにはterminal command実行用Workerを含めていません。test、lint、型検査、build、formatterなどのcommand実行が必要な場合は、許可commandと作用範囲を限定した専用Workerを追加してください。
+- `CommandRunner`は任意のterminal command実行Workerとして同梱します。Agent定義は他のAgentと同じ場所から読み込みますが、固定user-level runnerも `.copilot/command-runner/` から別途インストールする必要があります。[CommandRunnerのセットアップ](./.copilot/command-runner/README_ja.md)を参照してください。Agent固有Hookを利用するため、`chat.useCustomAgentHooks` を有効にします。
 - 外部Workerは、自己完結した依頼を処理し、再委譲せず、必要以上のToolを持たず、役割と作用範囲をdescriptionへ正確に記載する必要があります。
 - VS Code Chat Diagnosticsで、すべてのAgentとSkillの読み込み元を確認してください。
 
@@ -311,6 +319,8 @@ cp .copilot/agents/*.agent.md ~/.copilot/agents/
 cp -R .copilot/skills/* ~/.copilot/skills/
 ```
 
+`CommandRunner`を使う場合は、固定runnerを `~/.copilot/command-runner/` に配置する[CommandRunnerのインストール](./.copilot/command-runner/README_ja.md)も実施してください。
+
 ### 標準workspace配置
 
 1つのリポジトリと一緒に設定を管理する場合は、VS Codeの標準探索パスを使用します。
@@ -321,10 +331,11 @@ cp .copilot/agents/*.agent.md .github/agents/
 cp -R .copilot/skills/* .github/skills/
 ```
 
+workspace側へ `CommandRunner.agent.md` を配置する場合も、固定runner本体は `~/.copilot/command-runner/` に別途インストールしてから使用します。
+
 ### `.copilot`をworkspace内で使う場合
 
 workspace内の `.copilot/agents` と `.copilot/skills` を使うには、`chat.agentFilesLocations` と `chat.agentSkillsLocations` で追加探索先として有効にする必要があります。設定を行わずに `.copilot` をコピーするだけで認識されるとは限りません。
-
 
 ### 既存インストールの更新
 
@@ -333,14 +344,14 @@ workspace内の `.copilot/agents` と `.copilot/skills` を使うには、`chat.
 ユーザーレベル配置の削除対象：
 
 ```bash
-rm -f ~/.copilot/agents/{Orchestrator,Researcher,PullRequestResearcher,Writer,Reviewer,BrowserQA}.agent.md
+rm -f ~/.copilot/agents/{Orchestrator,Researcher,PullRequestResearcher,Writer,CommandRunner,Reviewer,BrowserQA}.agent.md
 rm -rf ~/.copilot/skills/code-review
 ```
 
 標準workspace配置の削除対象：
 
 ```bash
-rm -f .github/agents/{Orchestrator,Researcher,PullRequestResearcher,Writer,Reviewer,BrowserQA}.agent.md
+rm -f .github/agents/{Orchestrator,Researcher,PullRequestResearcher,Writer,CommandRunner,Reviewer,BrowserQA}.agent.md
 rm -rf .github/skills/code-review
 ```
 
@@ -442,7 +453,7 @@ Validatorは、同梱定義をclosed release inventoryとして扱います。
 Agent定義では、次の制約を検査します。
 
 - Agentディレクトリでは`*.agent.md`以外を拒否する
-- `hooks`、`handoffs`、`mcp-servers`など、Tool境界を迂回し得るfrontmatterを禁止する
+- Tool境界を迂回し得る `hooks`、`handoffs`、`mcp-servers` を禁止する。ただし固定 `CommandRunner.agent.md` のAgent固有 `hooks` だけは許可する
 - 同梱Agentのfrontmatter、Tool、ファイル名、必須Section、安全Policy anchorを固定する
 - 十分な圧縮余地を持つ本文回帰下限を固定する
 - Orchestratorの中核Invariantが、意図したSection内に残っていることを検査する
