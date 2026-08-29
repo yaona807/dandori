@@ -79,7 +79,7 @@ Positional values that begin with `-` are rejected. Add a fixed `--` element to 
 
 For `workspace-file` and `workspace-directory`, existing paths are checked after symlink resolution. When `mustExist` is `false`, the nearest existing ancestor is resolved first, so a non-existing path beneath a symlink that points outside the workspace is still rejected.
 
-A command's public `describe` representation is also bounded. Configuration fails closed when one command definition would be too large to return safely.
+A command's public `describe` representation is also bounded. A `describe` request fails closed when that command definition would be too large to return safely.
 
 ## Runner interface
 
