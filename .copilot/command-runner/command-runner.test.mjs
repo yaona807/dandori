@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import {
-  mkdir,
   mkdtemp,
+  mkdir,
   readFile,
-  readdir,
   rm,
+  symlink,
   writeFile,
 } from 'node:fs/promises';
 import os from 'node:os';
@@ -14,96 +14,178 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const SOURCE_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
+const RUNNER_SOURCE = path.join(SOURCE_DIRECTORY, 'command-runner.mjs');
 const INTERFACE_SOURCE = path.join(SOURCE_DIRECTORY, 'command-runner-interface.mjs');
 const HOOK_SOURCE = path.join(SOURCE_DIRECTORY, 'command-runner-hook.mjs');
 const AGENT_SOURCE = path.join(SOURCE_DIRECTORY, '..', 'agents', 'CommandRunner.agent.md');
-const RESPONSE_LIMIT = 12_288;
 
-const STUB_CORE = String.raw`#!/usr/bin/env node
-import { readFile } from 'node:fs/promises';
-import path from 'node:path';
-import process from 'node:process';
-
-const config = JSON.parse(await readFile(path.join(process.env.COPILOT_HOME, 'command-runner', 'stub.json'), 'utf8'));
-const cwd = path.resolve(process.cwd());
-const workspace = config.workspaces
-  .filter((entry) => cwd === entry.root || cwd.startsWith(entry.root + path.sep))
-  .sort((a, b) => b.root.length - a.root.length)[0];
-const emit = (value, stream = process.stdout) => stream.write(JSON.stringify(value) + '\n');
-if (!workspace) {
-  emit({ status: 'error', error: { code: 'workspace_not_registered', message: 'workspace not registered' } }, process.stderr);
-  process.exit(2);
-}
-const [operation, id, ...args] = process.argv.slice(2);
-const publicCommand = ([commandId, command]) => ({ id: commandId, description: command.description, arguments: command.arguments ?? [] });
-if (operation === 'list') {
-  emit({ workspaceId: workspace.id, commands: Object.entries(workspace.commands).map(publicCommand) });
-} else if (operation === 'describe') {
-  const command = workspace.commands[id];
-  if (!command) {
-    emit({ status: 'error', error: { code: 'command_not_registered', message: 'command not registered' } }, process.stderr);
-    process.exit(2);
-  }
-  emit({ workspaceId: workspace.id, command: publicCommand([id, command]) });
-} else if (operation === 'run') {
-  const command = workspace.commands[id];
-  if (!command) {
-    emit({ status: 'error', error: { code: 'command_not_registered', message: 'command not registered' } }, process.stderr);
-    process.exit(2);
-  }
-  const size = command.outputBytes ?? 0;
-  const stdout = (command.stdout ?? 'x').repeat(size || 1).slice(0, size || (command.stdout ?? 'x').length);
-  const stderr = (command.stderr ?? '').repeat(size || 1).slice(0, command.stderr ? size : 0);
-  emit({
-    status: command.exitCode ? 'failed' : 'completed',
-    workspaceId: workspace.id,
-    commandId: id,
-    arguments: Object.fromEntries(args.map((token) => [token.split('=', 1)[0], decodeURIComponent(token.slice(token.indexOf('=') + 1))])),
-    cwd: '.',
-    exitCode: command.exitCode ?? 0,
-    signal: null,
-    timedOut: false,
-    outputTruncated: false,
-    stdout,
-    stderr,
-  });
-} else {
-  emit({ status: 'error', error: { code: 'usage', message: 'unsupported operation' } }, process.stderr);
-  process.exit(2);
-}
-`;
-
-async function makeFixture(commandCount = 3) {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'dandori-command-runner-'));
-  const home = path.join(root, 'home');
-  const commandRunner = path.join(home, 'command-runner');
+async function makeFixture(configure = (configuration) => configuration) {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'command-runner-test-'));
+  const home = path.join(root, 'copilot-home');
   const alpha = path.join(root, 'alpha');
   const beta = path.join(root, 'beta');
-  await mkdir(commandRunner, { recursive: true });
-  await mkdir(alpha);
-  await mkdir(beta);
-  await writeFile(path.join(commandRunner, 'command-runner-interface.mjs'), await readFile(INTERFACE_SOURCE));
-  await writeFile(path.join(commandRunner, 'command-runner-hook.mjs'), await readFile(HOOK_SOURCE));
-  await writeFile(path.join(commandRunner, 'command-runner.mjs'), STUB_CORE);
 
-  const commands = {};
-  for (let index = 0; index < commandCount; index += 1) {
-    commands[`cmd_${String(index).padStart(3, '0')}`] = { description: `Command ${index}` };
-  }
-  commands.large = { description: 'Large output.', outputBytes: 40_000, stdout: 'a', stderr: 'b', exitCode: 1 };
-  commands.echo = { description: 'Echo.', stdout: 'ok' };
-  const config = {
+  await mkdir(path.join(home, 'command-runner'), { recursive: true });
+  await mkdir(path.join(home, 'agents'), { recursive: true });
+  await mkdir(path.join(alpha, 'tests'), { recursive: true });
+  await mkdir(beta, { recursive: true });
+
+  await writeFile(
+    path.join(home, 'command-runner', 'command-runner.mjs'),
+    await readFile(RUNNER_SOURCE),
+  );
+  await writeFile(
+    path.join(home, 'command-runner', 'command-runner-interface.mjs'),
+    await readFile(INTERFACE_SOURCE),
+  );
+  await writeFile(
+    path.join(home, 'command-runner', 'command-runner-hook.mjs'),
+    await readFile(HOOK_SOURCE),
+  );
+  await writeFile(
+    path.join(home, 'agents', 'CommandRunner.agent.md'),
+    await readFile(AGENT_SOURCE),
+  );
+  await writeFile(
+    path.join(alpha, 'echo-args.mjs'),
+    'process.stdout.write(JSON.stringify(process.argv.slice(2)));\n',
+  );
+  await writeFile(
+    path.join(beta, 'echo-args.mjs'),
+    'process.stdout.write(JSON.stringify(["beta", ...process.argv.slice(2)]));\n',
+  );
+  await writeFile(
+    path.join(alpha, 'sleep.mjs'),
+    'setTimeout(() => process.stdout.write("done"), 500);\n',
+  );
+  await writeFile(
+    path.join(alpha, 'tests', 'sample.test.js'),
+    'export {};\n',
+  );
+
+  const configuration = configure({
+    version: 1,
+    defaults: { timeoutMs: 10_000, maxOutputBytes: 16_384 },
     workspaces: [
-      { id: 'alpha', root: alpha, commands },
-      { id: 'beta', root: beta, commands: { beta: { description: 'Beta.' } } },
+      {
+        id: 'alpha',
+        root: alpha,
+        commands: {
+          sample: {
+            description: 'Echo validated arguments.',
+            run: [process.execPath, 'echo-args.mjs', '--'],
+            cwd: '.',
+            arguments: {
+              enabled: { kind: 'flag', token: '--enabled' },
+              count: {
+                kind: 'option',
+                token: '--count',
+                value: { type: 'integer', min: 1, max: 8 },
+              },
+              mode: {
+                kind: 'option',
+                token: '--mode',
+                value: { type: 'choice', values: ['fast', 'safe'] },
+              },
+              file: {
+                kind: 'positional',
+                value: {
+                  type: 'workspace-file',
+                  extensions: ['.test.js'],
+                  mustExist: true,
+                },
+              },
+              text: {
+                kind: 'positional',
+                value: { type: 'string', maxLength: 100 },
+              },
+            },
+          },
+          create: {
+            description: 'Echo a validated non-existing output path.',
+            run: [process.execPath, 'echo-args.mjs', '--'],
+            cwd: '.',
+            arguments: {
+              output: {
+                kind: 'positional',
+                required: true,
+                value: {
+                  type: 'workspace-file',
+                  extensions: ['.txt'],
+                  mustExist: false,
+                },
+              },
+            },
+          },
+          timeout: {
+            description: 'Exercise timeout reporting.',
+            run: [process.execPath, 'sleep.mjs'],
+            cwd: '.',
+            timeoutMs: 25,
+            arguments: {},
+          },
+        },
+      },
+      {
+        id: 'beta',
+        root: beta,
+        commands: {
+          beta: {
+            description: 'Run only in beta.',
+            run: [process.execPath, 'echo-args.mjs'],
+            cwd: '.',
+            arguments: {},
+          },
+        },
+      },
     ],
-  };
-  await writeFile(path.join(commandRunner, 'stub.json'), JSON.stringify(config));
-  return { root, home, alpha, beta, commandRunner };
+  });
+
+  await writeFile(
+    path.join(home, 'command-runner', 'workspaces.json'),
+    `${JSON.stringify(configuration, null, 2)}\n`,
+  );
+  return { root, home, alpha, beta };
 }
 
-async function withFixture(callback, count) {
-  const fixture = await makeFixture(count);
+function runRunner(fixture, cwd, args) {
+  return spawnSync(
+    process.execPath,
+    [path.join(fixture.home, 'command-runner', 'command-runner.mjs'), ...args],
+    {
+      cwd,
+      encoding: 'utf8',
+      env: { ...process.env, COPILOT_HOME: fixture.home },
+    },
+  );
+}
+
+function runInterface(fixture, cwd, args) {
+  return spawnSync(
+    process.execPath,
+    [path.join(fixture.home, 'command-runner', 'command-runner-interface.mjs'), ...args],
+    {
+      cwd,
+      encoding: 'utf8',
+      env: { ...process.env, COPILOT_HOME: fixture.home },
+    },
+  );
+}
+
+function runHook(fixture, input) {
+  return spawnSync(
+    process.execPath,
+    [path.join(fixture.home, 'command-runner', 'command-runner-hook.mjs')],
+    {
+      cwd: fixture.alpha,
+      encoding: 'utf8',
+      input: JSON.stringify(input),
+    },
+  );
+}
+
+async function withFixture(callback, configure) {
+  const fixture = await makeFixture(configure);
   try {
     await callback(fixture);
   } finally {
@@ -111,152 +193,401 @@ async function withFixture(callback, count) {
   }
 }
 
-function runInterface(fixture, cwd, args) {
-  return spawnSync(
-    process.execPath,
-    [path.join(fixture.commandRunner, 'command-runner-interface.mjs'), ...args],
-    { cwd, encoding: 'utf8', env: { ...process.env, COPILOT_HOME: fixture.home } },
-  );
-}
-
-function runHook(fixture, toolInput) {
-  return spawnSync(
-    process.execPath,
-    [path.join(fixture.commandRunner, 'command-runner-hook.mjs')],
-    {
-      cwd: fixture.alpha,
-      encoding: 'utf8',
-      input: JSON.stringify({
-        hook_event_name: 'PreToolUse',
-        tool_name: 'execute/runInTerminal',
-        tool_input: toolInput,
-      }),
-    },
-  );
-}
-
-function parseSuccess(result) {
-  assert.equal(result.status, 0, result.stderr);
-  assert.ok(Buffer.byteLength(result.stdout) <= RESPONSE_LIMIT, `response too large: ${Buffer.byteLength(result.stdout)}`);
-  return JSON.parse(result.stdout);
-}
-
-test('agent lives under agents and exposes only the bounded interface', async () => {
+test('distributed agent is user-level, agent-scoped, and fixed-runner-only', async () => {
   const source = await readFile(AGENT_SOURCE, 'utf8');
   assert.match(source, /^name: CommandRunner$/mu);
-  assert.match(source, /^tools:\n  - execute\/runInTerminal$/mu);
-  assert.match(source, /command-runner-interface\.mjs list/u);
-  assert.match(source, /command-runner-interface\.mjs output/u);
-  assert.doesNotMatch(source, /read\/readFile/u);
+  assert.match(source, /^user-invocable: false$/mu);
+  assert.match(source, /^disable-model-invocation: true$/mu);
+  assert.match(source, /tools:\n  - execute\/runInTerminal\nagents: \[\]\nhooks:/u);
+  assert.match(source, /command: node ~\/\.copilot\/command-runner\/command-runner-hook\.mjs/u);
+  assert.match(source, /timeout: 30/u);
+  assert.match(source, /node ~\/\.copilot\/command-runner\/command-runner-interface\.mjs list/u);
+  assert.match(source, /node ~\/\.copilot\/command-runner\/command-runner-interface\.mjs output/u);
+  assert.match(source, /Do not execute a raw project command\./u);
+  assert.match(source, /Do not specify, override, or infer a workspace ID/u);
+  assert.match(source, /Never request a terminal working-directory/u);
+  assert.doesNotMatch(
+    source,
+    /\b(?:DANDORI|Orchestrator|Task Card|TFR|TFC|Flow Ledger)\b/u,
+  );
 });
 
-test('list is paged, searchable, and bounded with many registered commands', async () => {
+test('list exposes commands only for the current workspace', async () => {
   await withFixture(async (fixture) => {
-    const first = parseSuccess(runInterface(fixture, fixture.alpha, ['list']));
-    assert.equal(first.commandIds.length, 100);
-    assert.equal(first.offset, 0);
-    assert.equal(first.nextOffset, 100);
-    assert.ok(first.total > 150);
+    const alpha = runRunner(fixture, fixture.alpha, ['list']);
+    assert.equal(alpha.status, 0, alpha.stderr);
+    const alphaOutput = JSON.parse(alpha.stdout);
+    assert.equal(alphaOutput.workspaceId, 'alpha');
+    assert.deepEqual(
+      alphaOutput.commands.map(({ id }) => id),
+      ['sample', 'create', 'timeout'],
+    );
+    assert.equal('run' in alphaOutput.commands[0], false);
 
-    const second = parseSuccess(runInterface(fixture, fixture.alpha, ['list', 'offset=100']));
-    assert.ok(second.commandIds.length > 0);
-    assert.equal(second.offset, 100);
-
-    const filtered = parseSuccess(runInterface(fixture, fixture.alpha, ['list', 'query=cmd_14']));
-    assert.deepEqual(filtered.commandIds, Array.from({ length: 10 }, (_, index) => `cmd_14${index}`));
-  }, 160);
-});
-
-test('describe returns exactly one bounded command definition', async () => {
-  await withFixture(async (fixture) => {
-    const output = parseSuccess(runInterface(fixture, fixture.alpha, ['describe', 'echo']));
-    assert.equal(output.workspaceId, 'alpha');
-    assert.equal(output.command.id, 'echo');
+    const beta = runRunner(fixture, fixture.beta, ['list']);
+    assert.equal(beta.status, 0, beta.stderr);
+    const betaOutput = JSON.parse(beta.stdout);
+    assert.equal(betaOutput.workspaceId, 'beta');
+    assert.deepEqual(betaOutput.commands.map(({ id }) => id), ['beta']);
   });
 });
 
-test('run stores large stdout and stderr while returning only compact metadata', async () => {
+test('unregistered workspace fails closed', async () => {
   await withFixture(async (fixture) => {
-    const output = parseSuccess(runInterface(fixture, fixture.alpha, ['run', 'large', 'secret=value']));
-    assert.equal(output.workspaceId, 'alpha');
-    assert.equal(output.commandId, 'large');
-    assert.equal(output.status, 'failed');
-    assert.equal(output.stdoutBytes, 40_000);
-    assert.equal(output.stderrBytes, 40_000);
-    assert.equal('stdout' in output, false);
-    assert.equal('stderr' in output, false);
-    assert.equal('arguments' in output, false);
-    assert.ok(output.stdoutPreview.length <= 512);
-    assert.ok(output.stderrPreview.length <= 512);
-
-    const directory = path.join(fixture.home, 'command-runner', 'executions', 'alpha', output.executionId);
-    assert.equal((await readFile(path.join(directory, 'stdout.log'), 'utf8')).length, 40_000);
-    assert.equal((await readFile(path.join(directory, 'stderr.log'), 'utf8')).length, 40_000);
+    const outside = path.join(fixture.root, 'outside');
+    await mkdir(outside);
+    const result = runRunner(fixture, outside, ['list']);
+    assert.equal(result.status, 2);
+    assert.match(result.stderr, /workspace is not registered/u);
   });
 });
 
-test('output reads only bounded chunks and can continue by offset', async () => {
+test('deepest registered root wins for nested workspaces', async () => {
   await withFixture(async (fixture) => {
-    const run = parseSuccess(runInterface(fixture, fixture.alpha, ['run', 'large']));
-    const first = parseSuccess(runInterface(fixture, fixture.alpha, [
-      'output', run.executionId, 'stream=stdout',
-    ]));
-    assert.equal(first.offset, 0);
-    assert.equal(first.data.length, 1_536);
-    assert.equal(first.eof, false);
-    const second = parseSuccess(runInterface(fixture, fixture.alpha, [
-      'output', run.executionId, 'stream=stdout', `offset=${first.nextOffset}`,
-    ]));
-    assert.equal(second.offset, first.nextOffset);
-    assert.equal(second.data.length, 1_536);
+    const nested = path.join(fixture.alpha, 'nested');
+    await mkdir(nested);
+    await writeFile(
+      path.join(nested, 'echo-args.mjs'),
+      'process.stdout.write("nested");\n',
+    );
+    const configPath = path.join(
+      fixture.home,
+      'command-runner',
+      'workspaces.json',
+    );
+    const config = JSON.parse(await readFile(configPath, 'utf8'));
+    config.workspaces.push({
+      id: 'nested',
+      root: nested,
+      commands: {
+        nested: {
+          description: 'Nested command.',
+          run: [process.execPath, 'echo-args.mjs'],
+          cwd: '.',
+          arguments: {},
+        },
+      },
+    });
+    await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`);
+    const result = runRunner(fixture, nested, ['list']);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(JSON.parse(result.stdout).workspaceId, 'nested');
   });
 });
 
-test('execution output is scoped to the current workspace', async () => {
+test('run builds deterministic argv and reports normalized execution metadata', async () => {
   await withFixture(async (fixture) => {
-    const run = parseSuccess(runInterface(fixture, fixture.alpha, ['run', 'echo']));
-    const denied = runInterface(fixture, fixture.beta, [
-      'output', run.executionId, 'stream=stdout',
+    const result = runRunner(fixture, fixture.alpha, [
+      'run',
+      'sample',
+      'text=hello%20world',
+      'file=tests%2Fsample.test.js',
+      'mode=safe',
+      'count=4',
+      'enabled=true',
     ]);
-    assert.equal(denied.status, 2);
-    assert.match(denied.stderr, /execution is unavailable/u);
+    assert.equal(result.status, 0, result.stderr);
+    const output = JSON.parse(result.stdout);
+    assert.equal(output.workspaceId, 'alpha');
+    assert.equal(output.commandId, 'sample');
+    assert.equal(output.cwd, '.');
+    assert.equal(output.timedOut, false);
+    assert.equal(output.outputTruncated, false);
+    assert.deepEqual(output.arguments, {
+      enabled: true,
+      count: '4',
+      mode: 'safe',
+      file: 'tests/sample.test.js',
+      text: 'hello world',
+    });
+    assert.deepEqual(JSON.parse(output.stdout), [
+      '--',
+      '--enabled',
+      '--count',
+      '4',
+      '--mode',
+      'safe',
+      'tests/sample.test.js',
+      'hello world',
+    ]);
   });
 });
 
-test('expired execution directories are cleaned before a new run', async () => {
+test('shell-looking string stays one argv value', async () => {
   await withFixture(async (fixture) => {
-    const executionRoot = path.join(fixture.home, 'command-runner', 'executions', 'alpha');
-    const expired = '20000101T000000.000Z_00000000-0000-4000-8000-000000000000';
-    await mkdir(path.join(executionRoot, expired), { recursive: true });
-    await writeFile(path.join(executionRoot, expired, 'stdout.log'), 'old');
-    await writeFile(path.join(executionRoot, expired, 'stderr.log'), '');
-    parseSuccess(runInterface(fixture, fixture.alpha, ['run', 'echo']));
-    const entries = await readdir(executionRoot);
-    assert.equal(entries.includes(expired), false);
+    const result = runRunner(
+      fixture,
+      fixture.alpha,
+      ['run', 'sample', 'text=%24%28touch%20owned%29'],
+    );
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(
+      JSON.parse(JSON.parse(result.stdout).stdout),
+      ['--', '$(touch owned)'],
+    );
   });
 });
 
-test('hook permits only the bounded interface and rejects direct core or raw commands', async () => {
+test('unknown arguments and out-of-range values are denied', async () => {
   await withFixture(async (fixture) => {
-    for (const command of [
-      'node ~/.copilot/command-runner/command-runner-interface.mjs list query=test',
-      'node ~/.copilot/command-runner/command-runner-interface.mjs describe echo',
-      'node ~/.copilot/command-runner/command-runner-interface.mjs run echo',
-      'node ~/.copilot/command-runner/command-runner-interface.mjs output 20260829T010203.004Z_00000000-0000-4000-8000-000000000000 stream=stdout',
-    ]) {
-      const result = runHook(fixture, { command });
-      assert.equal(JSON.parse(result.stdout).hookSpecificOutput.permissionDecision, 'allow');
+    const unknown = runRunner(
+      fixture,
+      fixture.alpha,
+      ['run', 'sample', 'other=value'],
+    );
+    assert.equal(unknown.status, 2);
+    assert.match(unknown.stderr, /unregistered parameter/u);
+
+    const range = runRunner(
+      fixture,
+      fixture.alpha,
+      ['run', 'sample', 'count=99'],
+    );
+    assert.equal(range.status, 2);
+    assert.match(range.stderr, /must be between 1 and 8/u);
+  });
+});
+
+test('positional values beginning with a hyphen are denied', async () => {
+  await withFixture(async (fixture) => {
+    const result = runRunner(
+      fixture,
+      fixture.alpha,
+      ['run', 'sample', 'text=-danger'],
+    );
+    assert.equal(result.status, 2);
+    assert.match(result.stderr, /must not start with '-'/u);
+  });
+});
+
+test('workspace traversal and existing symlink escapes are denied', async (t) => {
+  await withFixture(async (fixture) => {
+    const traversal = runRunner(
+      fixture,
+      fixture.alpha,
+      ['run', 'sample', 'file=..%2Foutside.test.js'],
+    );
+    assert.equal(traversal.status, 2);
+    assert.match(traversal.stderr, /escapes the workspace root/u);
+
+    const target = path.join(fixture.alpha, 'tests', 'secret.txt');
+    const alias = path.join(fixture.alpha, 'tests', 'alias.test.js');
+    await writeFile(target, 'secret\n');
+    try {
+      await symlink(target, alias);
+    } catch (error) {
+      if (error?.code === 'EPERM' || error?.code === 'EACCES') {
+        t.skip('symlink creation unavailable');
+        return;
+      }
+      throw error;
     }
 
+    const disguised = runRunner(
+      fixture,
+      fixture.alpha,
+      ['run', 'sample', 'file=tests%2Falias.test.js'],
+    );
+    assert.equal(disguised.status, 2);
+    assert.match(disguised.stderr, /disallowed extension/u);
+
+    const outside = path.join(fixture.root, 'outside.test.js');
+    await writeFile(outside, 'export {};\n');
+    await symlink(
+      outside,
+      path.join(fixture.alpha, 'tests', 'linked.test.js'),
+    );
+    const escaped = runRunner(
+      fixture,
+      fixture.alpha,
+      ['run', 'sample', 'file=tests%2Flinked.test.js'],
+    );
+    assert.equal(escaped.status, 2);
+    assert.match(escaped.stderr, /resolves outside the workspace root/u);
+  });
+});
+
+test('non-existing paths below an escaping symlink ancestor are denied', async (t) => {
+  await withFixture(async (fixture) => {
+    const outside = path.join(fixture.root, 'outside-directory');
+    const link = path.join(fixture.alpha, 'linked-directory');
+    await mkdir(outside);
+    try {
+      await symlink(outside, link, 'dir');
+    } catch (error) {
+      if (error?.code === 'EPERM' || error?.code === 'EACCES') {
+        t.skip('directory symlink creation unavailable');
+        return;
+      }
+      throw error;
+    }
+
+    const result = runRunner(
+      fixture,
+      fixture.alpha,
+      ['run', 'create', 'output=linked-directory%2Fnew.txt'],
+    );
+    assert.equal(result.status, 2);
+    assert.match(result.stderr, /resolves outside the workspace root/u);
+  });
+});
+
+test('duplicate configuration keys fail closed', async () => {
+  await withFixture(async (fixture) => {
+    await writeFile(
+      path.join(fixture.home, 'command-runner', 'workspaces.json'),
+      '{"version":1,"version":1,"workspaces":[]}',
+    );
+    const result = runRunner(fixture, fixture.alpha, ['list']);
+    assert.equal(result.status, 2);
+    assert.match(result.stderr, /duplicate key/u);
+  });
+});
+
+test('dynamic arguments cannot be attached to known inline-code forms', async () => {
+  await withFixture(async (fixture) => {
+    const result = runRunner(fixture, fixture.alpha, ['list']);
+    assert.equal(result.status, 2);
+    assert.match(result.stderr, /inline-code execution form/u);
+  }, (configuration) => {
+    configuration.workspaces[0].commands.sample.run = [
+      'node',
+      '-e',
+      'console.log(process.argv[1])',
+    ];
+    return configuration;
+  });
+});
+
+test('timeout is reported separately from exit and signal state', async () => {
+  await withFixture(async (fixture) => {
+    const result = runRunner(fixture, fixture.alpha, ['run', 'timeout']);
+    assert.equal(result.status, 0, result.stderr);
+    const output = JSON.parse(result.stdout);
+    assert.equal(output.status, 'failed');
+    assert.equal(output.timedOut, true);
+    assert.equal(output.outputTruncated, false);
+    assert.notEqual(output.signal, null);
+  });
+});
+
+test('hook permits canonical bounded-interface calls and denies direct core or compound commands', async () => {
+  await withFixture(async (fixture) => {
+    const allowed = runHook(fixture, {
+      hook_event_name: 'PreToolUse',
+      cwd: fixture.alpha,
+      tool_name: 'execute/runInTerminal',
+      tool_input: {
+        command: 'node ~/.copilot/command-runner/command-runner-interface.mjs run sample count=4',
+      },
+    });
+    assert.equal(allowed.status, 0, allowed.stderr);
+    assert.equal(
+      JSON.parse(allowed.stdout).hookSpecificOutput.permissionDecision,
+      'allow',
+    );
+
+    const directCore = runHook(fixture, {
+      hook_event_name: 'PreToolUse',
+      cwd: fixture.alpha,
+      tool_name: 'execute/runInTerminal',
+      tool_input: { command: 'node ~/.copilot/command-runner/command-runner.mjs list' },
+    });
+    assert.equal(
+      JSON.parse(directCore.stdout).hookSpecificOutput.permissionDecision,
+      'deny',
+    );
+
+    const raw = runHook(fixture, {
+      hook_event_name: 'PreToolUse',
+      cwd: fixture.alpha,
+      tool_name: 'execute/runInTerminal',
+      tool_input: { command: 'npm test' },
+    });
+    assert.equal(
+      JSON.parse(raw.stdout).hookSpecificOutput.permissionDecision,
+      'deny',
+    );
+
+    const compound = runHook(fixture, {
+      hook_event_name: 'PreToolUse',
+      cwd: fixture.alpha,
+      tool_name: 'execute/runInTerminal',
+      tool_input: {
+        command:
+          'node ~/.copilot/command-runner/command-runner-interface.mjs list && npm publish',
+      },
+    });
+    assert.equal(
+      JSON.parse(compound.stdout).hookSpecificOutput.permissionDecision,
+      'deny',
+    );
+  });
+});
+
+test('hook denies terminal execution overrides and background execution', async () => {
+  await withFixture(async (fixture) => {
     for (const toolInput of [
-      { command: 'node ~/.copilot/command-runner/command-runner.mjs list' },
-      { command: 'npm test' },
-      { command: 'node ~/.copilot/command-runner/command-runner-interface.mjs output ../../secret stream=stdout' },
-      { command: 'node ~/.copilot/command-runner/command-runner-interface.mjs list', env: { BAD: '1' } },
-      { command: 'node ~/.copilot/command-runner/command-runner-interface.mjs list', isBackground: true },
+      {
+        command: 'node ~/.copilot/command-runner/command-runner-interface.mjs list',
+        cwd: fixture.beta,
+      },
+      {
+        command: 'node ~/.copilot/command-runner/command-runner-interface.mjs list',
+        env: { TEST: '1' },
+      },
+      {
+        command: 'node ~/.copilot/command-runner/command-runner-interface.mjs list',
+        isBackground: true,
+      },
     ]) {
-      const result = runHook(fixture, toolInput);
-      assert.equal(JSON.parse(result.stdout).hookSpecificOutput.permissionDecision, 'deny');
+      const result = runHook(fixture, {
+        hook_event_name: 'PreToolUse',
+        cwd: fixture.alpha,
+        tool_name: 'execute/runInTerminal',
+        tool_input: toolInput,
+      });
+      assert.equal(
+        JSON.parse(result.stdout).hookSpecificOutput.permissionDecision,
+        'deny',
+      );
     }
+  });
+});
+
+test('hook ignores non-terminal tools except writes to control files', async () => {
+  await withFixture(async (fixture) => {
+    const read = runHook(fixture, {
+      hook_event_name: 'PreToolUse',
+      tool_name: 'read/readFile',
+      tool_input: { path: 'README.md' },
+    });
+    assert.deepEqual(JSON.parse(read.stdout), { continue: true });
+
+    const protectedWrite = runHook(fixture, {
+      hook_event_name: 'PreToolUse',
+      tool_name: 'edit/editFiles',
+      tool_input: {
+        files: [
+          {
+            path: '~/.copilot/command-runner/workspaces.json',
+            replacement: '{}',
+          },
+        ],
+      },
+    });
+    assert.equal(
+      JSON.parse(protectedWrite.stdout).hookSpecificOutput.permissionDecision,
+      'deny',
+    );
+
+    const unrelated = runHook(fixture, {
+      hook_event_name: 'PreToolUse',
+      tool_name: 'edit/editFiles',
+      tool_input: {
+        files: [{ path: 'src/example.js', replacement: 'export {};' }],
+      },
+    });
+    assert.deepEqual(JSON.parse(unrelated.stdout), { continue: true });
   });
 });

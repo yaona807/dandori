@@ -49,7 +49,7 @@ node ~/.copilot/command-runner/command-runner-interface.mjs run <command-id> [<n
 node ~/.copilot/command-runner/command-runner-interface.mjs output <execution-id> stream=stdout|stderr [offset=<n>]
 ```
 
-Encode argument values with `encodeURIComponent` semantics. Keep command IDs and argument names exactly as returned by `list` or `describe`. Runner responses are intentionally bounded; continue with the provided offset only when more information is necessary for the delegated request.
+Percent-encode argument values before placing them in the terminal command. Use `encodeURIComponent`, then also percent-encode `!`, `'`, `(`, `)`, and `*`. Keep command IDs and argument names exactly as returned by `list` or `describe`. Runner responses are intentionally bounded; continue with the provided offset only when more information is necessary for the delegated request.
 
 ## Strict rules
 
