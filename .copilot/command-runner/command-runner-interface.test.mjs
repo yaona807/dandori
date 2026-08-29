@@ -92,6 +92,7 @@ async function makeFixture(commandCount = 3) {
   }
   commands.large = { description: 'Large output.', outputBytes: 40_000, stdout: 'a', stderr: 'b', exitCode: 1 };
   commands.echo = { description: 'Echo.', stdout: 'ok' };
+  commands.unicode = { description: 'Multibyte output.', outputBytes: 5_000, stdout: `${'a'.repeat(26)}あ` };
   const config = {
     workspaces: [
       { id: 'alpha', root: alpha, commands },
@@ -186,8 +187,8 @@ test('run stores large stdout and stderr while returning only compact metadata',
     assert.equal('stdout' in output, false);
     assert.equal('stderr' in output, false);
     assert.equal('arguments' in output, false);
-    assert.ok(output.stdoutPreview.length <= 512);
-    assert.ok(output.stderrPreview.length <= 512);
+    assert.ok(Buffer.byteLength(output.stdoutPreview) <= 512);
+    assert.ok(Buffer.byteLength(output.stderrPreview) <= 512);
 
     const directory = path.join(fixture.home, 'command-runner', 'executions', 'alpha', output.executionId);
     assert.equal((await readFile(path.join(directory, 'stdout.log'), 'utf8')).length, 40_000);
@@ -209,6 +210,38 @@ test('output reads only bounded chunks and can continue by offset', async () => 
     ]));
     assert.equal(second.offset, first.nextOffset);
     assert.equal(second.data.length, 1_536);
+  });
+});
+
+test('output preserves UTF-8 text across byte-bounded chunks', async () => {
+  await withFixture(async (fixture) => {
+    const run = parseSuccess(runInterface(fixture, fixture.alpha, ['run', 'unicode']));
+    const directory = path.join(fixture.home, 'command-runner', 'executions', 'alpha', run.executionId);
+    const expected = await readFile(path.join(directory, 'stdout.log'), 'utf8');
+    let offset = 0;
+    let actual = '';
+    let firstNextOffset = null;
+    while (true) {
+      const output = parseSuccess(runInterface(fixture, fixture.alpha, [
+        'output', run.executionId, 'stream=stdout', `offset=${offset}`,
+      ]));
+      assert.equal(output.offset, offset);
+      assert.doesNotMatch(output.data, /\uFFFD/u);
+      assert.ok(Buffer.byteLength(output.data) <= 1_536);
+      assert.ok(output.nextOffset > offset || output.eof);
+      if (firstNextOffset === null) firstNextOffset = output.nextOffset;
+      actual += output.data;
+      offset = output.nextOffset;
+      if (output.eof) break;
+    }
+    assert.ok(firstNextOffset < 1_536, 'first chunk should stop before a split multibyte character');
+    assert.equal(actual, expected);
+
+    const misaligned = runInterface(fixture, fixture.alpha, [
+      'output', run.executionId, 'stream=stdout', 'offset=1535',
+    ]);
+    assert.equal(misaligned.status, 2);
+    assert.match(misaligned.stderr, /UTF-8 character boundary/u);
   });
 });
 
