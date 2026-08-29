@@ -5,7 +5,6 @@ import { spawn } from 'node:child_process';
 import {
   mkdir,
   open,
-  readFile,
   readdir,
   realpath,
   rm,
@@ -48,7 +47,6 @@ class InterfaceError extends Error {
 function interfaceHome() {
   return path.dirname(fileURLToPath(import.meta.url));
 }
-
 
 function corePath() {
   return path.join(interfaceHome(), 'command-runner.mjs');
@@ -220,6 +218,10 @@ function inside(root, candidate) {
     || (relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
 }
 
+function isUtf8Continuation(byte) {
+  return (byte & 0xc0) === 0x80;
+}
+
 async function managedExecutions() {
   const root = executionsRoot();
   await mkdir(root, { recursive: true, mode: 0o700 });
@@ -282,9 +284,10 @@ async function workspaceId() {
 
 function tail(value) {
   const buffer = Buffer.from(typeof value === 'string' ? value : '', 'utf8');
-  return buffer.length <= LIMITS.previewBytes
-    ? buffer.toString('utf8')
-    : buffer.subarray(buffer.length - LIMITS.previewBytes).toString('utf8');
+  if (buffer.length <= LIMITS.previewBytes) return buffer.toString('utf8');
+  let start = buffer.length - LIMITS.previewBytes;
+  while (start < buffer.length && isUtf8Continuation(buffer[start])) start += 1;
+  return buffer.subarray(start).toString('utf8');
 }
 
 async function storeExecution(workspace, coreResult) {
@@ -355,22 +358,38 @@ async function readOutput(workspace, id, provided) {
   if (!info.isFile()) throw new InterfaceError('execution_not_found', `execution output is unavailable: ${id}`);
   if (start > info.size) throw new InterfaceError('invalid_argument', `offset exceeds ${stream} size`);
 
-  const count = Math.min(LIMITS.outputChunkBytes, info.size - start);
-  const buffer = Buffer.alloc(count);
   const handle = await open(file, 'r');
+  let end = Math.min(start + LIMITS.outputChunkBytes, info.size);
+  let buffer;
   try {
+    if (start < info.size) {
+      const boundary = Buffer.alloc(1);
+      await handle.read(boundary, 0, 1, start);
+      if (isUtf8Continuation(boundary[0])) {
+        throw new InterfaceError('invalid_argument', 'offset must be at a UTF-8 character boundary');
+      }
+    }
+    if (end < info.size) {
+      const boundary = Buffer.alloc(1);
+      await handle.read(boundary, 0, 1, end);
+      while (end > start && isUtf8Continuation(boundary[0])) {
+        end -= 1;
+        await handle.read(boundary, 0, 1, end);
+      }
+    }
+    const count = end - start;
+    buffer = Buffer.alloc(count);
     if (count) await handle.read(buffer, 0, count, start);
   } finally {
     await handle.close();
   }
-  const nextOffset = start + count;
   return {
     workspaceId: workspace,
     executionId: id,
     stream,
     offset: start,
-    nextOffset,
-    eof: nextOffset >= info.size,
+    nextOffset: end,
+    eof: end >= info.size,
     data: buffer.toString('utf8'),
   };
 }
