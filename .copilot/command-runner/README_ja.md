@@ -79,7 +79,7 @@ Runnerは実行時に次の処理を行います。
 
 `workspace-file`と`workspace-directory`は、symlink解決後のパスを検証します。`mustExist`が `false` の場合も、最も近い既存の親ディレクトリを先に解決するため、Workspace外を指すsymlink配下の未作成パスは拒否されます。
 
-1コマンドの公開 `describe` 定義にもサイズ上限を設けます。安全なサイズで返せない定義は設定エラーとしてfail-closedにします。
+1コマンドの公開 `describe` 定義にもサイズ上限を設けます。安全なサイズで返せない場合は、その `describe` 要求をfail-closedで拒否します。
 
 ## Runnerのインターフェース
 
