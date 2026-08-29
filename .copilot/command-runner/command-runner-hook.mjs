@@ -9,15 +9,16 @@ const TERMINAL_TOOL_NAMES = new Set([
   'runTerminalCommand',
 ]);
 const COMMAND_ID_PATTERN = /^[a-z][a-z0-9_-]{0,63}$/;
+const EXECUTION_ID_PATTERN = /^\d{8}T\d{6}\.\d{3}Z_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const PARAMETER_TOKEN_PATTERN = /^[a-z][a-zA-Z0-9_-]{0,63}=[A-Za-z0-9._~%/-]*$/;
-const FIXED_PREFIX = ['node', '~/.copilot/command-runner/command-runner.mjs'];
+const FIXED_PREFIX = ['node', '~/.copilot/command-runner/command-runner-interface.mjs'];
 const FORBIDDEN_CHARACTER_PATTERN = /[\u0000-\u001f\u007f'"`$&|;<>()[\]{}\\]/u;
 const MAX_COMMAND_LENGTH = 65_536;
 const PROTECTED_SUFFIXES = new Set([
   '.copilot/agents/CommandRunner.agent.md',
-  '.copilot/command-runner/CommandRunner.agent.md',
   '.copilot/command-runner/command-runner-hook.mjs',
   '.copilot/command-runner/command-runner.mjs',
+  '.copilot/command-runner/command-runner-interface.mjs',
   '.copilot/command-runner/workspaces.json',
 ]);
 const WRITE_TOOL_NAME_PATTERN = /(?:^|[/._-])(?:edit|write|create|delete|remove|move|rename|patch)(?:$|[/._-])/iu;
@@ -56,14 +57,10 @@ function parseCommand(command) {
     throw new Error('terminal command must be a non-empty bounded string');
   }
   if (FORBIDDEN_CHARACTER_PATTERN.test(command)) {
-    throw new Error(
-      'terminal command contains unsupported shell syntax or control characters',
-    );
+    throw new Error('terminal command contains unsupported shell syntax or control characters');
   }
   if (command !== command.trim() || /\s{2,}/u.test(command)) {
-    throw new Error(
-      'terminal command must use canonical single-space formatting',
-    );
+    throw new Error('terminal command must use canonical single-space formatting');
   }
   return command.split(' ');
 }
@@ -77,9 +74,7 @@ function validateEncodedParameter(token) {
     const decoded = decodeURIComponent(token.slice(separator + 1));
     if (/\p{Cc}/u.test(decoded)) throw new Error('control character');
   } catch {
-    throw new Error(
-      `invalid encoded value in named argument: ${token.slice(0, separator)}`,
-    );
+    throw new Error(`invalid encoded value in named argument: ${token.slice(0, separator)}`);
   }
 }
 
@@ -93,7 +88,16 @@ function validateRunnerInvocation(tokens) {
 
   const operation = tokens[2];
   if (operation === 'list') {
-    if (tokens.length !== 3) throw new Error('list does not accept arguments');
+    for (const token of tokens.slice(3)) validateEncodedParameter(token);
+    return;
+  }
+
+  if (operation === 'output') {
+    const executionId = tokens[3];
+    if (!EXECUTION_ID_PATTERN.test(executionId ?? '')) {
+      throw new Error('output requires a safe execution ID');
+    }
+    for (const token of tokens.slice(4)) validateEncodedParameter(token);
     return;
   }
 
@@ -187,17 +191,13 @@ try {
       && WRITE_TOOL_NAME_PATTERN.test(toolName)
       && containsProtectedPath(input?.tool_input)
     ) {
-      deny(
-        'User-level CommandRunner control files cannot be modified by agent write tools.',
-      );
+      deny('User-level CommandRunner control files cannot be modified by agent write tools.');
     } else {
       output({ continue: true });
     }
   } else {
     validateTerminalInput(input?.tool_input);
-    allow(
-      'Registered commands are selected from the current workspace by the fixed user-level runner.',
-    );
+    allow('Only the fixed user-level command runner interface is permitted.');
   }
 } catch (error) {
   deny(error instanceof Error ? error.message : String(error));

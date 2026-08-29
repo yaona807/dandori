@@ -249,8 +249,15 @@ If authorization or cumulative loop-control state cannot be reconstructed exactl
     Researcher.agent.md
     PullRequestResearcher.agent.md
     Writer.agent.md
+    CommandRunner.agent.md
     Reviewer.agent.md
     BrowserQA.agent.md
+  command-runner/
+    command-runner.mjs
+    command-runner-interface.mjs
+    command-runner-hook.mjs
+    command-runner.test.mjs
+    workspaces.example.json
   skills/
     code-review/
       SKILL.md
@@ -272,6 +279,7 @@ assets/
 | --- | --- |
 | `Orchestrator` | Control-plane agent for intake, compact approval, contract management, Task Card creation, worker selection, audit, loop control, and synthesis |
 | Reference workers | Optional workers for investigation, pull-request inspection, implementation, review, and browser-based verification |
+| `CommandRunner` | Optional execution worker that exposes registered commands through a fixed bounded interface and keeps large command output in its own temporary execution cache |
 | `code-review` skill | Focused review guidance used by the reference review worker |
 
 ## Compatibility and prerequisites
@@ -282,7 +290,7 @@ assets/
 - `BrowserQA` requires the configured browser tool set.
 - Unavailable or unrecognized tool names can be ignored by the runtime; verify actual tool availability before use.
 - A bundled Worker calls a tool only when the tool arguments and runtime behavior can enforce the delegated boundary. If the available tool can operate only on a broader scope, the Worker returns `blocked` and identifies the narrower capability required.
-- The bundled reference set does not include a terminal-command Worker. Add a dedicated, narrowly scoped execution Worker when tests, lint, type checks, builds, formatters, or other commands are required.
+- `CommandRunner` is included as an optional terminal-command Worker. Its agent definition is discovered with the other agents, but its fixed user-level runner must also be installed from `.copilot/command-runner/`. See [the CommandRunner setup](./.copilot/command-runner/README.md). Agent-scoped hooks require `chat.useCustomAgentHooks` to be enabled.
 - External workers must accept a self-contained request, avoid sub-delegation, use no broader tools than necessary, and describe their role and effect boundary accurately.
 - Confirm the loaded source for every agent and skill with VS Code Chat Diagnostics.
 
@@ -308,6 +316,8 @@ cp .copilot/agents/*.agent.md ~/.copilot/agents/
 cp -R .copilot/skills/* ~/.copilot/skills/
 ```
 
+If you use `CommandRunner`, also complete the separate [CommandRunner installation](./.copilot/command-runner/README.md), which installs the fixed runner under `~/.copilot/command-runner/`.
+
 ### Standard workspace installation
 
 Use VS Code's standard workspace discovery paths when the configuration should travel with one repository:
@@ -318,10 +328,11 @@ cp .copilot/agents/*.agent.md .github/agents/
 cp -R .copilot/skills/* .github/skills/
 ```
 
+A workspace-level `CommandRunner.agent.md` still uses the fixed user-level runner under `~/.copilot/command-runner/`; install that runner separately before using the worker.
+
 ### Custom `.copilot` workspace installation
 
 Keeping `.copilot/agents` and `.copilot/skills` inside a workspace requires those locations to be enabled through `chat.agentFilesLocations` and `chat.agentSkillsLocations`. Do not assume that copying `.copilot` into a repository is sufficient without the corresponding discovery settings.
-
 
 ### Upgrade an existing installation
 
@@ -330,14 +341,14 @@ Copying a new version over an existing installation does not remove files that w
 User-level cleanup:
 
 ```bash
-rm -f ~/.copilot/agents/{Orchestrator,Researcher,PullRequestResearcher,Writer,Reviewer,BrowserQA}.agent.md
+rm -f ~/.copilot/agents/{Orchestrator,Researcher,PullRequestResearcher,Writer,CommandRunner,Reviewer,BrowserQA}.agent.md
 rm -rf ~/.copilot/skills/code-review
 ```
 
 Standard workspace cleanup:
 
 ```bash
-rm -f .github/agents/{Orchestrator,Researcher,PullRequestResearcher,Writer,Reviewer,BrowserQA}.agent.md
+rm -f .github/agents/{Orchestrator,Researcher,PullRequestResearcher,Writer,CommandRunner,Reviewer,BrowserQA}.agent.md
 rm -rf .github/skills/code-review
 ```
 
@@ -381,7 +392,7 @@ python scripts/validate_release_archive.py dandori.zip
 
 The archive validator rejects path traversal, symlinks, generated artifacts, duplicate or portability-colliding names, unexpected top-level entries, missing release files, and extracted definitions that fail the repository validator. Portability checks include Unicode NFKC and case-folded collisions, Windows reserved device names, forbidden characters and control characters, and path components ending in a space or period.
 
-GitHub Actions runs deterministic definition validation, mutation tests, and release-archive validation for every pull request and push to `master`. The repository permits only `.github/workflows/validate.yml`, only the `validate` job, and only the `pull_request` and `push` triggers; local Actions under `.github/actions` are forbidden. The checkout step discards persisted credentials, and the validation job has a 15-minute timeout. The validator structurally checks the unconditional job and its exact fail-closed validation steps; moving commands to another job, adding `if`, `needs`, `continue-on-error`, extra jobs or workflows, unapproved triggers, or path filters does not satisfy the contract. All step-level actions and reusable workflows are parsed from YAML and must use full-length commit SHAs. Python bytecode generation is disabled in CI, and the validator rejects tag- or branch-based action references, repository symlinks, missing Python ignore rules, and tracked generated artifacts. The validator treats the bundled definitions as a closed release inventory: only `*.agent.md` files are allowed in the agent directory; execution-bypass frontmatter such as `hooks`, `handoffs`, and `mcp-servers` is rejected; bundled-agent frontmatter, tools, filenames, required sections, safety-policy anchors, and conservative body-size regression floors are fixed; core Orchestrator invariants must remain in their intended sections; and the bundled `code-review` skill must contain only its declared Markdown files. DANDORI-specific coupling and Reviewer-owned worker policy are checked across every Skill Markdown file with case and separator variants normalized. Additional local workers may still be added as `*.agent.md` files, but they remain subject to the common runtime, no-subdelegation, forbidden-frontmatter, and DANDORI-coupling checks and produce a manual policy/Diagnostics review warning. External allowlisted workers also remain a Diagnostics-reviewed warning because their definitions are outside this repository. The dedicated test runner fails when no tests are discovered or when any test is skipped in CI. Required mutation and release-archive tests must retain their approved classes, methods, real mutations, failing-validator assertions, and non-empty shared helpers. Every conformance case must retain a non-empty Input and at least one concrete Expected bullet. LLM behavior is not inferred from static files; use the structured cases and run-record template in `tests/conformance.md` for model, Worker-tool, and VS Code release checks.
+GitHub Actions runs deterministic definition validation, mutation tests, and release-archive validation for every pull request and push to `master`. The repository permits only `.github/workflows/validate.yml`, only the `validate` job, and only the `pull_request` and `push` triggers; local Actions under `.github/actions` are forbidden. The checkout step discards persisted credentials, and the validation job has a 15-minute timeout. The validator structurally checks the unconditional job and its exact fail-closed validation steps; moving commands to another job, adding `if`, `needs`, `continue-on-error`, extra jobs or workflows, unapproved triggers, or path filters does not satisfy the contract. All step-level actions and reusable workflows are parsed from YAML and must use full-length commit SHAs. Python bytecode generation is disabled in CI, and the validator rejects tag- or branch-based action references, repository symlinks, missing Python ignore rules, and tracked generated artifacts. The validator treats the bundled definitions as a closed release inventory: only `*.agent.md` files are allowed in the agent directory; execution-bypass frontmatter such as `hooks`, `handoffs`, and `mcp-servers` is rejected, except for the agent-scoped `hooks` field on the fixed `CommandRunner.agent.md`; bundled-agent frontmatter, tools, filenames, required sections, safety-policy anchors, and conservative body-size regression floors are fixed; core Orchestrator invariants must remain in their intended sections; and the bundled `code-review` skill must contain only its declared Markdown files. DANDORI-specific coupling and Reviewer-owned worker policy are checked across every Skill Markdown file with case and separator variants normalized. Additional local workers may still be added as `*.agent.md` files, but they remain subject to the common runtime, no-subdelegation, forbidden-frontmatter, and DANDORI-coupling checks and produce a manual policy/Diagnostics review warning. External allowlisted workers also remain a Diagnostics-reviewed warning because their definitions are outside this repository. The dedicated test runner fails when no tests are discovered or when any test is skipped in CI. Required mutation and release-archive tests must retain their approved classes, methods, real mutations, failing-validator assertions, and non-empty shared helpers. Every conformance case must retain a non-empty Input and at least one concrete Expected bullet. LLM behavior is not inferred from static files; use the structured cases and run-record template in `tests/conformance.md` for model, Worker-tool, and VS Code release checks.
 
 The validator proves structural constraints, tool boundaries, required policy anchors, and the integrity of the declared validation contract. It does not prove that every natural-language statement across an Agent definition is semantically consistent, nor can it establish actual model behavior from static files alone. Changes to policy wording therefore require human review, and runtime behavior must be checked with the conformance cases for the relevant VS Code, Copilot Chat, model, and extension versions.
 

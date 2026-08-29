@@ -1422,7 +1422,10 @@ def validate_repository(root: Path) -> ValidationResult:
             result.errors.append(f"{relative(path, root)}: invalid frontmatter: {exc}")
             continue
 
-        forbidden_keys = sorted(set(meta) & FORBIDDEN_AGENT_FRONTMATTER_KEYS)
+        allowed_forbidden_keys = {"hooks"} if path.name == "CommandRunner.agent.md" else set()
+        forbidden_keys = sorted(
+            (set(meta) & FORBIDDEN_AGENT_FRONTMATTER_KEYS) - allowed_forbidden_keys
+        )
         if forbidden_keys:
             result.errors.append(
                 f"{relative(path, root)}: forbidden agent frontmatter keys: {forbidden_keys}"
@@ -1433,6 +1436,14 @@ def validate_repository(root: Path) -> ValidationResult:
             result.errors.append(f"{relative(path, root)}: missing non-empty name")
             continue
         name = name.strip()
+        if path.name == "CommandRunner.agent.md" and name != "CommandRunner":
+            result.errors.append(
+                f"{relative(path, root)}: CommandRunner agent filename must keep name 'CommandRunner'"
+            )
+        if name == "CommandRunner" and path.name != "CommandRunner.agent.md":
+            result.errors.append(
+                f"{relative(path, root)}: CommandRunner agent must use filename 'CommandRunner.agent.md'"
+            )
         if name in BUNDLED_AGENT_NAMES:
             missing_keys = sorted(BUNDLED_AGENT_FRONTMATTER_KEYS - set(meta))
             unexpected_keys = sorted(
