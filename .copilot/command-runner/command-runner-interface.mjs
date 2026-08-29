@@ -448,11 +448,16 @@ async function main() {
     if (!COMMAND_ID_RE.test(subject ?? '')) {
       throw new InterfaceError('usage', 'run requires a safe command ID');
     }
-    // Validate the public argument envelope before invoking the core runner.
     parseArguments(rest);
     const workspace = await workspaceId();
     await cleanupExecutions(LIMITS.maxExecutionReserveBytes);
     const result = await runCore(['run', subject, ...rest]);
+    if (result?.workspaceId !== workspace || result?.commandId !== subject) {
+      throw new InterfaceError(
+        'runner_protocol_error',
+        'fixed runner identity changed during execution',
+      );
+    }
     emit(await storeExecution(workspace, result));
     return 0;
   }
