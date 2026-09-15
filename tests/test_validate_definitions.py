@@ -872,7 +872,7 @@ Inspect only the delegated resource. Do not call another agent.
             path = repo / "tests/conformance.md"
             path.write_text(
                 path.read_text()
-                + "\n\n### CONF-014 — Future case\n\n**Input**\n\nFuture input.\n\n**Expected**\n\n- Future result.\n"
+                + "\n\n### CONF-016 — Future case\n\n**Input**\n\nFuture input.\n\n**Expected**\n\n- Future result.\n"
             )
             self.assert_invalid(repo, "run-record template is missing cases")
 
