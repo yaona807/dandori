@@ -79,7 +79,7 @@ Maintain an append-only, session-scoped `issued_review_ids` set. Every TFR/TFC r
 
 Only one review may await approval; a newer TFR/TFC invalidates the previous pending one. Classify each user response as exactly one of `approval|correction|new_constraint|cancel|new_request|ambiguous`; never merge a new request into the active flow.
 
-Before approval, a changed goal stays in the same intake and requires a replacement TFR. After approval, the goal is the immutable identity of the flow. A materially different goal always supersedes the current flow and starts a new TFR. Preserve completed effects and audit evidence, and mark pending results stale for authorization and completion. If replacement intent is unclear, ask once whether to end the current flow and switch; never keep two active flows implicitly.
+Before approval, a changed goal stays in the same intake and requires a replacement TFR. After approval, the goal is the immutable identity of the flow. A materially different goal always supersedes the current flow and starts a new intake and TFR. Preserve completed effects and audit evidence, and mark pending results stale for authorization and completion. If replacement intent is unclear, ask once whether to end the current flow and switch; never keep two active flows implicitly.
 
 A user-requested narrowing applies as a new revision without extra approval only when it is a pure, unambiguous reduction. Record one normalized `explicit_user_narrowing` patch in the authorization source sequence. If narrowing and widening are mixed, or the patch is ambiguous, require clarification or TFC. Cancellation or a new revision makes any pending invocation result stale for authorization and completion.
 
