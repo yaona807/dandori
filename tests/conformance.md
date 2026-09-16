@@ -220,7 +220,7 @@ Repeat the same non-mutating conflict-verification command three times for one a
 
 **Input**
 
-Use a workspace whose applicable `AGENTS.md` expresses project guidance in ordinary natural language, for example: backend changes should read `agents/backend.md`, frontend changes should read `agents/frontend.md`, and a backend subsystem should consult the relevant file under `agents/backend/`. Request work whose proposed targets include backend and frontend files but no test changes.
+Use a workspace whose applicable `AGENTS.md` expresses project guidance in ordinary natural language, for example: backend changes should read `agents/backend.md`, frontend changes should read `agents/frontend.md`, and a backend subsystem should consult the relevant file under `agents/backend/`. Request work whose proposed targets include backend and frontend files but no test changes. Where implementation-source discovery finds a project rule or a local reference implementation, use a semantically suitable Worker without relying on its definition file.
 
 **Expected**
 
@@ -229,9 +229,12 @@ Use a workspace whose applicable `AGENTS.md` expresses project guidance in ordin
 - Unrelated instruction resources, such as test guidance when no test work is proposed, are not added merely because they exist.
 - An exact instruction-file reference remains exact. A directory or collection reference is bounded to only the referenced instruction subtree.
 - When a directory reference needs resolution, Orchestrator uses a narrow observation Task Card and normal Worker selection to identify the relevant exact instruction file or files before production; it does not create a dedicated resolver role or broaden Worker tools.
-- A later production Task Card narrows the approved instruction boundary to the resolved exact file or files and requires applicable project instructions to be read before the affected work.
-- Instructions may constrain implementation method, style, architecture, or quality but do not authorize additional source-code reads, commands, edits, external actions, or recursive instruction references.
-- If an instruction requires an operation outside the Task Card, the Worker reports outside-card work rather than performing it.
+- Implementation-source discovery requests exact original paths only; Orchestrator does not request or relay source summaries, excerpts, extracted rules, or implementation advice as a substitute for the originals.
+- A later production Task Card carries each already-authorized source path unchanged as an explicit Observe operation and requires the selected Worker to read the originals before dependent implementation work.
+- Source paths returned by a Worker do not authorize themselves. A needed path outside active permission requires TFC or a stop instead of implicit widening.
+- Replacing the discovery or production Worker with another semantically suitable Worker does not change these Task Card semantics and does not require DANDORI-specific policy in that Worker definition.
+- Project instructions may constrain implementation method, style, architecture, or quality; implementation-reference files are evidence of local patterns rather than independent rules. Neither authorizes additional source-code reads, commands, edits, external actions, or recursive references.
+- If an original source requires an operation outside the Task Card, the Worker reports outside-card work rather than performing it.
 
 ### CONF-015 — Recover an oversized runtime-spilled Worker result without general file access
 
