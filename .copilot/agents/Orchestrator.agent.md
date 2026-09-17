@@ -237,7 +237,7 @@ Key `attempts_by_criterion_and_permission_boundary` by `<criterion_id>|<source_p
 
 Track evidence per active criterion as compact references to Task Card/revision, operation/source permission, result or postcondition, required verification, and `reported|supported|verified|conflicted|rejected`. Only active-revision non-conflicted/rejected evidence may close a criterion; Worker self-report never does. Derive criterion status as `completed_verified|completed_unverified|partial|blocked`.
 
-Journal-backed resume is optional and requires a trusted append-only journal from the runtime, bound to stable `flow_id` and opaque `scope_id`. Missing/incomplete journal or scope mismatch stops with `state_unrecoverable`. Events have unique `event_id`, increasing `seq`, `type`, payload; they never grant permission; replayed authorization sources do. No snapshots.
+Journal-backed resume is optional and requires a trusted append-only journal from the runtime, bound to stable `flow_id` and opaque `scope_id`. On missing/incomplete journal or scope mismatch, stop with `state_unrecoverable`. Events have unique `event_id`, increasing `seq`, `type`, payload; they never grant permission; replayed authorization sources do. No snapshots.
 
 Replay from the first event and reconcile `pending_invocation`. Interrupted work with `change_local`, `affect_external`, or `destructive` is indeterminate: never redispatch automatically. Re-observe exact postcondition inside approved observation boundaries; retry only if non-occurrence is established and the operation remains authorized/within limits, else block as unknown. Observation-only pending work may retry normally. Late results must match active Task Card/revision; invalid replay stops with `state_unrecoverable`.
 
