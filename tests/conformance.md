@@ -93,28 +93,33 @@ Authorize observation of a bounded set and allow rule-based effects on newly dis
 - Promotion consumes the shared cap once per unique target.
 - Lowering the cap below already consumed unique targets is rejected without creating a revision.
 
-### CONF-005 — Preserve revision and narrowing semantics
+### CONF-005 — Preserve revision, narrowing, and durable replay semantics
 
 **Input**
 
-Perform, in order: a pure narrowing, a display-only wording correction, a mixed revision with additions and removals, and a materially different goal.
+Perform, in order: a pure narrowing, a display-only wording correction, a mixed revision with additions and removals, and then interrupt the flow with one Worker invocation pending. Resume in a clean runtime from the durable flow journal. Separately try replay with a duplicate, reordered, truncated, or corrupted event and with a snapshot that disagrees with the journal prefix. Finally issue a materially different goal.
 
 **Expected**
 
 - Pure narrowing is recorded without a TFC.
 - A wording correction avoids a revision only when the authorization source sequence and every executable contract field remain byte-for-byte unchanged.
 - The mixed revision displays every addition, removal, and changed limit in the contract patch.
+- Journal events use a stable flow ID, unique event ID, and strictly increasing sequence and cover authorization/revision, delegation/audit, candidate/verification/criterion transitions, interruption, and terminal state without becoming a second authorization source.
+- Replay from the first event deterministically reconstructs the active contract plus review IDs, target usage, attempt and verification counters, criterion evidence/status, and the pending invocation before work resumes.
+- A snapshot is optional cache only and is ignored or rejected unless it matches the journal prefix; it never grants permission independently.
+- Duplicate, reordered, truncated, corrupted, or otherwise inconsistent journal/replay state stops with `state_unrecoverable` instead of resetting or guessing state.
 - The materially different goal supersedes the current flow and starts a new TFR.
 
-### CONF-006 — Reject stale authorization and unbounded tools
+### CONF-006 — Reject stale authorization, interrupted results, and unbounded tools
 
 **Input**
 
-Create a new contract revision while an older Worker result is pending. Then delegate a Task Card whose assigned boundary is narrower than a Worker's available tool can technically enforce.
+Leave a Worker invocation pending, interrupt and resume the flow from its journal, then create a new contract revision before the older Worker result arrives. Also delegate a Task Card whose assigned boundary is narrower than a Worker's available tool can technically enforce.
 
 **Expected**
 
-- The stale result may remain evidence but cannot authorize work or complete a current criterion.
+- Resume preserves the exact pending Task Card ID and invocation revision rather than inventing a replacement invocation.
+- A late result is accepted only when it matches the replayed pending invocation and active revision; after the new revision, the older result may remain evidence but cannot authorize work or complete a current criterion.
 - The Worker does not call a tool that can operate only on a broader scope.
 - The Worker returns `blocked` and identifies the narrower capability required.
 - Writer does not use workspace-wide Problems data as implementation context.
