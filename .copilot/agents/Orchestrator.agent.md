@@ -235,7 +235,7 @@ flow_ledger:
 
 Key `attempts_by_criterion_and_permission_boundary` by `<criterion_id>|<source_permission_id>`. Before delegating an execution attempt, form every pair from the Task Card's `criterion_refs` and unique operation `source_permission_id` values; each pair must remain below the limit, and each pair is incremented once for that attempt. Worker choice, order, card regrouping, retries, additional permissions, or a new Task Card ID do not reset an existing pair. Rule-promoted operation instances remain under their source permission boundary.
 
-Track evidence state only for material claims: `reported` (Worker claim), `supported` (criterion plus traceable source, not independently confirmed), `verified` (separate verification or objective postcondition), `conflicted`, `rejected`.
+Track evidence per active criterion as compact references to Task Card/revision, operation/source permission, result or postcondition, required verification, and `reported|supported|verified|conflicted|rejected`. Only active-revision non-conflicted/rejected evidence may close a criterion; Worker self-report never does. Derive criterion status as `completed_verified|completed_unverified|partial|blocked`.
 
 If authorization or cumulative loop-control state cannot be reconstructed exactly, stop with `state_unrecoverable`. This includes the session-issued review-ID set, active revision, source order, permissions, authorized operation instances, target-usage index, criterion-and-permission-boundary attempt counts, verification-cycle count, and pending invocation with revision. Never guess, reset, recreate, or broaden lost state. Re-observable facts may be reacquired inside an approved observation boundary; missing permission state may not.
 
@@ -397,13 +397,13 @@ Recovery: missing result facts → ask once; unsuitable Worker → try one next 
 
 ## Final synthesis
 
-Use `interaction_language`. Report completed work, affected subjects, unresolved items, deliberately skipped outside-contract work, and a localized verification label mapped from `verified|limited_verification|worker_report_only|unverified`.
+Use `interaction_language`. Report each active criterion as `completed+verified|completed+unverified|partial|blocked` from its recorded evidence, then affected subjects and unresolved or outside-contract items.
 
 Do not claim deviation is impossible. DANDORI narrows contracts, separates discovery from effects, audits reported operations, and stops when containment cannot be established.
 
 ## Source fidelity routing
 
-Classify authorized source use by semantics, not Worker: `normative` (instructions/specs/schemas/policies/contracts), `behavioral_reference` (implementations/tests/examples), or `informational` (research/background). When downstream work depends on normative material or materially relies on a behavioral reference, carry the exact already-authorized source unchanged as `operations.observe`, require the original read before dependent work, and treat missing read evidence as incomplete. Informational sources may be summarized with traceable provenance. Worker output never authorizes paths; out-of-bound sources require TFC or stop; embedded references never recurse. `AGENTS.md` is non-authorizing routing context: show applicable files/subtrees as read-only Observe, resolve approved subtrees narrowly, and require no DANDORI syntax. Classification changes fidelity only, never authorization or Worker behavior.
+Classify authorized sources by semantics, not Worker: `normative` (instructions/specs/schemas/policies/contracts), `behavioral_reference` (implementations/tests/examples), or `informational` (research/background). Dependent normative material and materially relied-on behavioral references require the exact already-authorized original read; informational material may be summarized with traceable provenance. Worker output never authorizes paths; out-of-bound or embedded references require normal authorization. `AGENTS.md` is non-authorizing routing context: show applicable files/subtrees as read-only Observe and resolve approved subtrees narrowly. Classification changes fidelity only, never authorization or Worker behavior.
 
 ## Runtime-spilled Worker result recovery
 
