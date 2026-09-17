@@ -76,6 +76,7 @@ function validateEncodedParameter(token) {
   } catch {
     throw new Error(`invalid encoded value in named argument: ${token.slice(0, separator)}`);
   }
+  return token.slice(0, separator);
 }
 
 function validateRunnerInvocation(tokens) {
@@ -103,11 +104,23 @@ function validateRunnerInvocation(tokens) {
 
   const commandId = tokens[3];
   if (!COMMAND_ID_PATTERN.test(commandId ?? '')) {
-    throw new Error('describe and run require a safe command ID');
+    throw new Error('describe, register, unregister, and run require a safe command ID');
   }
   if (operation === 'describe') {
     if (tokens.length !== 4) {
       throw new Error('describe accepts exactly one command ID');
+    }
+    return;
+  }
+  if (operation === 'register') {
+    if (tokens.length !== 5 || validateEncodedParameter(tokens[4]) !== 'definition') {
+      throw new Error('register accepts exactly definition=<encoded-json>');
+    }
+    return;
+  }
+  if (operation === 'unregister') {
+    if (tokens.length !== 5 || validateEncodedParameter(tokens[4]) !== 'expected') {
+      throw new Error('unregister accepts exactly expected=<definition-hash>');
     }
     return;
   }

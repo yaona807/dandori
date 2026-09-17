@@ -14,6 +14,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const SOURCE_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
+const CORE_SOURCE = path.join(SOURCE_DIRECTORY, 'command-runner.mjs');
 const INTERFACE_SOURCE = path.join(SOURCE_DIRECTORY, 'command-runner-interface.mjs');
 const HOOK_SOURCE = path.join(SOURCE_DIRECTORY, 'command-runner-hook.mjs');
 const AGENT_SOURCE = path.join(SOURCE_DIRECTORY, '..', 'agents', 'CommandRunner.agent.md');
@@ -100,11 +101,70 @@ async function makeFixture(commandCount = 3) {
     ],
   };
   await writeFile(path.join(commandRunner, 'stub.json'), JSON.stringify(config));
+  await writeFile(path.join(commandRunner, 'workspaces.json'), `${JSON.stringify(config, null, 2)}\n`);
+  return { root, home, alpha, beta, commandRunner };
+}
+
+async function makeManagementFixture() {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'dandori-command-runner-management-'));
+  const home = path.join(root, 'home');
+  const commandRunner = path.join(home, 'command-runner');
+  const alpha = path.join(root, 'alpha');
+  const beta = path.join(root, 'beta');
+  await mkdir(commandRunner, { recursive: true });
+  await mkdir(alpha);
+  await mkdir(beta);
+  await writeFile(path.join(commandRunner, 'command-runner-interface.mjs'), await readFile(INTERFACE_SOURCE));
+  await writeFile(path.join(commandRunner, 'command-runner-hook.mjs'), await readFile(HOOK_SOURCE));
+  await writeFile(path.join(commandRunner, 'command-runner.mjs'), await readFile(CORE_SOURCE));
+  await writeFile(
+    path.join(alpha, 'echo-args.mjs'),
+    'process.stdout.write(JSON.stringify(process.argv.slice(2)));\n',
+  );
+  await writeFile(
+    path.join(beta, 'echo-args.mjs'),
+    'process.stdout.write("beta");\n',
+  );
+  const command = (description, extra = []) => ({
+    description,
+    run: [process.execPath, 'echo-args.mjs', ...extra],
+    cwd: '.',
+    arguments: {},
+  });
+  const config = {
+    version: 1,
+    defaults: { timeoutMs: 10_000, maxOutputBytes: 16_384 },
+    workspaces: [
+      {
+        id: 'alpha',
+        root: alpha,
+        commands: {
+          keep: command('Keep.'),
+          remove: command('Remove.'),
+        },
+      },
+      {
+        id: 'beta',
+        root: beta,
+        commands: { beta: command('Beta.') },
+      },
+    ],
+  };
+  await writeFile(path.join(commandRunner, 'workspaces.json'), `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 });
   return { root, home, alpha, beta, commandRunner };
 }
 
 async function withFixture(callback, count) {
   const fixture = await makeFixture(count);
+  try {
+    await callback(fixture);
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+}
+
+async function withManagementFixture(callback) {
+  const fixture = await makeManagementFixture();
   try {
     await callback(fixture);
   } finally {
@@ -142,11 +202,20 @@ function parseSuccess(result) {
   return JSON.parse(result.stdout);
 }
 
+function parseFailure(result, code) {
+  assert.equal(result.status, 2, result.stdout);
+  const output = JSON.parse(result.stderr);
+  assert.equal(output.error.code, code);
+  return output;
+}
+
 test('agent lives under agents and exposes only the bounded interface', async () => {
   const source = await readFile(AGENT_SOURCE, 'utf8');
   assert.match(source, /^name: CommandRunner$/mu);
   assert.match(source, /^tools:\n  - execute\/runInTerminal$/mu);
   assert.match(source, /command-runner-interface\.mjs list/u);
+  assert.match(source, /command-runner-interface\.mjs register/u);
+  assert.match(source, /command-runner-interface\.mjs unregister/u);
   assert.match(source, /command-runner-interface\.mjs output/u);
   assert.doesNotMatch(source, /read\/readFile/u);
 });
@@ -168,11 +237,96 @@ test('list is paged, searchable, and bounded with many registered commands', asy
   }, 160);
 });
 
-test('describe returns exactly one bounded command definition', async () => {
+test('describe returns one bounded command definition and stable hash', async () => {
   await withFixture(async (fixture) => {
-    const output = parseSuccess(runInterface(fixture, fixture.alpha, ['describe', 'echo']));
-    assert.equal(output.workspaceId, 'alpha');
-    assert.equal(output.command.id, 'echo');
+    const first = parseSuccess(runInterface(fixture, fixture.alpha, ['describe', 'echo']));
+    const second = parseSuccess(runInterface(fixture, fixture.alpha, ['describe', 'echo']));
+    assert.equal(first.workspaceId, 'alpha');
+    assert.equal(first.command.id, 'echo');
+    assert.match(first.definitionHash, /^sha256-[0-9a-f]{64}$/u);
+    assert.equal(first.definitionHash, second.definitionHash);
+  });
+});
+
+test('register adds only a new validated command in the current workspace', async () => {
+  await withManagementFixture(async (fixture) => {
+    const definition = {
+      description: 'Registered command.',
+      run: [process.execPath, 'echo-args.mjs', '--registered'],
+      cwd: '.',
+      arguments: {},
+    };
+    const registered = parseSuccess(runInterface(fixture, fixture.alpha, [
+      'register',
+      'added',
+      `definition=${encodeURIComponent(JSON.stringify(definition))}`,
+    ]));
+    assert.equal(registered.workspaceId, 'alpha');
+    assert.equal(registered.commandId, 'added');
+    assert.match(registered.definitionHash, /^sha256-[0-9a-f]{64}$/u);
+
+    const described = parseSuccess(runInterface(fixture, fixture.alpha, ['describe', 'added']));
+    assert.equal(described.definitionHash, registered.definitionHash);
+    assert.equal(described.command.description, 'Registered command.');
+
+    const run = parseSuccess(runInterface(fixture, fixture.alpha, ['run', 'added']));
+    assert.equal(run.commandId, 'added');
+    assert.match(run.stdoutPreview, /--registered/u);
+
+    const config = JSON.parse(await readFile(path.join(fixture.commandRunner, 'workspaces.json'), 'utf8'));
+    assert.deepEqual(config.workspaces[0].commands.added, definition);
+    assert.equal('added' in config.workspaces[1].commands, false);
+  });
+});
+
+test('register rejects duplicate IDs and invalid definitions without mutating configuration', async () => {
+  await withManagementFixture(async (fixture) => {
+    const configPath = path.join(fixture.commandRunner, 'workspaces.json');
+    const before = await readFile(configPath, 'utf8');
+    parseFailure(runInterface(fixture, fixture.alpha, [
+      'register',
+      'keep',
+      `definition=${encodeURIComponent(JSON.stringify({ description: 'Replacement.', run: ['echo'], cwd: '.', arguments: {} }))}`,
+    ]), 'command_already_registered');
+    assert.equal(await readFile(configPath, 'utf8'), before);
+
+    parseFailure(runInterface(fixture, fixture.alpha, [
+      'register',
+      'invalid',
+      `definition=${encodeURIComponent(JSON.stringify({ description: 'Missing run.', cwd: '.', arguments: {} }))}`,
+    ]), 'invalid_config');
+    assert.equal(await readFile(configPath, 'utf8'), before);
+  });
+});
+
+test('unregister uses definition-hash CAS and cannot remove the last workspace command', async () => {
+  await withManagementFixture(async (fixture) => {
+    const configPath = path.join(fixture.commandRunner, 'workspaces.json');
+    const described = parseSuccess(runInterface(fixture, fixture.alpha, ['describe', 'remove']));
+    const before = await readFile(configPath, 'utf8');
+
+    parseFailure(runInterface(fixture, fixture.alpha, [
+      'unregister',
+      'remove',
+      `expected=sha256-${'0'.repeat(64)}`,
+    ]), 'stale_definition');
+    assert.equal(await readFile(configPath, 'utf8'), before);
+
+    const removed = parseSuccess(runInterface(fixture, fixture.alpha, [
+      'unregister',
+      'remove',
+      `expected=${described.definitionHash}`,
+    ]));
+    assert.equal(removed.removedDefinitionHash, described.definitionHash);
+    const after = JSON.parse(await readFile(configPath, 'utf8'));
+    assert.equal('remove' in after.workspaces[0].commands, false);
+
+    const keep = parseSuccess(runInterface(fixture, fixture.alpha, ['describe', 'keep']));
+    parseFailure(runInterface(fixture, fixture.alpha, [
+      'unregister',
+      'keep',
+      `expected=${keep.definitionHash}`,
+    ]), 'last_command');
   });
 });
 
@@ -269,11 +423,13 @@ test('expired execution directories are cleaned before a new run', async () => {
   });
 });
 
-test('hook permits only the bounded interface and rejects direct core or raw commands', async () => {
+test('hook permits only bounded execution and management interface shapes', async () => {
   await withFixture(async (fixture) => {
     for (const command of [
       'node ~/.copilot/command-runner/command-runner-interface.mjs list query=test',
       'node ~/.copilot/command-runner/command-runner-interface.mjs describe echo',
+      'node ~/.copilot/command-runner/command-runner-interface.mjs register lint definition=%7B%22description%22%3A%22Lint%22%7D',
+      `node ~/.copilot/command-runner/command-runner-interface.mjs unregister echo expected=sha256-${'0'.repeat(64)}`,
       'node ~/.copilot/command-runner/command-runner-interface.mjs run echo',
       'node ~/.copilot/command-runner/command-runner-interface.mjs output 20260829T010203.004Z_00000000-0000-4000-8000-000000000000 stream=stdout',
     ]) {
@@ -284,6 +440,8 @@ test('hook permits only the bounded interface and rejects direct core or raw com
     for (const toolInput of [
       { command: 'node ~/.copilot/command-runner/command-runner.mjs list' },
       { command: 'npm test' },
+      { command: 'node ~/.copilot/command-runner/command-runner-interface.mjs register lint other=value' },
+      { command: 'node ~/.copilot/command-runner/command-runner-interface.mjs unregister echo other=value' },
       { command: 'node ~/.copilot/command-runner/command-runner-interface.mjs output ../../secret stream=stdout' },
       { command: 'node ~/.copilot/command-runner/command-runner-interface.mjs list', env: { BAD: '1' } },
       { command: 'node ~/.copilot/command-runner/command-runner-interface.mjs list', isBackground: true },

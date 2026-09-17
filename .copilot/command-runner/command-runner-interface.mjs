@@ -1,12 +1,16 @@
 #!/usr/bin/env node
 
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import {
+  lstat,
   mkdir,
+  mkdtemp,
   open,
+  readFile,
   readdir,
   realpath,
+  rename,
   rm,
   stat,
   writeFile,
@@ -19,6 +23,7 @@ import { fileURLToPath } from 'node:url';
 const COMMAND_ID_RE = /^[a-z][a-z0-9_-]{0,63}$/;
 const QUERY_RE = /^[a-z0-9_-]{1,64}$/;
 const NAME_RE = /^[a-z][a-zA-Z0-9_-]{0,63}$/;
+const DEFINITION_HASH_RE = /^sha256-[0-9a-f]{64}$/;
 const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
 const EXECUTION_ID_RE = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})\.(\d{3})Z_([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/u;
 const LIMITS = {
@@ -30,11 +35,13 @@ const LIMITS = {
   parameterCount: 50,
   parameterTotalLength: 65_536,
   parameterValueLength: 8_192,
+  managementDefinitionBytes: 16_384,
   coreResponseBytes: 256 * 1024 * 1024,
   executionTtlMs: 24 * 60 * 60 * 1000,
   executionCacheBytes: 256 * 1024 * 1024,
   maxExecutionReserveBytes: 32 * 1024 * 1024,
   activeGraceMs: 61 * 60 * 1000,
+  staleLockMs: 5 * 60 * 1000,
 };
 
 class InterfaceError extends Error {
@@ -56,6 +63,14 @@ function copilotHome() {
   return process.env.COPILOT_HOME
     ? path.resolve(process.env.COPILOT_HOME)
     : path.join(os.homedir(), '.copilot');
+}
+
+function configurationPath() {
+  return path.join(copilotHome(), 'command-runner', 'workspaces.json');
+}
+
+function configurationLockPath() {
+  return path.join(copilotHome(), 'command-runner', 'workspaces.lock');
 }
 
 function executionsRoot() {
@@ -87,7 +102,7 @@ function fail(error) {
   return 2;
 }
 
-function parseArguments(tokens) {
+function parseArguments(tokens, valueByteLimit = LIMITS.parameterValueLength) {
   if (tokens.length > LIMITS.parameterCount) {
     throw new InterfaceError('invalid_argument', 'too many parameters');
   }
@@ -112,7 +127,7 @@ function parseArguments(tokens) {
     } catch {
       throw new InterfaceError('invalid_argument', `invalid percent encoding for parameter: ${name}`);
     }
-    if (CONTROL_RE.test(value) || value.length > LIMITS.parameterValueLength) {
+    if (CONTROL_RE.test(value) || Buffer.byteLength(value) > valueByteLimit) {
       throw new InterfaceError('invalid_argument', `parameter value is unsafe or too large: ${name}`);
     }
     const values = result.get(name) ?? [];
@@ -146,11 +161,11 @@ function offset(value) {
   return parsed;
 }
 
-async function runCore(args) {
+async function runCore(args, env = process.env) {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [corePath(), ...args], {
       cwd: process.cwd(),
-      env: process.env,
+      env,
       shell: false,
       windowsHide: true,
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -195,6 +210,333 @@ async function runCore(args) {
         reject(new InterfaceError('runner_protocol_error', 'fixed runner returned invalid JSON'));
       }
     });
+  });
+}
+
+function parseStrictJson(source, code, sourceName) {
+  let index = 0;
+  const syntaxError = (message) => {
+    throw new InterfaceError(code, `${sourceName}: ${message} at byte ${index}`);
+  };
+  const whitespace = () => {
+    while (/[\t\n\r ]/u.test(source[index] ?? '')) index += 1;
+  };
+  function parseString() {
+    if (source[index] !== '"') syntaxError('expected string');
+    const start = index++;
+    while (index < source.length) {
+      if (source[index] === '"') {
+        index += 1;
+        try {
+          return JSON.parse(source.slice(start, index));
+        } catch {
+          syntaxError('invalid string');
+        }
+      }
+      if (source[index] === '\\') {
+        index += 1;
+        if (source[index] === 'u') {
+          if (!/^[0-9a-fA-F]{4}$/u.test(source.slice(index + 1, index + 5))) {
+            syntaxError('invalid unicode escape');
+          }
+          index += 5;
+        } else if ('"\\/bfnrt'.includes(source[index] ?? '')) {
+          index += 1;
+        } else {
+          syntaxError('invalid escape');
+        }
+      } else {
+        if (source.charCodeAt(index) < 0x20) syntaxError('unescaped control character');
+        index += 1;
+      }
+    }
+    syntaxError('unterminated string');
+  }
+  function parseValue() {
+    whitespace();
+    if (source[index] === '{') return parseMapping();
+    if (source[index] === '[') return parseArray();
+    if (source[index] === '"') return parseString();
+    const match = source.slice(index).match(
+      /^(?:-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?|true|false|null)/u,
+    );
+    if (!match) syntaxError('expected JSON value');
+    index += match[0].length;
+  }
+  function parseArray() {
+    index += 1;
+    whitespace();
+    if (source[index] === ']') {
+      index += 1;
+      return;
+    }
+    while (index < source.length) {
+      parseValue();
+      whitespace();
+      if (source[index] === ']') {
+        index += 1;
+        return;
+      }
+      if (source[index++] !== ',') syntaxError('expected comma or closing bracket');
+    }
+    syntaxError('unterminated array');
+  }
+  function parseMapping() {
+    index += 1;
+    whitespace();
+    const keys = new Set();
+    if (source[index] === '}') {
+      index += 1;
+      return;
+    }
+    while (index < source.length) {
+      const key = parseString();
+      if (keys.has(key)) syntaxError(`duplicate key ${JSON.stringify(key)}`);
+      keys.add(key);
+      whitespace();
+      if (source[index++] !== ':') syntaxError('expected colon');
+      parseValue();
+      whitespace();
+      if (source[index] === '}') {
+        index += 1;
+        return;
+      }
+      if (source[index++] !== ',') syntaxError('expected comma or closing brace');
+      whitespace();
+    }
+    syntaxError('unterminated object');
+  }
+  parseValue();
+  whitespace();
+  if (index !== source.length) syntaxError('unexpected trailing content');
+  try {
+    return JSON.parse(source);
+  } catch (error) {
+    throw new InterfaceError(code, `${sourceName}: invalid JSON: ${error.message}`);
+  }
+}
+
+function canonicalize(value) {
+  if (Array.isArray(value)) return value.map(canonicalize);
+  if (value !== null && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.keys(value).sort().map((key) => [key, canonicalize(value[key])]),
+    );
+  }
+  return value;
+}
+
+function definitionHash(definition) {
+  return `sha256-${createHash('sha256')
+    .update(JSON.stringify(canonicalize(definition)))
+    .digest('hex')}`;
+}
+
+function publicConfiguredCommand(id, command) {
+  const argumentsDefinition = command.arguments ?? {};
+  return {
+    id,
+    description: command.description,
+    arguments: Object.entries(argumentsDefinition).map(([name, spec]) => ({
+      name,
+      kind: spec.kind,
+      required: spec.required === true,
+      repeatable: spec.repeatable === true,
+      ...(spec.maxItems === undefined ? {} : { maxItems: spec.maxItems }),
+      ...(spec.kind === 'flag' ? { type: 'boolean' } : { ...spec.value }),
+    })),
+  };
+}
+
+async function readConfigurationSource() {
+  const file = configurationPath();
+  let info;
+  try {
+    info = await lstat(file);
+  } catch {
+    throw new InterfaceError('configuration_not_found', `unable to read ${file}`);
+  }
+  if (!info.isFile() || info.isSymbolicLink()) {
+    throw new InterfaceError('unsafe_configuration_path', 'workspaces.json must be a regular non-symlink file for management operations');
+  }
+  const source = await readFile(file, 'utf8');
+  return {
+    source,
+    raw: parseStrictJson(source, 'invalid_config', file),
+  };
+}
+
+async function readStableConfiguration() {
+  const before = await readConfigurationSource();
+  const selected = await runCore(['list']);
+  const afterSource = await readFile(configurationPath(), 'utf8');
+  if (afterSource !== before.source) {
+    throw new InterfaceError('configuration_changed', 'workspaces.json changed while it was being inspected');
+  }
+  if (typeof selected.workspaceId !== 'string' || !COMMAND_ID_RE.test(selected.workspaceId)) {
+    throw new InterfaceError('runner_protocol_error', 'fixed runner returned an invalid workspace ID');
+  }
+  const matches = Array.isArray(before.raw?.workspaces)
+    ? before.raw.workspaces.filter((workspace) => workspace?.id === selected.workspaceId)
+    : [];
+  if (matches.length !== 1) {
+    throw new InterfaceError('invalid_config', 'selected workspace is not uniquely present in workspaces.json');
+  }
+  return { ...before, workspaceId: selected.workspaceId, workspace: matches[0] };
+}
+
+async function validateCandidateConfiguration(configuration, expectedWorkspaceId) {
+  const temporaryHome = await mkdtemp(path.join(os.tmpdir(), 'dandori-command-runner-config-'));
+  try {
+    const directory = path.join(temporaryHome, 'command-runner');
+    await mkdir(directory, { recursive: true, mode: 0o700 });
+    await writeFile(
+      path.join(directory, 'workspaces.json'),
+      `${JSON.stringify(configuration, null, 2)}\n`,
+      { encoding: 'utf8', mode: 0o600 },
+    );
+    const result = await runCore(['list'], { ...process.env, COPILOT_HOME: temporaryHome });
+    if (result?.workspaceId !== expectedWorkspaceId) {
+      throw new InterfaceError('workspace_identity_changed', 'candidate configuration changes the selected workspace identity');
+    }
+  } finally {
+    await rm(temporaryHome, { recursive: true, force: true });
+  }
+}
+
+async function writeConfigurationAtomically(source, configuration) {
+  const file = configurationPath();
+  const current = await readFile(file, 'utf8');
+  if (current !== source) {
+    throw new InterfaceError('configuration_changed', 'workspaces.json changed before the update could be committed');
+  }
+  const temporary = path.join(path.dirname(file), `.workspaces.${randomUUID()}.tmp`);
+  let handle;
+  try {
+    handle = await open(temporary, 'wx', 0o600);
+    await handle.writeFile(`${JSON.stringify(configuration, null, 2)}\n`, 'utf8');
+    await handle.sync();
+    await handle.close();
+    handle = null;
+    await rename(temporary, file);
+  } finally {
+    if (handle) await handle.close();
+    await rm(temporary, { force: true });
+  }
+}
+
+async function withConfigurationLock(callback) {
+  const lockPath = configurationLockPath();
+  let handle;
+  try {
+    handle = await open(lockPath, 'wx', 0o600);
+  } catch (error) {
+    if (error?.code !== 'EEXIST') throw error;
+    try {
+      const info = await stat(lockPath);
+      if (Date.now() - info.mtimeMs >= LIMITS.staleLockMs) {
+        throw new InterfaceError(
+          'stale_configuration_lock',
+          `stale command-runner configuration lock requires manual removal: ${lockPath}`,
+        );
+      }
+    } catch (statError) {
+      if (statError instanceof InterfaceError) throw statError;
+      if (statError?.code === 'ENOENT') {
+        throw new InterfaceError('configuration_busy', 'command-runner configuration changed concurrently; retry the exact operation');
+      }
+      throw statError;
+    }
+    throw new InterfaceError('configuration_busy', 'another command-runner management operation is in progress');
+  }
+  try {
+    await handle.writeFile(`${process.pid} ${Date.now()}\n`, 'utf8');
+    await handle.sync();
+    return await callback();
+  } finally {
+    await handle.close();
+    await rm(lockPath, { force: true });
+  }
+}
+
+async function describeConfiguredCommand(id) {
+  const snapshot = await readStableConfiguration();
+  const command = snapshot.workspace.commands?.[id];
+  if (!command) {
+    throw new InterfaceError(
+      'command_not_registered',
+      `command is not registered for workspace ${snapshot.workspaceId}: ${id}`,
+    );
+  }
+  return {
+    workspaceId: snapshot.workspaceId,
+    command: publicConfiguredCommand(id, command),
+    definitionHash: definitionHash(command),
+  };
+}
+
+async function registerConfiguredCommand(id, definitionSource) {
+  return withConfigurationLock(async () => {
+    const snapshot = await readStableConfiguration();
+    if (snapshot.workspace.commands?.[id]) {
+      throw new InterfaceError(
+        'command_already_registered',
+        `command is already registered for workspace ${snapshot.workspaceId}: ${id}`,
+      );
+    }
+    const definition = parseStrictJson(
+      definitionSource,
+      'invalid_definition',
+      `command definition ${id}`,
+    );
+    if (definition === null || typeof definition !== 'object' || Array.isArray(definition)) {
+      throw new InterfaceError('invalid_definition', 'command definition must be a JSON object');
+    }
+    const candidate = JSON.parse(JSON.stringify(snapshot.raw));
+    const workspace = candidate.workspaces.find((entry) => entry.id === snapshot.workspaceId);
+    workspace.commands[id] = definition;
+    await validateCandidateConfiguration(candidate, snapshot.workspaceId);
+    await writeConfigurationAtomically(snapshot.source, candidate);
+    return {
+      status: 'completed',
+      workspaceId: snapshot.workspaceId,
+      commandId: id,
+      definitionHash: definitionHash(definition),
+    };
+  });
+}
+
+async function unregisterConfiguredCommand(id, expectedHash) {
+  if (!DEFINITION_HASH_RE.test(expectedHash)) {
+    throw new InterfaceError('invalid_argument', 'expected must be a sha256 definition hash returned by describe');
+  }
+  return withConfigurationLock(async () => {
+    const snapshot = await readStableConfiguration();
+    const command = snapshot.workspace.commands?.[id];
+    if (!command) {
+      throw new InterfaceError(
+        'command_not_registered',
+        `command is not registered for workspace ${snapshot.workspaceId}: ${id}`,
+      );
+    }
+    const currentHash = definitionHash(command);
+    if (currentHash !== expectedHash) {
+      throw new InterfaceError('stale_definition', 'registered command changed after it was described');
+    }
+    if (Object.keys(snapshot.workspace.commands).length <= 1) {
+      throw new InterfaceError('last_command', 'cannot remove the last command from a registered workspace');
+    }
+    const candidate = JSON.parse(JSON.stringify(snapshot.raw));
+    const workspace = candidate.workspaces.find((entry) => entry.id === snapshot.workspaceId);
+    delete workspace.commands[id];
+    await validateCandidateConfiguration(candidate, snapshot.workspaceId);
+    await writeConfigurationAtomically(snapshot.source, candidate);
+    return {
+      status: 'completed',
+      workspaceId: snapshot.workspaceId,
+      commandId: id,
+      removedDefinitionHash: currentHash,
+    };
   });
 }
 
@@ -396,10 +738,10 @@ async function readOutput(workspace, id, provided) {
 
 async function main() {
   const [operation, subject, ...rest] = process.argv.slice(2);
-  if (!['list', 'describe', 'run', 'output'].includes(operation)) {
+  if (!['list', 'describe', 'register', 'unregister', 'run', 'output'].includes(operation)) {
     throw new InterfaceError(
       'usage',
-      'usage: command-runner-interface.mjs list [query=<value>] [offset=<n>] | describe <id> | run <id> [name=encoded-value ...] | output <execution-id> stream=stdout|stderr [offset=<n>]',
+      'usage: command-runner-interface.mjs list [query=<value>] [offset=<n>] | describe <id> | register <id> definition=<encoded-json> | unregister <id> expected=<definition-hash> | run <id> [name=encoded-value ...] | output <execution-id> stream=stdout|stderr [offset=<n>]',
     );
   }
 
@@ -435,12 +777,31 @@ async function main() {
     if (!COMMAND_ID_RE.test(subject ?? '') || rest.length) {
       throw new InterfaceError('usage', 'describe accepts exactly one safe command ID');
     }
-    const result = await runCore(['describe', subject]);
-    const response = { workspaceId: result.workspaceId, command: result.command };
+    const response = await describeConfiguredCommand(subject);
     if (Buffer.byteLength(serialize(response)) > LIMITS.describeBytes) {
       throw new InterfaceError('definition_too_large', 'command definition is too large to return safely');
     }
     emit(response);
+    return 0;
+  }
+
+  if (operation === 'register') {
+    if (!COMMAND_ID_RE.test(subject ?? '')) {
+      throw new InterfaceError('usage', 'register requires a safe command ID');
+    }
+    const provided = parseArguments(rest, LIMITS.managementDefinitionBytes);
+    allowOnly(provided, new Set(['definition']));
+    emit(await registerConfiguredCommand(subject, one(provided, 'definition', true)));
+    return 0;
+  }
+
+  if (operation === 'unregister') {
+    if (!COMMAND_ID_RE.test(subject ?? '')) {
+      throw new InterfaceError('usage', 'unregister requires a safe command ID');
+    }
+    const provided = parseArguments(rest);
+    allowOnly(provided, new Set(['expected']));
+    emit(await unregisterConfiguredCommand(subject, one(provided, 'expected', true)));
     return 0;
   }
 
