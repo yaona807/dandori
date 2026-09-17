@@ -92,6 +92,7 @@ REQUIRED_TEST_METHODS = {
         "test_validate_workflow_rejects_global_run_defaults",
         "test_validation_workflow_rejects_additional_job",
         "test_validation_workflow_rejects_path_filters",
+        "test_validation_workflow_rejects_unapproved_trigger",
         "test_validation_workflow_requires_master_push_trigger",
         "test_validation_workflow_requires_mutation_test_command",
         "test_validation_workflow_requires_pull_request_trigger",
