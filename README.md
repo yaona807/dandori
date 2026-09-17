@@ -240,7 +240,7 @@ DANDORI limits repeated work by requiring each invocation to produce a concrete 
 
 If authorization or cumulative loop-control state cannot be reconstructed exactly, DANDORI stops with `state_unrecoverable`. Re-observable evidence may be reacquired inside the approved observation boundary, but lost permission state, cap usage, attempt counts, or pending-revision bindings are never guessed or reset.
 
-Journal-backed resume is an optional runtime integration contract, not a persistence feature built into the current DANDORI distribution. Cross-session resume is available only when a runtime supplies a trusted complete journal bound to the same flow and execution/workspace scope; otherwise DANDORI fails closed with `state_unrecoverable`. Interrupted work that may have produced persistent effects is reconciled by observing its exact postcondition before any retry. DANDORI does not add snapshots, a state database, or a persistence-specific Worker.
+Journal-backed resume is an optional runtime integration contract, not a persistence feature built into the current DANDORI distribution. Cross-session resume is available only when a runtime supplies a trusted complete journal bound to the same flow and execution/workspace scope; otherwise DANDORI fails closed with `state_unrecoverable`. Interrupted work that may have produced persistent effects is reconciled by observing its exact postcondition before any retry. DANDORI does not add snapshots, a state database, or a persistence-specific Worker. A compatible runtime must durably acknowledge all state required by a delegation before that Worker is called and must provide exclusive ownership for the exact flow/scope while it is active.
 
 ## What's included
 
