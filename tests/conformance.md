@@ -225,15 +225,15 @@ Use a workspace whose applicable `AGENTS.md` expresses project guidance in ordin
 **Expected**
 
 - Orchestrator interprets the meaning of `AGENTS.md` without requiring a DANDORI-specific syntax, heading, table, or link format.
-- Normative sources such as project instructions and specifications are classified independently of Worker identity and use `original_required` whenever downstream work depends on them.
-- Existing implementations, tests, and examples are classified as `behavioral_reference`; when a downstream decision materially relies on one, the exact already-authorized original is marked `original_required`.
-- Background research and explanatory material are classified as `informational` and may use `summary_allowed` when provenance remains traceable and no contract requirement demands the original.
-- Source-fidelity metadata is non-authorizing: every requirement references an existing Observe operation, and it never creates a new source, path, permission, or boundary.
+- Normative sources such as project instructions and specifications are classified independently of Worker identity and require the original whenever downstream work depends on them.
+- Existing implementations, tests, and examples are `behavioral_reference`; when a downstream decision materially relies on one, the exact already-authorized original must be read.
+- Background research and explanatory material are `informational` and may be summarized when provenance remains traceable and no contract requirement demands the original.
+- Source classification is non-authorizing: it only changes whether an already-authorized Observe source must be read directly or may be summarized; it never creates a source, path, permission, or boundary.
 - Before approval, the TFR exposes applicable referenced instruction/specification resources as explicit read-only Observe operations. Unrelated resources are not added merely because they exist.
 - An exact source reference remains exact. A directory or collection reference is bounded to only the authorized subtree and is resolved with a narrow observation Task Card before dependent production.
-- Source discovery requests exact original paths when the downstream requirement is `original_required`; Orchestrator does not substitute summaries, excerpts, extracted rules, or implementation advice for those originals.
-- A later production Task Card carries each already-authorized required source as an explicit Observe operation plus source requirement and requires the selected Worker to read the original before dependent implementation work.
-- A Worker result that omits a reported read for an `original_required` source is incomplete even if the Worker says the implementation is complete.
+- Source discovery requests exact original paths when downstream work will require the original; Orchestrator does not substitute summaries, excerpts, extracted rules, or implementation advice for those originals.
+- A later production Task Card carries each already-authorized required source unchanged as an explicit Observe operation and requires the selected Worker to read the original before dependent implementation work.
+- A Worker result that omits a reported read for a required original source is incomplete even if the Worker says the implementation is complete.
 - Summaries remain allowed for informational sources and for audit/final synthesis after required originals have been read; DANDORI does not impose a global no-summary rule.
 - Source paths returned by a Worker do not authorize themselves. A needed source outside active permission requires TFC or a stop instead of implicit widening.
 - Replacing the discovery or production Worker with another semantically suitable Worker does not change source classification, fidelity, Task Card authorization, or completion semantics and does not require DANDORI-specific policy in that Worker definition.
