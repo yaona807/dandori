@@ -247,7 +247,7 @@ test('list exposes commands only for the current workspace', async () => {
     assert.equal(alphaOutput.workspaceId, 'alpha');
     assert.deepEqual(
       alphaOutput.commands.map(({ id }) => id),
-      ['sample', 'create', 'timeout'],
+      ['sample', 'create', 'timeout', 'tree-timeout'],
     );
     assert.equal('run' in alphaOutput.commands[0], false);
 
