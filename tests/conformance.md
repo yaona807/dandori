@@ -132,15 +132,18 @@ Provide a task compatible with one Worker, then a task for which the preferred W
 - No compatible Worker produces `no_suitable_worker` without widening the contract.
 - Worker incompatibility never changes the approved operation boundary.
 
-### CONF-008 — Enforce audit and loop-control limits
+### CONF-008 — Enforce audit, criterion evidence, and loop-control limits
 
 **Input**
 
-Return a Worker result with missing audit-critical information, then repeat equivalent execution attempts for the same criterion ID and source permission ID while changing Worker, Task Card ID, order, or grouping.
+Return a Worker result with missing audit-critical information, then provide traceable production evidence for two active criteria while required verification is absent for one of them. Repeat equivalent execution attempts for the same criterion ID and source permission ID while changing Worker, Task Card ID, order, or grouping.
 
 **Expected**
 
 - Missing audit-critical information is requested at most once.
+- Material evidence is recorded against the specific active criterion with compact provenance to Task Card/revision, operation/source permission, and result or observable postcondition.
+- A criterion with sufficient production evidence but missing required verification is `completed_unverified`, never `completed_verified`.
+- Final synthesis derives `completed+verified|completed+unverified|partial|blocked` per criterion from recorded evidence rather than Worker outcome wording.
 - Equivalent execution attempts stop after two for the same `<criterion_id>|<source_permission_id>` pair.
 - Changing Worker, Task Card ID, order, or grouping does not reset the counter.
 - A genuinely different source permission ID uses a separate counter.
@@ -174,7 +177,8 @@ Authorize a persistent local change and require verification with a test, lint, 
 - The command runs only in a no-write, no-update, and no-fix mode.
 - Persistent outputs are disabled or the command is not run.
 - The verification invocation does not perform corrections or any `change_local`, `affect_external`, or `destructive` operation.
-- If no non-mutating verification path exists, the result is reported as `unverified`.
+- Verification evidence is bound back to the criterion and its active contract revision rather than treated as free-form flow evidence.
+- If no non-mutating verification path exists, the criterion is reported as completed but unverified when production evidence is otherwise sufficient.
 
 
 ### CONF-011 — Resolve conflicting claims with narrow verification
@@ -186,10 +190,11 @@ Return two material Worker claims about the same active criterion that conflict 
 **Expected**
 
 - Both claims are marked `conflicted` and excluded from authorization and completion.
+- Conflicted or rejected evidence cannot contribute to that criterion's completion status, even if one Worker reports `completed`.
 - Orchestrator issues one narrow verification Task Card for the exact contradiction.
 - The card may observe and may run only the explicitly authorized non-mutating test under the normal verification policy.
 - The verification invocation does not perform corrections or any `change_local`, `affect_external`, or `destructive` operation.
-- The objectively observed result resolves the conflict; if objective resolution is unavailable, the flow stops unresolved.
+- The objectively observed result resolves the conflict and becomes criterion-bound verification evidence; if objective resolution is unavailable, the flow stops unresolved.
 
 ### CONF-012 — Require criterion accounting for every execute operation
 
