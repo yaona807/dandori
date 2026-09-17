@@ -11,6 +11,7 @@ const ID_RE = /^[a-z][a-z0-9_-]{0,63}$/;
 const NAME_RE = /^[a-z][a-zA-Z0-9_-]{0,63}$/;
 const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
 const DEFAULTS = { timeoutMs: 300_000, maxOutputBytes: 1_048_576 };
+const TERMINATION_GRACE_MS = 1_000;
 const LIMITS = { parameters: 50, valueLength: 8192, totalLength: 65_536 };
 const INLINE_CODE = new Set([
   'sh\0-c', 'bash\0-c', 'zsh\0-c', 'cmd\0/c', 'cmd.exe\0/c',
@@ -781,6 +782,7 @@ async function execute(workspace, id, command, provided) {
       cwd,
       shell: false,
       windowsHide: true,
+      detached: process.platform !== 'win32',
       stdio: ['ignore', 'pipe', 'pipe'],
     });
 
@@ -789,13 +791,38 @@ async function execute(workspace, id, command, provided) {
     let outputTruncated = false;
     let timedOut = false;
     let settled = false;
+    let terminating = false;
+    let terminationTimer;
+
+    const signalCommand = (signal) => {
+      if (!child.pid) return;
+      if (process.platform === 'win32') {
+        child.kill(signal);
+        return;
+      }
+      try {
+        process.kill(-child.pid, signal);
+      } catch (error) {
+        if (error?.code !== 'ESRCH') child.kill(signal);
+      }
+    };
+
+    const terminateCommand = () => {
+      if (terminating) return;
+      terminating = true;
+      signalCommand('SIGTERM');
+      terminationTimer = setTimeout(
+        () => signalCommand('SIGKILL'),
+        TERMINATION_GRACE_MS,
+      );
+    };
 
     const collect = (current, chunk) => {
       if (outputTruncated) return current;
       const remaining = command.maxOutputBytes - current.length;
       if (chunk.length > remaining) {
         outputTruncated = true;
-        child.kill();
+        terminateCommand();
         return Buffer.concat([current, chunk.subarray(0, Math.max(0, remaining))]);
       }
       return Buffer.concat([current, chunk]);
@@ -810,13 +837,14 @@ async function execute(workspace, id, command, provided) {
 
     const timer = setTimeout(() => {
       timedOut = true;
-      child.kill();
+      terminateCommand();
     }, command.timeoutMs);
 
     const finish = (callback) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      clearTimeout(terminationTimer);
       callback();
     };
 
@@ -824,6 +852,7 @@ async function execute(workspace, id, command, provided) {
       finish(() => reject(error));
     });
     child.once('close', (code, signal) => {
+      if (terminating) signalCommand('SIGKILL');
       finish(() => resolve({
         status: code === 0 && !signal && !timedOut && !outputTruncated
           ? 'completed'
