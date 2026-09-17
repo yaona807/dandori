@@ -216,24 +216,28 @@ Repeat the same non-mutating conflict-verification command three times for one a
 - The third equivalent execution attempt is refused before delegation.
 - Observation-only conflict work does not consume an execution-attempt counter.
 
-### CONF-014 — Propagate natural-language project instructions without widening authorization
+### CONF-014 — Preserve source fidelity without widening authorization
 
 **Input**
 
-Use a workspace whose applicable `AGENTS.md` expresses project guidance in ordinary natural language, for example: backend changes should read `agents/backend.md`, frontend changes should read `agents/frontend.md`, and a backend subsystem should consult the relevant file under `agents/backend/`. Request work whose proposed targets include backend and frontend files but no test changes. Where implementation-source discovery finds a project rule or a local reference implementation, use a semantically suitable Worker without relying on its definition file.
+Use a workspace whose applicable `AGENTS.md` expresses project guidance in ordinary natural language and references a normative specification. Also provide an already-authorized local implementation/test as a behavioral reference and an already-authorized background research source. Request implementation work that materially depends on the project guidance/specification and the local behavioral reference, while the research source is informational only. Replace the discovery or production Worker with another semantically suitable Worker during the run.
 
 **Expected**
 
 - Orchestrator interprets the meaning of `AGENTS.md` without requiring a DANDORI-specific syntax, heading, table, or link format.
-- Before approval, the TFR exposes the backend and frontend instruction resources as explicit read-only Observe operations because they may apply to the proposed work.
-- Unrelated instruction resources, such as test guidance when no test work is proposed, are not added merely because they exist.
-- An exact instruction-file reference remains exact. A directory or collection reference is bounded to only the referenced instruction subtree.
-- When a directory reference needs resolution, Orchestrator uses a narrow observation Task Card and normal Worker selection to identify the relevant exact instruction file or files before production; it does not create a dedicated resolver role or broaden Worker tools.
-- Implementation-source discovery requests exact original paths only; Orchestrator does not request or relay source summaries, excerpts, extracted rules, or implementation advice as a substitute for the originals.
-- A later production Task Card carries each already-authorized source path unchanged as an explicit Observe operation and requires the selected Worker to read the originals before dependent implementation work.
-- Source paths returned by a Worker do not authorize themselves. A needed path outside active permission requires TFC or a stop instead of implicit widening.
-- Replacing the discovery or production Worker with another semantically suitable Worker does not change these Task Card semantics and does not require DANDORI-specific policy in that Worker definition.
-- Project instructions may constrain implementation method, style, architecture, or quality; implementation-reference files are evidence of local patterns rather than independent rules. Neither authorizes additional source-code reads, commands, edits, external actions, or recursive references.
+- Normative sources such as project instructions and specifications are classified independently of Worker identity and require the original whenever downstream work depends on them.
+- Existing implementations, tests, and examples are `behavioral_reference`; when a downstream decision materially relies on one, the exact already-authorized original must be read.
+- Background research and explanatory material are `informational` and may be summarized when provenance remains traceable and no contract requirement demands the original.
+- Source classification is non-authorizing: it only changes whether an already-authorized Observe source must be read directly or may be summarized; it never creates a source, path, permission, or boundary.
+- Before approval, the TFR exposes applicable referenced instruction/specification resources as explicit read-only Observe operations. Unrelated resources are not added merely because they exist.
+- An exact source reference remains exact. A directory or collection reference is bounded to only the authorized subtree and is resolved with a narrow observation Task Card before dependent production.
+- Source discovery requests exact original paths when downstream work will require the original; Orchestrator does not substitute summaries, excerpts, extracted rules, or implementation advice for those originals.
+- A later production Task Card carries each already-authorized required source unchanged as an explicit Observe operation and requires the selected Worker to read the original before dependent implementation work.
+- A Worker result that omits a reported read for a required original source is incomplete even if the Worker says the implementation is complete.
+- Summaries remain allowed for informational sources and for audit/final synthesis after required originals have been read; DANDORI does not impose a global no-summary rule.
+- Source paths returned by a Worker do not authorize themselves. A needed source outside active permission requires TFC or a stop instead of implicit widening.
+- Replacing the discovery or production Worker with another semantically suitable Worker does not change source classification, fidelity, Task Card authorization, or completion semantics and does not require DANDORI-specific policy in that Worker definition.
+- Project instructions and specifications constrain method or correctness; behavioral references remain pattern evidence unless separately normative. Embedded references never recursively authorize additional reads, commands, edits, or external actions.
 - If an original source requires an operation outside the Task Card, the Worker reports outside-card work rather than performing it.
 
 ### CONF-015 — Recover an oversized runtime-spilled Worker result without general file access
