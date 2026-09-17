@@ -243,7 +243,7 @@ DANDORI は、次の累積効果タグを使用します。
 
 認可状態または累積ループ制御状態を正確に復元できない場合は、`state_unrecoverable` で停止します。承認済み調査境界内で再取得できる根拠は再観測できますが、失われた権限状態、cap使用数、試行回数、pending resultとRevisionの対応を推測またはリセットしません。
 
-Journal-backed resume は任意のruntime統合契約であり、現在のDANDORI配布物そのものに永続化backendは含みません。セッションを跨ぐresumeは、runtimeが同一Flow・同一実行/workspace scopeへ束縛された完全で信頼できるJournalを提供できる場合だけ使用し、それ以外は `state_unrecoverable` でfail-closedします。中断時に永続的な副作用が発生した可能性がある処理は、再試行前に正確なpostconditionを再観測して照合します。snapshot、state database、永続化専用Workerは追加しません。
+Journal-backed resume は任意のruntime統合契約であり、現在のDANDORI配布物そのものに永続化backendは含みません。セッションを跨ぐresumeは、runtimeが同一Flow・同一実行/workspace scopeへ束縛された完全で信頼できるJournalを提供できる場合だけ使用し、それ以外は `state_unrecoverable` でfail-closedします。中断時に永続的な副作用が発生した可能性がある処理は、再試行前に正確なpostconditionを再観測して照合します。snapshot、state database、永続化専用Workerは追加しません。 互換runtimeは、Worker呼び出し前にその委譲が依存する状態をdurableに記録・acknowledgeし、Flow稼働中は同一Flow/scopeの排他的ownershipを保証する必要があります。
 
 ## 含まれるもの
 

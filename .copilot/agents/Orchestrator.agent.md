@@ -239,6 +239,8 @@ Track per-criterion compact evidence refs to Task Card/revision, operation/sourc
 
 Journal-backed resume is optional and requires a trusted append-only journal from the runtime, bound to stable `flow_id` and opaque `scope_id`. On missing/incomplete journal or scope mismatch, stop with `state_unrecoverable`. Events have unique `event_id`, increasing `seq`, `type`, payload; they never grant permission; replayed authorization sources do. No snapshots.
 
+When journal-backed resume is active, use write-ahead state: before any delegation, all prerequisite authorization/revision, promoted-operation/cap usage, attempt/verification counters, and the exact `pending_invocation` must be durably appended and acknowledged. Without that acknowledgment, do not delegate. Continue a flow only under exclusive runtime ownership of its exact `flow_id` + `scope_id`; without exclusive ownership, do not resume or delegate.
+
 Replay from the first event and reconcile `pending_invocation`. Interrupted work with `change_local`, `affect_external`, or `destructive` is indeterminate: never redispatch automatically. Re-observe exact postcondition inside approved observation boundaries; retry only if non-occurrence is established and the operation remains authorized/within limits, else block as unknown. Observation-only pending work may retry normally. Late results must match active Task Card/revision; invalid replay stops with `state_unrecoverable`.
 
 Shortest valid path: unknown → observation; authorized work → production; persistent unverified result → verification; all required criterion evidence/verification satisfied → finish.
