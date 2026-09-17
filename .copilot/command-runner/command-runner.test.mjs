@@ -59,6 +59,26 @@ async function makeFixture(configure = (configuration) => configuration) {
     'setTimeout(() => process.stdout.write("done"), 500);\n',
   );
   await writeFile(
+    path.join(alpha, 'stubborn-parent.mjs'),
+    [
+      "import { spawn } from 'node:child_process';",
+      "spawn(process.execPath, ['stubborn-descendant.mjs'], { stdio: 'ignore' });",
+      "process.on('SIGTERM', () => {});",
+      "setInterval(() => {}, 1000);",
+      '',
+    ].join('\n'),
+  );
+  await writeFile(
+    path.join(alpha, 'stubborn-descendant.mjs'),
+    [
+      "import { writeFileSync } from 'node:fs';",
+      "process.on('SIGTERM', () => {});",
+      "setTimeout(() => writeFileSync('stubborn-survived.txt', 'survived'), 1500);",
+      "setInterval(() => {}, 1000);",
+      '',
+    ].join('\n'),
+  );
+  await writeFile(
     path.join(alpha, 'tests', 'sample.test.js'),
     'export {};\n',
   );
@@ -122,6 +142,13 @@ async function makeFixture(configure = (configuration) => configuration) {
             run: [process.execPath, 'sleep.mjs'],
             cwd: '.',
             timeoutMs: 25,
+            arguments: {},
+          },
+          'tree-timeout': {
+            description: 'Exercise process-group timeout termination.',
+            run: [process.execPath, 'stubborn-parent.mjs'],
+            cwd: '.',
+            timeoutMs: 100,
             arguments: {},
           },
         },
@@ -220,7 +247,7 @@ test('list exposes commands only for the current workspace', async () => {
     assert.equal(alphaOutput.workspaceId, 'alpha');
     assert.deepEqual(
       alphaOutput.commands.map(({ id }) => id),
-      ['sample', 'create', 'timeout'],
+      ['sample', 'create', 'timeout', 'tree-timeout'],
     );
     assert.equal('run' in alphaOutput.commands[0], false);
 
@@ -468,6 +495,23 @@ test('timeout is reported separately from exit and signal state', async () => {
     assert.equal(output.timedOut, true);
     assert.equal(output.outputTruncated, false);
     assert.notEqual(output.signal, null);
+  });
+});
+
+test('timeout terminates stubborn descendants in the command process group', async () => {
+  await withFixture(async (fixture) => {
+    const result = runRunner(fixture, fixture.alpha, ['run', 'tree-timeout']);
+    assert.equal(result.status, 0, result.stderr);
+    const output = JSON.parse(result.stdout);
+    assert.equal(output.status, 'failed');
+    assert.equal(output.timedOut, true);
+    assert.notEqual(output.signal, null);
+
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    await assert.rejects(
+      readFile(path.join(fixture.alpha, 'stubborn-survived.txt')),
+      { code: 'ENOENT' },
+    );
   });
 });
 

@@ -146,6 +146,7 @@ The cache is temporary observation data, not an audit log. Before a new run, the
 - Management candidates are validated as complete runner configurations before an atomic update.
 - Terminal working-directory, environment, shell, profile, and background overrides are denied by the hook.
 - Commands are started with `spawn(..., shell: false)`.
+- On timeout or output-limit termination, the runner stops the command's POSIX process group, escalating from `SIGTERM` to `SIGKILL` after a fixed grace period so ordinary descendants do not outlive the bounded run. Deliberately detached descendants are outside this guarantee.
 - The agent-scoped hook permits only the fixed runner interface and protects the user-level control files.
 - `output` accepts only a valid execution ID and only resolves output under the current workspace's execution directory; arbitrary paths are not accepted.
 - Execution output is untrusted data and does not grant authority for follow-up commands.
