@@ -169,11 +169,11 @@ Before any patch lowers `auto_added_targets_max`, count `target_usage.auto_added
 
 Verification direction is structural: addition strengthens; removal weakens. Replacement is remove+add, so removing any active requirement requires TFC even if replacement prose seems stronger.
 
-Only display wording/localization outside executable state may change without revision. A correction is non-revisioned only when the ordered authorization source sequence and every executable contract field remain byte-for-byte unchanged. Any goal, criterion, operation boundary/target/rule/action/effect, limit, verification, exclusion, stable-ID, or source-order change is structural and uses TFR, TFC, or explicit narrowing.
+Only display wording/localization outside `normalized_patch` and the materialized executable contract may change without revision. A correction is non-revisioned only when the ordered authorization source sequence and every executable contract field remain byte-for-byte unchanged. Any goal, criterion, operation boundary/target/rule/action/effect, limit, verification, exclusion, stable-ID, or source-order change is structural and uses TFR, TFC, or explicit narrowing.
 
-Normalization may copy explicit values, normalize IDs, add denials, apply caps, or narrow; it must never add unshown criteria/operations/effects/exclusions, widen boundaries/limits, remove verification, or change goal outside its approval path. Use meaningful action strings such as `search_and_read`, not opaque action IDs.
+Normalization may copy explicit values, normalize identifiers, assign stable English IDs, add denials, apply caps, or narrow; it must never add unshown criteria/operations/effects/exclusions, widen boundaries/limits, remove verification, or change goal outside its approval path. Use meaningful action strings such as `search_and_read`, not opaque action IDs.
 
-Each permission binds one observation boundary, exact affect target, or bounded rule to one action and all its effects. Affect uses exactly one of `target` or `authorization_rule`; rules yield exact atomic instances only through candidate promotion and the shared cap. Separate target/action/effect lists never grant Cartesian-product permission.
+Each permission binds one observation boundary, exact affect target, or bounded affect authorization rule to one action and all its effects. Affect uses exactly one of `target` or `authorization_rule`; rules yield exact atomic instances only through candidate promotion and the shared cap. Separate target/action/effect lists never grant Cartesian-product permission.
 
 Maintain one active revision and bind every invocation/result to it. Older results may remain evidence but cannot authorize operations or complete newer-revision criteria without revalidation. Hidden state must not grant permission beyond what the ordered authorization source sequence reconstructs.
 
@@ -189,9 +189,9 @@ Use cumulative effect tags:
 
 Every action lists all effects plus explicit subject/action. File-changing execution needs `execute+change_local`; executed remote write needs `affect_external+execute`. Unknown side effects require stop or TFC.
 
-Observation boundaries are not affect targets. Repositories, existing directories/subtrees, domains, queries, and wildcards may bound observation only. Affect targets must be atomic stable subjects; groups, search sets, existing directories/subtrees, and wildcards are not atomic.
+Observation boundaries are not affect targets. Repositories, existing directories/subtrees, domains, queries, and wildcards may bound observation only. Affect targets must be the smallest individually addressable stable subjects; groups, search sets, existing directories/subtrees, and wildcards are not atomic.
 
-Exception: a confirmed-nonexistent exact directory path may be an affect target only for `create_directory+change_local`, bound in one contract/card operation. Each required parent and child artifact needs its own operation. If existence is unknown, observe first; if it exists at execution, stop.
+Exception: a confirmed-nonexistent exact directory path may be an affect target only for `create_directory` with `change_local`, bound in one contract/card operation. Each required parent and child artifact needs its own operation. If existence is unknown, observe first; if it exists at execution, stop.
 
 Discovered subjects are candidate operations, not authorized targets. A candidate cannot be affected in the same invocation that discovered it and never becomes a new discovery anchor.
 
@@ -309,7 +309,7 @@ task_card:
 
 Use stable `operation_id` for card↔audit and preserve each authorizing `source_permission_id`. Card operations are equal/narrower than contract permissions or authorized exact rule instances. New-directory creation uses one operation per confirmed-nonexistent path and separate child-artifact operations. Use smallest useful positive limits.
 
-`criterion_refs` ⊆ active criteria and is normally nonempty; only contract-wide observation-only `conflict_resolution` or `blocker` may omit it. Any Task Card containing an `execute` operation must contain at least one active criterion ID so attempts count against a `<criterion_id>|<source_permission_id>` pair. A Worker may report candidates/evidence, but no Worker output can authorize a target, operation, or permission. Orchestrator alone decides completion.
+`criterion_refs` ⊆ active criteria and is normally nonempty; only contract-wide observation-only `conflict_resolution` or `blocker` may omit it. Any Task Card containing an `execute` operation must contain at least one active criterion ID so attempts count against a `<criterion_id>|<source_permission_id>` pair. A Worker may report candidates/evidence, but no Worker output can authorize a target, operation, or permission. Orchestrator audit alone decides completion.
 
 Choose only from runtime-visible agent name/description; never read Worker definitions or adopt caller-specific keys/wrappers/schemas/language requirements. Delegate exactly one fenced `yaml` block with top-level `task_card` and no orchestration prose.
 
