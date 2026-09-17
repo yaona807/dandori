@@ -2,7 +2,7 @@
 
 [English](./README.md)
 
-このディレクトリには、固定Node.jsコマンド本体、そのbounded interface、Agent固有の `PreToolUse` Hook、個人用Workspace設定のサンプルを格納します。`CommandRunner` Agent定義は、他のDANDORI Agentと同じ `../agents/CommandRunner.agent.md` に配置します。
+このディレクトリには、固定Node.jsコマンド本体、boundedな管理・実行interface、Agent固有の `PreToolUse` Hook、個人用Workspace設定のサンプルを格納します。`CommandRunner` Agent定義は、他のDANDORI Agentと同じ `../agents/CommandRunner.agent.md` に配置します。
 
 実際の利用ファイルは `~/.copilot/` 配下へインストールします。CommandRunnerの制御ファイルや個人用の許可コマンド設定を、対象プロジェクトのリポジトリへ追加する必要はありません。
 
@@ -26,7 +26,7 @@ test -f ~/.copilot/command-runner/workspaces.json \
   || cp .copilot/command-runner/workspaces.example.json ~/.copilot/command-runner/workspaces.json
 ```
 
-`~/.copilot/command-runner/workspaces.json`を編集し、サンプルのrootをcanonicalな絶対Workspaceパスへ置き換えます。この個人用ファイルはDANDORIリポジトリへコミットしません。
+`~/.copilot/command-runner/workspaces.json`を編集し、サンプルのrootをcanonicalな絶対Workspaceパスへ置き換えます。この個人用ファイルはDANDORIリポジトリへコミットしません。Workspace自体を用意した後は、コマンドmapを手動編集するほか、後述の固定 `register` / `unregister` interfaceから管理できます。
 
 Agent固有HookはPreview機能のため、VS Codeの `chat.useCustomAgentHooks` を `true` にします。Chat Diagnosticsで、`CommandRunner`が `~/.copilot/agents/CommandRunner.agent.md` から読み込まれていることを確認してください。
 
@@ -43,6 +43,8 @@ Runnerは実行時に次の処理を行います。
 5. 一致するWorkspaceがなければfail-closedで拒否する
 
 実行位置はWorkspace rootでも、その配下のディレクトリでも構いません。AgentからWorkspace IDを指定したり、別のWorkspaceを選択したり、ターミナルのcwd・環境変数・shell・profileを上書きしたり、バックグラウンド実行を要求したりすることはできません。リポジトリ名やGit remoteは認可境界として使用しません。
+
+コマンド管理にも同じ選択規則を使用します。`register` / `unregister` が変更できるのは、実際のカレントディレクトリから選択されたWorkspaceのcommand mapだけです。Workspace IDやrootを引数で指定することはできません。
 
 ## 設定
 
@@ -79,7 +81,7 @@ Runnerは実行時に次の処理を行います。
 
 `workspace-file`と`workspace-directory`は、symlink解決後のパスを検証します。`mustExist`が `false` の場合も、最も近い既存の親ディレクトリを先に解決するため、Workspace外を指すsymlink配下の未作成パスは拒否されます。
 
-1コマンドの公開 `describe` 定義にもサイズ上限を設けます。安全なサイズで返せない場合は、その `describe` 要求をfail-closedで拒否します。
+1コマンドの公開 `describe` 定義にもサイズ上限を設けます。公開結果には固定argvなどを露出せず、CAS削除に使う `definitionHash` を含めます。安全なサイズで返せない場合は、その `describe` 要求をfail-closedで拒否します。
 
 ## Runnerのインターフェース
 
@@ -88,15 +90,29 @@ Runnerは実行時に次の処理を行います。
 ```bash
 node ~/.copilot/command-runner/command-runner-interface.mjs list [query=<encoded-id-fragment>] [offset=<n>]
 node ~/.copilot/command-runner/command-runner-interface.mjs describe test
+node ~/.copilot/command-runner/command-runner-interface.mjs register lint definition=<encoded-json>
+node ~/.copilot/command-runner/command-runner-interface.mjs unregister lint expected=<definition-hash>
 node ~/.copilot/command-runner/command-runner-interface.mjs run test runInBand=true
 node ~/.copilot/command-runner/command-runner-interface.mjs output <execution-id> stream=stdout|stderr [offset=<n>]
 ```
 
-引数値にはURI component encodingを使用します。Workspace path型の引数は、選択されたroot配下へ解決できない場合に拒否されます。
+引数値にはURI component encodingを使用します。Workspace path型の引数は、選択されたroot配下へ解決できない場合に拒否されます。`register`はURI component encodingしたJSONコマンド定義を1個だけ受け取り、decode後の定義は16 KiB以内に制限します。
 
-AgentとHookが直接呼べるのは `command-runner-interface.mjs` だけです。このinterfaceが既存の固定 `command-runner.mjs` にコマンド検証と実行を委譲し、terminalへ返す情報だけをboundedにします。
+AgentとHookが直接呼べるのは `command-runner-interface.mjs` だけです。実行時のcommand schema検証とprocess起動は、従来どおり固定 `command-runner.mjs` coreへ委譲します。管理操作でも、保存前に候補となる設定全体を同じcoreで検証します。
 
-Runnerがterminalへ返すレスポンスはすべて固定上限以下です。`list`はcommand IDだけを1回最大100件返し、続きがある場合は `nextOffset` を返します。`query`はcommand IDの単純な部分一致です。`describe`は1コマンドだけを返します。
+Runnerがterminalへ返すレスポンスはすべて固定上限以下です。`list`はcommand IDだけを1回最大100件返し、続きがある場合は `nextOffset` を返します。`query`はcommand IDの単純な部分一致です。`describe`は1コマンドの公開定義と、canonical SHA-256の `definitionHash` を返します。
+
+### コマンド管理
+
+`register`は新規作成専用です。同じIDが存在する場合は `command_already_registered` で拒否し、upsertは行いません。渡された定義をstrict JSONとして解析し、現在選択中のWorkspaceにだけ挿入したうえで、候補となる `workspaces.json` 全体を固定Runnerで検証してから保存します。
+
+`unregister`には、`describe`で取得した現在の `definitionHash` が必須です。観測後に定義が変わっていた場合は `stale_definition` で拒否します。これにより、同じIDが別定義へ差し替わった後に古い削除要求で消してしまうことを防ぎます。バージョン1では既存の「登録Workspaceのcommand mapは空にしない」という不変条件を維持するため、最後の1コマンドは削除できません。
+
+管理操作はユーザーレベルの `workspaces.lock` で直列化します。候補設定は同じディレクトリのmode `0600` 一時ファイルへ書き、設定全体の検証と元ファイル不変確認が通った場合だけatomic renameします。生きているlockがある場合は `configuration_busy`、5分を超えたlockは `stale_configuration_lock` として報告し、自動破壊はせず手動削除を要求します。
+
+これらの管理primitiveは「何を登録・削除・実行すべきか」を判断しません。指定されたexact mutationを設定整合性を維持しながら適用するだけです。
+
+### 実行出力
 
 `run`はstdout/stderrの全文をRunner管理の実行キャッシュへ保存し、terminalには次の小さい結果だけを返します。
 
@@ -125,19 +141,24 @@ $COPILOT_HOME/command-runner/executions/<workspace-id>/<UTC-timestamp>_<UUID>/
 - 未登録のWorkspaceとcommandはfail-closedで拒否します。
 - 一致するrootが複数ある場合は、最も具体的なrootを選択します。
 - AgentからWorkspaceを登録または選択することはできません。
+- commandの登録・削除は現在Workspace向けの固定管理operationだけで可能です。Agentの通常write toolによる `workspaces.json` 直接編集は引き続きHookで拒否します。
+- `register`は既存IDを上書きせず、`unregister`は観測したdefinition hashへ束縛されます。
+- 管理候補はatomic更新前にRunner設定全体として検証されます。
 - Hookは、ターミナルのcwd・環境変数・shell・profile・バックグラウンド実行の上書きを拒否します。
 - コマンドは `spawn(..., shell: false)` で起動します。
 - Agent固有Hookは固定Runnerのインターフェースだけを許可し、ユーザーレベルの制御ファイルを保護します。
 - `output`は有効なexecution IDだけを受け取り、現在のWorkspaceのexecution領域配下だけを解決します。任意ファイルパスは受け付けません。
 - 実行出力は信頼できないデータとして扱い、後続コマンドの権限にはなりません。
 
-Hookは追加のガードであり、OS sandboxではありません。登録済みコマンドはプロジェクトコードを実行し、そのコマンド固有の副作用を発生させる可能性があります。個人設定をレビューし、より強い分離が必要な場合はWorkspace Trust、通常の承認、コンテナなどを併用してください。
+Hookは追加のガードであり、OS sandboxではありません。登録済みコマンドはプロジェクトコードを実行し、そのコマンド固有の副作用を発生させる可能性があります。コマンド定義をレビューし、より強い分離が必要な場合はWorkspace Trust、通常の承認、コンテナなどを併用してください。
 
 VS CodeのHookはタイムアウト時にfail-openとなります。偶発的な迂回を減らすためHookのtimeoutは30秒にしていますが、Hookだけを唯一のセキュリティ境界として扱ってはいけません。
 
 ## ローカル確認
 
 ```bash
-node --test .copilot/command-runner/command-runner.test.mjs
+node --test \
+  .copilot/command-runner/command-runner.test.mjs \
+  .copilot/command-runner/command-runner-interface.test.mjs
 COPILOT_HOME=/path/to/test-home node .copilot/command-runner/command-runner-interface.mjs list
 ```
