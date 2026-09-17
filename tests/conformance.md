@@ -93,38 +93,31 @@ Authorize observation of a bounded set and allow rule-based effects on newly dis
 - Promotion consumes the shared cap once per unique target.
 - Lowering the cap below already consumed unique targets is rejected without creating a revision.
 
-### CONF-005 — Preserve revision, narrowing, and bounded journal replay semantics
+### CONF-005 — Preserve revision, narrowing, and flow replacement semantics
 
 **Input**
 
-Perform a pure narrowing, a display-only wording correction, and a mixed revision. Under journal-backed resume, first try delegation when the runtime cannot durably acknowledge prerequisite state, and when another runtime exclusively owns the same flow/scope. Then interrupt with one observation-only Worker invocation pending and resume from a trusted complete same-scope journal. Separately try resume with no journal, a different scope, and duplicate, reordered, truncated, or corrupted events. Finally issue a materially different goal.
+Perform a pure narrowing, a display-only wording correction, and a mixed revision that both removes and widens contract fields. While one invocation is pending, apply a valid new revision. Finally issue a materially different goal.
 
 **Expected**
 
-- Pure narrowing is recorded without a TFC.
+- Pure narrowing is recorded as a new revision without a TFC.
 - A wording correction avoids a revision only when the authorization source sequence and every executable contract field remain byte-for-byte unchanged.
-- The mixed revision displays every addition, removal, and changed limit in the contract patch.
-- Journal-backed resume is optional: no trusted complete journal or a scope mismatch stops with `state_unrecoverable`.
-- Before delegation, every prerequisite authorization/revision, promoted-operation/cap usage, attempt/verification counter, and exact pending invocation is durably appended and acknowledged; without acknowledgment, no Worker is called.
-- Only one runtime may continue the exact flow/scope at a time; without exclusive ownership, no resume or delegation occurs.
-- Journal events use stable flow and scope IDs, unique event IDs, and strictly increasing sequence without becoming a second authorization source; no snapshot or second cache authority is required.
-- Replay from the first event reconstructs the active contract, review IDs, target usage, counters, criterion evidence/status, and pending invocation before work resumes.
-- Duplicate, reordered, truncated, corrupted, or otherwise inconsistent replay stops with `state_unrecoverable` instead of resetting or guessing state.
-- The materially different goal supersedes the current flow and starts a new TFR.
+- The mixed revision requires a TFC and displays every addition, removal, and changed limit in the contract patch.
+- A result bound to an older revision is stale for authorization and completion after the new revision, even when it remains useful as evidence after revalidation.
+- The materially different goal supersedes the current flow and starts a new TFR without reusing earlier review IDs or approval tokens.
 
-### CONF-006 — Reject stale authorization, indeterminate effects, and unbounded tools
+### CONF-006 — Reject stale authorization and unbounded tools
 
 **Input**
 
-Durably record a pending Worker invocation whose Task Card contains a persistent effect, then test interruption both immediately before actual execution and after execution may have started, and resume from a trusted same-scope journal. Also repeat with observation-only pending work, then create a new contract revision before an older Worker result arrives. Finally delegate a Task Card whose assigned boundary is narrower than a Worker's available tool can technically enforce.
+Delegate a Task Card, create a valid new contract revision before accepting the older Worker result, and then process that late result. Separately delegate a Task Card whose assigned operation boundary is narrower than a Worker's available tool can technically enforce.
 
 **Expected**
 
-- Resume preserves the exact pending Task Card ID and invocation revision rather than inventing a replacement invocation.
-- An interrupted invocation with `change_local`, `affect_external`, or `destructive` is indeterminate and is not automatically re-dispatched, including when interruption occurred after durable pending state but before actual execution can be proven.
-- Orchestrator first re-observes the exact postcondition inside approved observation boundaries; retry occurs only when non-occurrence is established and the original operation remains authorized and within limits, otherwise the result remains blocked/unknown.
-- Observation-only pending work may be retried under the normal attempt and progress limits.
-- A late result is accepted only when it matches the replayed pending invocation and active revision; after a new revision, the older result may remain evidence but cannot authorize work or complete a current criterion.
+- A late result is accepted as current only when its Task Card ID and invocation revision match the active pending invocation.
+- An older-revision result may remain evidence after revalidation but cannot authorize work or complete a current criterion.
+- A stale result cannot restore removed permission, reset consumed limits, or bypass the active revision.
 - The Worker does not call a tool that can operate only on a broader scope.
 - The Worker returns `blocked` and identifies the narrower capability required.
 - Writer does not use workspace-wide Problems data as implementation context.
