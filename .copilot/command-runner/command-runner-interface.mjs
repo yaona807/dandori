@@ -475,6 +475,18 @@ async function describeConfiguredCommand(id) {
   };
 }
 
+function parseCommandDefinition(id, definitionSource) {
+  const definition = parseStrictJson(
+    definitionSource,
+    'invalid_definition',
+    `command definition ${id}`,
+  );
+  if (definition === null || typeof definition !== 'object' || Array.isArray(definition)) {
+    throw new InterfaceError('invalid_definition', 'command definition must be a JSON object');
+  }
+  return definition;
+}
+
 async function registerConfiguredCommand(id, definitionSource) {
   return withConfigurationLock(async () => {
     const snapshot = await readStableConfiguration();
@@ -484,14 +496,7 @@ async function registerConfiguredCommand(id, definitionSource) {
         `command is already registered for workspace ${snapshot.workspaceId}: ${id}`,
       );
     }
-    const definition = parseStrictJson(
-      definitionSource,
-      'invalid_definition',
-      `command definition ${id}`,
-    );
-    if (definition === null || typeof definition !== 'object' || Array.isArray(definition)) {
-      throw new InterfaceError('invalid_definition', 'command definition must be a JSON object');
-    }
+    const definition = parseCommandDefinition(id, definitionSource);
     const candidate = JSON.parse(JSON.stringify(snapshot.raw));
     const workspace = candidate.workspaces.find((entry) => entry.id === snapshot.workspaceId);
     workspace.commands[id] = definition;
@@ -501,6 +506,39 @@ async function registerConfiguredCommand(id, definitionSource) {
       status: 'completed',
       workspaceId: snapshot.workspaceId,
       commandId: id,
+      definitionHash: definitionHash(definition),
+    };
+  });
+}
+
+async function updateConfiguredCommand(id, expectedHash, definitionSource) {
+  if (!DEFINITION_HASH_RE.test(expectedHash)) {
+    throw new InterfaceError('invalid_argument', 'expected must be a sha256 definition hash returned by describe');
+  }
+  return withConfigurationLock(async () => {
+    const snapshot = await readStableConfiguration();
+    const current = snapshot.workspace.commands?.[id];
+    if (!current) {
+      throw new InterfaceError(
+        'command_not_registered',
+        `command is not registered for workspace ${snapshot.workspaceId}: ${id}`,
+      );
+    }
+    const currentHash = definitionHash(current);
+    if (currentHash !== expectedHash) {
+      throw new InterfaceError('stale_definition', 'registered command changed after it was described');
+    }
+    const definition = parseCommandDefinition(id, definitionSource);
+    const candidate = JSON.parse(JSON.stringify(snapshot.raw));
+    const workspace = candidate.workspaces.find((entry) => entry.id === snapshot.workspaceId);
+    workspace.commands[id] = definition;
+    await validateCandidateConfiguration(candidate, snapshot.workspaceId);
+    await writeConfigurationAtomically(snapshot.source, candidate);
+    return {
+      status: 'completed',
+      workspaceId: snapshot.workspaceId,
+      commandId: id,
+      previousDefinitionHash: currentHash,
       definitionHash: definitionHash(definition),
     };
   });
@@ -738,10 +776,10 @@ async function readOutput(workspace, id, provided) {
 
 async function main() {
   const [operation, subject, ...rest] = process.argv.slice(2);
-  if (!['list', 'describe', 'register', 'unregister', 'run', 'output'].includes(operation)) {
+  if (!['list', 'describe', 'register', 'update', 'unregister', 'run', 'output'].includes(operation)) {
     throw new InterfaceError(
       'usage',
-      'usage: command-runner-interface.mjs list [query=<value>] [offset=<n>] | describe <id> | register <id> definition=<encoded-json> | unregister <id> expected=<definition-hash> | run <id> [name=encoded-value ...] | output <execution-id> stream=stdout|stderr [offset=<n>]',
+      'usage: command-runner-interface.mjs list [query=<value>] [offset=<n>] | describe <id> | register <id> definition=<encoded-json> | update <id> expected=<definition-hash> definition=<encoded-json> | unregister <id> expected=<definition-hash> | run <id> [name=encoded-value ...] | output <execution-id> stream=stdout|stderr [offset=<n>]',
     );
   }
 
@@ -792,6 +830,20 @@ async function main() {
     const provided = parseArguments(rest, LIMITS.managementDefinitionBytes);
     allowOnly(provided, new Set(['definition']));
     emit(await registerConfiguredCommand(subject, one(provided, 'definition', true)));
+    return 0;
+  }
+
+  if (operation === 'update') {
+    if (!COMMAND_ID_RE.test(subject ?? '')) {
+      throw new InterfaceError('usage', 'update requires a safe command ID');
+    }
+    const provided = parseArguments(rest, LIMITS.managementDefinitionBytes);
+    allowOnly(provided, new Set(['expected', 'definition']));
+    emit(await updateConfiguredCommand(
+      subject,
+      one(provided, 'expected', true),
+      one(provided, 'definition', true),
+    ));
     return 0;
   }
 

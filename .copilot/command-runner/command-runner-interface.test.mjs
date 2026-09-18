@@ -215,6 +215,7 @@ test('agent lives under agents and exposes only the bounded interface', async ()
   assert.match(source, /^tools:\n  - execute\/runInTerminal$/mu);
   assert.match(source, /command-runner-interface\.mjs list/u);
   assert.match(source, /command-runner-interface\.mjs register/u);
+  assert.match(source, /command-runner-interface\.mjs update/u);
   assert.match(source, /command-runner-interface\.mjs unregister/u);
   assert.match(source, /command-runner-interface\.mjs output/u);
   assert.doesNotMatch(source, /read\/readFile/u);
@@ -248,13 +249,25 @@ test('describe returns one bounded command definition and stable hash', async ()
   });
 });
 
-test('register adds only a new validated command in the current workspace', async () => {
+test('register preserves required and optional argument definitions', async () => {
   await withManagementFixture(async (fixture) => {
     const definition = {
       description: 'Registered command.',
       run: [process.execPath, 'echo-args.mjs', '--registered'],
       cwd: '.',
-      arguments: {},
+      arguments: {
+        target: {
+          kind: 'positional',
+          required: true,
+          value: { type: 'string', maxLength: 80 },
+        },
+        mode: {
+          kind: 'option',
+          token: '--mode',
+          required: false,
+          value: { type: 'choice', values: ['fast', 'safe'] },
+        },
+      },
     };
     const registered = parseSuccess(runInterface(fixture, fixture.alpha, [
       'register',
@@ -268,10 +281,37 @@ test('register adds only a new validated command in the current workspace', asyn
     const described = parseSuccess(runInterface(fixture, fixture.alpha, ['describe', 'added']));
     assert.equal(described.definitionHash, registered.definitionHash);
     assert.equal(described.command.description, 'Registered command.');
+    assert.deepEqual(described.command.arguments, [
+      {
+        name: 'target',
+        kind: 'positional',
+        required: true,
+        repeatable: false,
+        type: 'string',
+        maxLength: 80,
+      },
+      {
+        name: 'mode',
+        kind: 'option',
+        required: false,
+        repeatable: false,
+        type: 'choice',
+        values: ['fast', 'safe'],
+      },
+    ]);
 
-    const run = parseSuccess(runInterface(fixture, fixture.alpha, ['run', 'added']));
+    parseFailure(runInterface(fixture, fixture.alpha, ['run', 'added']), 'invalid_argument');
+    const run = parseSuccess(runInterface(fixture, fixture.alpha, [
+      'run',
+      'added',
+      'target=src',
+      'mode=safe',
+    ]));
     assert.equal(run.commandId, 'added');
     assert.match(run.stdoutPreview, /--registered/u);
+    assert.match(run.stdoutPreview, /src/u);
+    assert.match(run.stdoutPreview, /--mode/u);
+    assert.match(run.stdoutPreview, /safe/u);
 
     const config = JSON.parse(await readFile(path.join(fixture.commandRunner, 'workspaces.json'), 'utf8'));
     assert.deepEqual(config.workspaces[0].commands.added, definition);
@@ -296,6 +336,79 @@ test('register rejects duplicate IDs and invalid definitions without mutating co
       `definition=${encodeURIComponent(JSON.stringify({ description: 'Missing run.', cwd: '.', arguments: {} }))}`,
     ]), 'invalid_config');
     assert.equal(await readFile(configPath, 'utf8'), before);
+  });
+});
+
+test('update replaces exactly one command using definition-hash CAS', async () => {
+  await withManagementFixture(async (fixture) => {
+    const configPath = path.join(fixture.commandRunner, 'workspaces.json');
+    const described = parseSuccess(runInterface(fixture, fixture.alpha, ['describe', 'keep']));
+    const definition = {
+      description: 'Updated keep.',
+      run: [process.execPath, 'echo-args.mjs', '--updated'],
+      cwd: '.',
+      arguments: {
+        target: {
+          kind: 'positional',
+          required: true,
+          value: { type: 'string', maxLength: 80 },
+        },
+        verbose: {
+          kind: 'flag',
+          token: '--verbose',
+          required: false,
+        },
+      },
+    };
+    const encoded = `definition=${encodeURIComponent(JSON.stringify(definition))}`;
+    const before = await readFile(configPath, 'utf8');
+
+    parseFailure(runInterface(fixture, fixture.alpha, [
+      'update',
+      'keep',
+      `expected=sha256-${'0'.repeat(64)}`,
+      encoded,
+    ]), 'stale_definition');
+    assert.equal(await readFile(configPath, 'utf8'), before);
+
+    parseFailure(runInterface(fixture, fixture.alpha, [
+      'update',
+      'keep',
+      `expected=${described.definitionHash}`,
+      `definition=${encodeURIComponent(JSON.stringify({ description: 'Missing run.', arguments: {} }))}`,
+    ]), 'invalid_config');
+    assert.equal(await readFile(configPath, 'utf8'), before);
+
+    const updated = parseSuccess(runInterface(fixture, fixture.alpha, [
+      'update',
+      'keep',
+      `expected=${described.definitionHash}`,
+      encoded,
+    ]));
+    assert.equal(updated.previousDefinitionHash, described.definitionHash);
+    assert.notEqual(updated.definitionHash, described.definitionHash);
+
+    const afterDescribe = parseSuccess(runInterface(fixture, fixture.alpha, ['describe', 'keep']));
+    assert.equal(afterDescribe.definitionHash, updated.definitionHash);
+    assert.equal(afterDescribe.command.description, 'Updated keep.');
+    assert.equal(afterDescribe.command.arguments[0].required, true);
+    assert.equal(afterDescribe.command.arguments[1].required, false);
+
+    parseFailure(runInterface(fixture, fixture.alpha, ['run', 'keep']), 'invalid_argument');
+    const run = parseSuccess(runInterface(fixture, fixture.alpha, [
+      'run',
+      'keep',
+      'target=src',
+      'verbose=true',
+    ]));
+    assert.match(run.stdoutPreview, /--updated/u);
+    assert.match(run.stdoutPreview, /src/u);
+    assert.match(run.stdoutPreview, /--verbose/u);
+
+    const config = JSON.parse(await readFile(configPath, 'utf8'));
+    assert.deepEqual(config.workspaces[0].commands.keep, definition);
+    assert.equal(config.workspaces[0].commands.remove.description, 'Remove.');
+    assert.equal(config.workspaces[1].commands.beta.description, 'Beta.');
   });
 });
 
@@ -429,6 +542,7 @@ test('hook permits only bounded execution and management interface shapes', asyn
       'node ~/.copilot/command-runner/command-runner-interface.mjs list query=test',
       'node ~/.copilot/command-runner/command-runner-interface.mjs describe echo',
       'node ~/.copilot/command-runner/command-runner-interface.mjs register lint definition=%7B%22description%22%3A%22Lint%22%7D',
+      `node ~/.copilot/command-runner/command-runner-interface.mjs update echo expected=sha256-${'0'.repeat(64)} definition=%7B%22description%22%3A%22Echo%22%7D`,
       `node ~/.copilot/command-runner/command-runner-interface.mjs unregister echo expected=sha256-${'0'.repeat(64)}`,
       'node ~/.copilot/command-runner/command-runner-interface.mjs run echo',
       'node ~/.copilot/command-runner/command-runner-interface.mjs output 20260829T010203.004Z_00000000-0000-4000-8000-000000000000 stream=stdout',
@@ -441,6 +555,8 @@ test('hook permits only bounded execution and management interface shapes', asyn
       { command: 'node ~/.copilot/command-runner/command-runner.mjs list' },
       { command: 'npm test' },
       { command: 'node ~/.copilot/command-runner/command-runner-interface.mjs register lint other=value' },
+      { command: `node ~/.copilot/command-runner/command-runner-interface.mjs update echo definition=%7B%7D expected=sha256-${'0'.repeat(64)}` },
+      { command: `node ~/.copilot/command-runner/command-runner-interface.mjs update echo expected=sha256-${'0'.repeat(64)} other=value` },
       { command: 'node ~/.copilot/command-runner/command-runner-interface.mjs unregister echo other=value' },
       { command: 'node ~/.copilot/command-runner/command-runner-interface.mjs output ../../secret stream=stdout' },
       { command: 'node ~/.copilot/command-runner/command-runner-interface.mjs list', env: { BAD: '1' } },

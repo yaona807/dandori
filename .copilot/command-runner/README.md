@@ -44,7 +44,7 @@ At runtime the runner:
 
 The active directory may be the workspace root or any directory below it. The agent cannot provide a workspace ID, select another workspace, override the terminal working directory, change the environment or shell, or request background execution. Repository names and Git remotes are not authorization boundaries.
 
-The same selection rule applies to command management. `register` and `unregister` can mutate only the command map of the workspace selected from the real current directory; neither operation accepts a workspace ID or root.
+The same selection rule applies to command management. `register`, `update`, and `unregister` can mutate only the command map of the workspace selected from the real current directory; none accepts a workspace ID or root.
 
 ## Configuration
 
@@ -81,7 +81,7 @@ Positional values that begin with `-` are rejected. Add a fixed `--` element to 
 
 For `workspace-file` and `workspace-directory`, existing paths are checked after symlink resolution. When `mustExist` is `false`, the nearest existing ancestor is resolved first, so a non-existing path beneath a symlink that points outside the workspace is still rejected.
 
-A command's public `describe` representation is also bounded. It includes a `definitionHash` for compare-and-swap removal without exposing the fixed argv or other private configuration fields. A `describe` request fails closed when the public representation would be too large to return safely.
+A command's public `describe` representation is also bounded. It includes a `definitionHash` for compare-and-swap replacement or removal without exposing the fixed argv or other private configuration fields. A `describe` request fails closed when the public representation would be too large to return safely.
 
 ## Runner interface
 
@@ -91,12 +91,13 @@ Run from the active workspace:
 node ~/.copilot/command-runner/command-runner-interface.mjs list [query=<encoded-id-fragment>] [offset=<n>]
 node ~/.copilot/command-runner/command-runner-interface.mjs describe test
 node ~/.copilot/command-runner/command-runner-interface.mjs register lint definition=<encoded-json>
+node ~/.copilot/command-runner/command-runner-interface.mjs update lint expected=<definition-hash> definition=<encoded-json>
 node ~/.copilot/command-runner/command-runner-interface.mjs unregister lint expected=<definition-hash>
 node ~/.copilot/command-runner/command-runner-interface.mjs run test runInBand=true
 node ~/.copilot/command-runner/command-runner-interface.mjs output <execution-id> stream=stdout|stderr [offset=<n>]
 ```
 
-Argument values use URI component encoding. Workspace path arguments are resolved under the selected root and rejected when they escape it. `register` accepts one URI-component-encoded JSON command definition; the decoded definition is bounded to 16 KiB.
+Argument values use URI component encoding. Workspace path arguments are resolved under the selected root and rejected when they escape it. `register` and `update` accept one URI-component-encoded JSON command definition; the decoded definition is bounded to 16 KiB. `update` additionally requires the current `definitionHash`.
 
 The agent and hook expose only `command-runner-interface.mjs`. Execution still delegates command schema validation and process execution to the fixed `command-runner.mjs` core. Management validates the complete candidate configuration through that same core before persisting it.
 
@@ -104,13 +105,40 @@ All interface responses are bounded below the terminal spill threshold. `list` r
 
 ### Command management
 
+Command definitions support required and optional arguments directly. Omitted `required` is optional; set `required: true` when omission must reject execution. For example:
+
+```json
+{
+  "description": "Build one target.",
+  "run": ["npm", "run", "build", "--"],
+  "cwd": ".",
+  "arguments": {
+    "target": {
+      "kind": "positional",
+      "required": true,
+      "value": { "type": "string", "maxLength": 80 }
+    },
+    "mode": {
+      "kind": "option",
+      "token": "--mode",
+      "required": false,
+      "value": { "type": "choice", "values": ["fast", "safe"] }
+    }
+  }
+}
+```
+
+Argument kinds are `flag`, `option`, and `positional`. Non-flag arguments carry a validated `value` type: `boolean`, bounded `integer`, `choice`, bounded `string`, `workspace-file`, or `workspace-directory`. `option` requires a fixed option token; `positional` has no token. Repeatable non-flag arguments use `repeatable: true` with bounded `maxItems`.
+
 `register` is create-only. It fails with `command_already_registered` when the ID already exists and never acts as an upsert. The supplied definition is strict-JSON parsed, inserted only into the currently selected workspace, then the entire candidate `workspaces.json` is validated by the fixed runner before persistence.
+
+`update` replaces exactly one existing command definition and is not an upsert. It requires the current `definitionHash` returned by `describe`; a stale hash fails with `stale_definition`. The replacement is strict-JSON parsed, the whole candidate configuration is validated, and only then is it persisted atomically.
 
 `unregister` requires the current `definitionHash` returned by `describe`. If the definition changed since it was observed, removal fails with `stale_definition`; this prevents an approval or request for one command definition from deleting a later replacement that reused the same ID. Version 1 retains the existing non-empty command-map invariant, so the last command in a registered workspace cannot be removed.
 
 Management operations serialize through a user-level `workspaces.lock`. A candidate is written to a mode-`0600` temporary file in the same directory and atomically renamed over `workspaces.json` only after full validation and a final unchanged-source check. A live lock fails with `configuration_busy`. A lock older than five minutes is reported as `stale_configuration_lock` and must be removed manually rather than being broken automatically.
 
-These management primitives do not decide whether a command should be registered, removed, or subsequently executed. They only apply an exact requested mutation while preserving configuration integrity.
+These management primitives do not decide whether a command should be registered, replaced, removed, or subsequently executed. They only apply an exact requested mutation while preserving configuration integrity.
 
 ### Execution output
 
