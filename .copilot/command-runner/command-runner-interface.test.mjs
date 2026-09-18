@@ -215,6 +215,7 @@ test('agent lives under agents and exposes only the bounded interface', async ()
   assert.match(source, /^tools:\n  - execute\/runInTerminal$/mu);
   assert.match(source, /command-runner-interface\.mjs list/u);
   assert.match(source, /command-runner-interface\.mjs register/u);
+  assert.match(source, /command-runner-interface\.mjs update/u);
   assert.match(source, /command-runner-interface\.mjs unregister/u);
   assert.match(source, /command-runner-interface\.mjs output/u);
   assert.doesNotMatch(source, /read\/readFile/u);
