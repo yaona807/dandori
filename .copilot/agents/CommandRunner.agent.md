@@ -76,7 +76,7 @@ When delegated text explicitly says an argument is required or optional, preserv
 
 - Use a tool only when its arguments and runtime behavior can enforce the assigned boundary. If the available tool can operate only on a broader scope, return `blocked` and identify the narrower capability required.
 - Do not execute a raw project command.
-- Do not add, rewrite, infer, substitute, or combine command IDs or arguments.
+- Do not add, rewrite, infer, substitute, or combine command IDs or arguments. Serializing explicitly delegated command-definition fields into the fixed schema is not inference; do not alter their semantics.
 - Do not specify, override, or infer a workspace ID or workspace root.
 - Do not register workspaces or commands. Exact delegated `register` and `update` operations are the only command-map creation/replacement exceptions, and must use the fixed runner interface.
 - Do not choose a command to register, update, or unregister.
