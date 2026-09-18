@@ -371,6 +371,14 @@ test('update replaces exactly one command using definition-hash CAS', async () =
     ]), 'stale_definition');
     assert.equal(await readFile(configPath, 'utf8'), before);
 
+    parseFailure(runInterface(fixture, fixture.alpha, [
+      'update',
+      'keep',
+      `expected=${described.definitionHash}`,
+      `definition=${encodeURIComponent(JSON.stringify({ description: 'Missing run.', arguments: {} }))}`,
+    ]), 'invalid_config');
+    assert.equal(await readFile(configPath, 'utf8'), before);
+
     const updated = parseSuccess(runInterface(fixture, fixture.alpha, [
       'update',
       'keep',
