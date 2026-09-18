@@ -44,7 +44,7 @@ Runnerは実行時に次の処理を行います。
 
 実行位置はWorkspace rootでも、その配下のディレクトリでも構いません。AgentからWorkspace IDを指定したり、別のWorkspaceを選択したり、ターミナルのcwd・環境変数・shell・profileを上書きしたり、バックグラウンド実行を要求したりすることはできません。リポジトリ名やGit remoteは認可境界として使用しません。
 
-コマンド管理にも同じ選択規則を使用します。`register` / `unregister` が変更できるのは、実際のカレントディレクトリから選択されたWorkspaceのcommand mapだけです。Workspace IDやrootを引数で指定することはできません。
+コマンド管理にも同じ選択規則を使用します。`register` / `update` / `unregister` が変更できるのは、実際のカレントディレクトリから選択されたWorkspaceのcommand mapだけです。Workspace IDやrootを引数で指定することはできません。
 
 ## 設定
 
@@ -81,7 +81,7 @@ Runnerは実行時に次の処理を行います。
 
 `workspace-file`と`workspace-directory`は、symlink解決後のパスを検証します。`mustExist`が `false` の場合も、最も近い既存の親ディレクトリを先に解決するため、Workspace外を指すsymlink配下の未作成パスは拒否されます。
 
-1コマンドの公開 `describe` 定義にもサイズ上限を設けます。公開結果には固定argvなどを露出せず、CAS削除に使う `definitionHash` を含めます。安全なサイズで返せない場合は、その `describe` 要求をfail-closedで拒否します。
+1コマンドの公開 `describe` 定義にもサイズ上限を設けます。公開結果には固定argvなどを露出せず、CAS置換・削除に使う `definitionHash` を含めます。安全なサイズで返せない場合は、その `describe` 要求をfail-closedで拒否します。
 
 ## Runnerのインターフェース
 
@@ -91,12 +91,13 @@ Runnerは実行時に次の処理を行います。
 node ~/.copilot/command-runner/command-runner-interface.mjs list [query=<encoded-id-fragment>] [offset=<n>]
 node ~/.copilot/command-runner/command-runner-interface.mjs describe test
 node ~/.copilot/command-runner/command-runner-interface.mjs register lint definition=<encoded-json>
+node ~/.copilot/command-runner/command-runner-interface.mjs update lint expected=<definition-hash> definition=<encoded-json>
 node ~/.copilot/command-runner/command-runner-interface.mjs unregister lint expected=<definition-hash>
 node ~/.copilot/command-runner/command-runner-interface.mjs run test runInBand=true
 node ~/.copilot/command-runner/command-runner-interface.mjs output <execution-id> stream=stdout|stderr [offset=<n>]
 ```
 
-引数値にはURI component encodingを使用します。Workspace path型の引数は、選択されたroot配下へ解決できない場合に拒否されます。`register`はURI component encodingしたJSONコマンド定義を1個だけ受け取り、decode後の定義は16 KiB以内に制限します。
+引数値にはURI component encodingを使用します。Workspace path型の引数は、選択されたroot配下へ解決できない場合に拒否されます。`register`と`update`はURI component encodingしたJSONコマンド定義を1個だけ受け取り、decode後の定義は16 KiB以内に制限します。`update`には現在の `definitionHash` も必要です。
 
 AgentとHookが直接呼べるのは `command-runner-interface.mjs` だけです。実行時のcommand schema検証とprocess起動は、従来どおり固定 `command-runner.mjs` coreへ委譲します。管理操作でも、保存前に候補となる設定全体を同じcoreで検証します。
 
@@ -104,13 +105,40 @@ Runnerがterminalへ返すレスポンスはすべて固定上限以下です。
 
 ### コマンド管理
 
+コマンド定義では必須引数と任意引数を直接設定できます。`required` を省略した場合は任意扱いで、未指定時に実行を拒否したい引数は `required: true` とします。
+
+```json
+{
+  "description": "1つのtargetをbuildする。",
+  "run": ["npm", "run", "build", "--"],
+  "cwd": ".",
+  "arguments": {
+    "target": {
+      "kind": "positional",
+      "required": true,
+      "value": { "type": "string", "maxLength": 80 }
+    },
+    "mode": {
+      "kind": "option",
+      "token": "--mode",
+      "required": false,
+      "value": { "type": "choice", "values": ["fast", "safe"] }
+    }
+  }
+}
+```
+
+引数kindは `flag` / `option` / `positional` です。flag以外は `value` を持ち、`boolean`、範囲付き `integer`、`choice`、長さ上限付き `string`、`workspace-file`、`workspace-directory` を使用できます。`option` は固定tokenが必須、`positional` はtokenを持ちません。繰り返し可能なflag以外の引数は `repeatable: true` と有限の `maxItems` を指定します。
+
 `register`は新規作成専用です。同じIDが存在する場合は `command_already_registered` で拒否し、upsertは行いません。渡された定義をstrict JSONとして解析し、現在選択中のWorkspaceにだけ挿入したうえで、候補となる `workspaces.json` 全体を固定Runnerで検証してから保存します。
+
+`update`は既存1コマンドの定義を完全置換し、upsertは行いません。`describe`で取得した現在の `definitionHash` が必須で、古いhashは `stale_definition` で拒否します。置換定義をstrict JSONとして解析し、候補設定全体を検証してからatomicに保存します。
 
 `unregister`には、`describe`で取得した現在の `definitionHash` が必須です。観測後に定義が変わっていた場合は `stale_definition` で拒否します。これにより、同じIDが別定義へ差し替わった後に古い削除要求で消してしまうことを防ぎます。バージョン1では既存の「登録Workspaceのcommand mapは空にしない」という不変条件を維持するため、最後の1コマンドは削除できません。
 
 管理操作はユーザーレベルの `workspaces.lock` で直列化します。候補設定は同じディレクトリのmode `0600` 一時ファイルへ書き、設定全体の検証と元ファイル不変確認が通った場合だけatomic renameします。生きているlockがある場合は `configuration_busy`、5分を超えたlockは `stale_configuration_lock` として報告し、自動破壊はせず手動削除を要求します。
 
-これらの管理primitiveは「何を登録・削除・実行すべきか」を判断しません。指定されたexact mutationを設定整合性を維持しながら適用するだけです。
+これらの管理primitiveは「何を登録・置換・削除・実行すべきか」を判断しません.指定されたexact mutationを設定整合性を維持しながら適用するだけです。
 
 ### 実行出力
 
