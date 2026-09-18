@@ -104,7 +104,7 @@ function validateRunnerInvocation(tokens) {
 
   const commandId = tokens[3];
   if (!COMMAND_ID_PATTERN.test(commandId ?? '')) {
-    throw new Error('describe, register, unregister, and run require a safe command ID');
+    throw new Error('describe, register, update, unregister, and run require a safe command ID');
   }
   if (operation === 'describe') {
     if (tokens.length !== 4) {
@@ -115,6 +115,16 @@ function validateRunnerInvocation(tokens) {
   if (operation === 'register') {
     if (tokens.length !== 5 || validateEncodedParameter(tokens[4]) !== 'definition') {
       throw new Error('register accepts exactly definition=<encoded-json>');
+    }
+    return;
+  }
+  if (operation === 'update') {
+    if (
+      tokens.length !== 6
+      || validateEncodedParameter(tokens[4]) !== 'expected'
+      || validateEncodedParameter(tokens[5]) !== 'definition'
+    ) {
+      throw new Error('update accepts exactly expected=<definition-hash> definition=<encoded-json>');
     }
     return;
   }
