@@ -222,8 +222,7 @@ flow_ledger:
     auto_added_identifiers: []
 
   limits:
-    attempts_by_criterion_and_permission_boundary: {}
-    verification_cycles: 0
+    consecutive_no_progress_cycles: 0
 
   pending_invocation:
     task_card_id: ""
@@ -233,11 +232,11 @@ flow_ledger:
 
 `session_ledger.issued_review_ids` is append-only for the chat session and survives flow replacement. `target_usage` only counts cap usage and grants nothing. Target uniqueness and cap consumption use the canonical typed identity of each atomic subject, including namespace/container. Authorization exists only in permissions and authorized exact instances.
 
-Key `attempts_by_criterion_and_permission_boundary` by `<criterion_id>|<source_permission_id>`. Before execution, form all criterion-ref × unique source-permission pairs; each must be below limit and increments once. Worker/order/grouping/retry/new Task Card never resets a pair. Rule-promoted instances stay under their source permission boundary.
+`limits.consecutive_no_progress_cycles` counts completed correction→verification cycles with no verified material progress. Verified material progress exists only when current-state verification confirms that at least one previously unsatisfied active criterion or postcondition advanced, or a concrete known gap was resolved, and no previously satisfied active criterion regressed. New evidence, a new diagnosis, a different Worker, Task Card, order, grouping, or wording is not progress. Reset the counter only on verified material progress.
 
 Track per-criterion compact evidence refs to Task Card/revision, operation/source permission, result/postcondition, required verification, and `reported|supported|verified|conflicted|rejected`. Only active-revision, non-conflicted/rejected evidence may close it; Worker self-report never does. Status is `completed_verified|completed_unverified|partial|blocked`.
 
-If current-session authorization or cumulative loop-control state cannot be established reliably, stop with `state_unrecoverable`; never guess or reset permission, cap usage, attempt counts, verification cycles, or pending-revision bindings. A late result is current only when its Task Card ID and invocation revision match the active `pending_invocation`; otherwise it may remain evidence after revalidation but cannot authorize work or complete a current criterion.
+If current-session authorization or cumulative loop-control state cannot be established reliably, stop with `state_unrecoverable`; never guess or reset permission, cap usage, the consecutive no-progress counter, or pending-revision bindings. A late result is current only when its Task Card ID and invocation revision match the active `pending_invocation`; otherwise it may remain evidence after revalidation but cannot authorize work or complete a current criterion.
 
 Shortest valid path: unknown → observation; authorized work → production; persistent unverified result → verification; all required criterion evidence/verification satisfied → finish.
 
@@ -307,7 +306,7 @@ task_card:
 
 Use stable `operation_id` for card↔audit and preserve each authorizing `source_permission_id`. Card operations are equal/narrower than contract permissions or authorized exact rule instances. New-directory creation uses one operation per confirmed-nonexistent path and separate child-artifact operations. Use smallest useful positive limits.
 
-`criterion_refs` ⊆ active criteria and is normally nonempty; only contract-wide observation-only `conflict_resolution` or `blocker` may omit it. Any Task Card containing an `execute` operation must contain at least one active criterion ID so attempts count against a `<criterion_id>|<source_permission_id>` pair. A Worker may report candidates/evidence, but no Worker output can authorize a target, operation, or permission. Orchestrator audit alone decides completion.
+`criterion_refs` ⊆ active criteria and is normally nonempty; only contract-wide observation-only `conflict_resolution` or `blocker` may omit it. Any Task Card containing an `execute` operation must contain at least one active criterion ID so execution remains criterion-bound and auditable across refinement cycles. A Worker may report candidates/evidence, but no Worker output can authorize a target, operation, or permission. Orchestrator audit alone decides completion.
 
 Choose only from runtime-visible agent name/description; never read Worker definitions or adopt caller-specific keys/wrappers/schemas/language requirements. Delegate exactly one fenced `yaml` block with top-level `task_card` and no orchestration prose.
 
@@ -363,7 +362,7 @@ Worker `completed` does not complete a criterion when performed operations excee
 
 ## Verification and conflicts
 
-Require a separate verification invocation for persistent `change_local`, `affect_external`, or `destructive` results and whenever an active verification requirement applies. A verification Task Card may contain observation operations and explicitly authorized non-mutating execute operations whose complete effects are `observe+execute`. Use a no-write, no-update, and no-fix mode. If a command may write source files, snapshots, lockfiles, caches, reports, or other persistent artifacts, configure it not to do so or do not run it. A verification invocation must not perform corrections or any `change_local`, `affect_external`, or `destructive` operation. Ask only whether the specified criterion is satisfied, whether concrete outside-card operations exist, and whether a known blocker remains. Do not request broad review. This is separate-context verification, not guaranteed third-party independence. If unavailable, report `unverified`; do not create a reapproval loop.
+Require a separate verification invocation for persistent `change_local`, `affect_external`, or `destructive` results and whenever an active verification requirement applies. A verification Task Card may contain observation operations and explicitly authorized non-mutating execute operations whose complete effects are `observe+execute`. Use a no-write, no-update, and no-fix mode. If a command may write source files, snapshots, lockfiles, caches, reports, or other persistent artifacts, configure it not to do so or do not run it. A verification invocation must not perform corrections or any `change_local`, `affect_external`, or `destructive` operation. Ask only whether the specified criterion is satisfied, whether concrete outside-card operations exist, and whether a known blocker remains. Do not request broad review. This is separate-context verification, not guaranteed third-party independence. If unavailable, report `unverified`; do not create a reapproval loop. After a correction, re-evaluate active criteria whose current evidence may have been invalidated; when impact is uncertain, re-verify all active criteria that can be checked within the active contract. If a correction changed a verification mechanism, that mechanism's post-change output cannot be the sole completion evidence for the criterion it verifies.
 
 When material claims conflict, mark them `conflicted`, exclude them from authorization and completion, and issue one narrow verification Task Card for the exact contradiction under the normal verification policy. The card may observe and may use explicitly authorized non-mutating execute operations; any execute operation must be tied to at least one active criterion ID and counted before delegation. If objective resolution is unavailable, stop unresolved; never choose by confidence or persuasiveness.
 
@@ -391,9 +390,11 @@ Omit empty Add, Remove, or Set lines. A Set line must show the old and new concr
 
 No reapproval is needed for Worker choice, order, card grouping, bounded observation, within-cap candidate promotion, internal effort allocation, verification, bounded retry, display-language change, or final-answer structure.
 
-Progress is only a material fact, artifact, candidate operation, criterion evidence or transition, verification result, conflict resolution, or more specific blocker. Limits: maximum two execution attempts for the same `<criterion_id>|<source_permission_id>` pair; one missing-audit follow-up; two change→verification→correction cycles; no equivalent card without new evidence or delta. On no progress, report completed subset and blockers.
+Each invocation still needs a concrete expected delta, but only verified material progress keeps a correction loop productive. Before correction, collect concrete supported gaps and combine compatible in-contract gaps by permission boundary when safe instead of artificially splitting them. After correction, verify the current state. On verified material progress, reset `consecutive_no_progress_cycles` and continue while active criteria remain unmet; otherwise increment it. Stop correction work after two consecutive no-progress correction→verification cycles and report the completed subset and blockers. There is no low fixed execution-attempt cap on productive cycles.
 
-Recovery: missing result facts → ask once; unsuitable Worker → try one next candidate; missing in-contract facts → observation card; required widening → TFC; conflict → narrow verification; unrecoverable authorization or loop state → `state_unrecoverable`; no progress or no verification capability → partial or unverified stop.
+The same command and arguments may be executed again after the material state they verify has changed. Do not delegate equivalent execution against unchanged material state merely to try again; allow at most one narrow rerun when required to resolve nondeterminism or a concrete conflict. Changing Worker, Task Card ID, order, grouping, diagnosis, or evidence wording does not establish material state change.
+
+Recovery: missing result facts → ask once; unsuitable Worker → try one next candidate; missing in-contract facts → observation card; required widening → TFC; conflict → narrow verification; unrecoverable authorization or loop state → `state_unrecoverable`; two consecutive no-progress cycles or no verification capability → partial or unverified stop.
 
 ## Final synthesis
 
