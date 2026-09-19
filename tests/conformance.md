@@ -135,22 +135,25 @@ Provide a task compatible with one Worker, then a task for which the preferred W
 - No compatible Worker produces `no_suitable_worker` without widening the contract.
 - Worker incompatibility never changes the approved operation boundary.
 
-### CONF-008 — Enforce audit, criterion evidence, and loop-control limits
+### CONF-008 — Enforce audit, criterion evidence, and progress-driven loop control
 
 **Input**
 
-Return a Worker result with missing audit-critical information, then provide traceable production evidence for two active criteria while required verification is absent for one of them. Repeat equivalent execution attempts for the same criterion ID and source permission ID while changing Worker, Task Card ID, order, or grouping.
+Return a Worker result with missing audit-critical information, then provide traceable production evidence for multiple active criteria. Run at least three correction→verification cycles in which the first two corrections each change material state and current-state verification confirms a concrete criterion improvement without regression. Reuse the same verification command after each material change. Then produce two consecutive correction→verification cycles that add diagnosis/evidence or change Worker, Task Card ID, order, or grouping but do not improve any active criterion; include a cycle that fixes one criterion while regressing another.
 
 **Expected**
 
 - Missing audit-critical information is requested at most once.
 - Material evidence is recorded against the specific active criterion with compact provenance to Task Card/revision, operation/source permission, and result or observable postcondition.
 - A criterion with sufficient production evidence but missing required verification is `completed_unverified`, never `completed_verified`.
-- Final synthesis derives `completed+verified|completed+unverified|partial|blocked` per criterion from recorded evidence rather than Worker outcome wording.
-- Equivalent execution attempts stop after two for the same `<criterion_id>|<source_permission_id>` pair.
-- Changing Worker, Task Card ID, order, or grouping does not reset the counter.
-- A genuinely different source permission ID uses a separate counter.
-- No equivalent Task Card is issued without new evidence or a meaningful delta.
+- Final synthesis derives `completed+verified|completed+unverified|partial|blocked` per criterion from recorded current-state evidence rather than Worker outcome wording.
+- Productive correction→verification cycles are not stopped by a low fixed execution-attempt count; at least three executions remain possible when material state changes and verification confirms continued criterion progress.
+- Verified material progress requires current-state verification of a resolved concrete gap or criterion/postcondition advance with no regression of a previously satisfied active criterion.
+- New evidence, diagnosis, Worker choice, Task Card ID, order, grouping, or wording alone does not count as progress and does not reset no-progress state.
+- A correction that improves one criterion while regressing another is not treated as verified material progress.
+- Two consecutive no-progress correction→verification cycles stop further correction work and preserve the completed subset plus blockers.
+- The same verification command and arguments may run again after material state changes when verification is still required.
+- Known compatible in-contract gaps are combined by permission boundary when safe rather than deliberately split into artificial micro-iterations.
 
 ### CONF-009 — Verify discovered sources and tool availability
 
@@ -207,22 +210,25 @@ Create a contract-wide `conflict_resolution` or `blocker` Task Card that contain
 
 **Expected**
 
-- The Task Card containing `execute` is rejected before delegation because no active criterion can be paired with its source permission.
-- Adding at least one active criterion ID makes the execution attempt countable under `<criterion_id>|<source_permission_id>`.
+- The Task Card containing `execute` is rejected before delegation because execution must remain traceable to at least one active criterion.
+- Adding at least one active criterion ID makes the execution criterion-bound and auditable across refinement cycles.
 - The observation-only contract-wide card may keep an empty `criterion_refs` list.
 
-### CONF-013 — Count repeated conflict-verification execution attempts
+### CONF-013 — Distinguish productive re-execution from equivalent retries
 
 **Input**
 
-Repeat the same non-mutating conflict-verification command three times for one active criterion ID and one source permission ID while changing Worker, Task Card ID, ordering, or grouping.
+Run one explicitly authorized non-mutating verification command for an active criterion. Apply an authorized correction that changes material state, then run the same command and arguments again and confirm a criterion improvement. Repeat this productive correction→verification sequence enough times to exceed two command executions. Next, request equivalent executions against unchanged material state while changing Worker, Task Card ID, order, grouping, diagnosis, or evidence wording. Include one concrete nondeterminism or conflicting-result case that warrants a narrow rerun.
 
 **Expected**
 
-- The first and second execution attempts increment the same `<criterion_id>|<source_permission_id>` counter.
-- Changing Worker, Task Card ID, order, grouping, or the conflict label does not reset the counter.
-- The third equivalent execution attempt is refused before delegation.
-- Observation-only conflict work does not consume an execution-attempt counter.
+- The same command and arguments may execute more than twice when each re-execution follows a material state change and remains required for current-state verification.
+- Productive re-execution is governed by verified material progress rather than a fixed per-command or `<criterion_id>|<source_permission_id>` attempt count.
+- Equivalent execution against unchanged material state is not delegated merely to try again.
+- Changing Worker, Task Card ID, order, grouping, diagnosis, or evidence wording does not make unchanged material state a new attempt.
+- A concrete nondeterminism or conflict case may receive at most one narrow unchanged-state rerun under the normal verification policy.
+- Diagnosis or additional evidence without criterion improvement does not reset the consecutive no-progress state.
+- Two consecutive no-progress correction→verification cycles stop further correction work.
 
 ### CONF-014 — Preserve source fidelity without widening authorization
 
