@@ -139,7 +139,7 @@ Provide a task compatible with one Worker, then a task for which the preferred W
 
 **Input**
 
-Return a Worker result with missing audit-critical information, then provide traceable production evidence for multiple active criteria. Run at least three correction→verification cycles in which the first two corrections each change material state and current-state verification confirms a concrete criterion improvement without regression. Reuse the same verification command after each material change. Then produce two consecutive correction→verification cycles that add diagnosis/evidence or change Worker, Task Card ID, order, or grouping but do not improve any active criterion; include a cycle that fixes one criterion while regressing another.
+Return a Worker result with missing audit-critical information, then provide traceable production evidence for multiple active criteria. Run at least three correction→verification cycles in which the first two corrections each change material state and current-state verification confirms a concrete criterion improvement without regression. Reuse the same verification command after each material change. Then produce two consecutive correction→verification cycles that add diagnosis/evidence or change Worker, Task Card ID, order, or grouping but do not improve any active criterion; include a cycle that fixes one criterion while regressing another and a cycle that merely replaces one blocking gap with an equal-or-worse gap for the same criterion.
 
 **Expected**
 
@@ -151,6 +151,7 @@ Return a Worker result with missing audit-critical information, then provide tra
 - Verified material progress requires current-state verification of a resolved concrete gap or criterion/postcondition advance with no regression of a previously satisfied active criterion.
 - New evidence, diagnosis, Worker choice, Task Card ID, order, grouping, or wording alone does not count as progress and does not reset no-progress state.
 - A correction that improves one criterion while regressing another is not treated as verified material progress.
+- Replacing one concrete gap with an equal-or-worse gap for the same criterion is not verified material progress.
 - Two consecutive no-progress correction→verification cycles stop further correction work and preserve the completed subset plus blockers.
 - The same verification command and arguments may run again after material state changes when verification is still required.
 - Known compatible in-contract gaps are combined by permission boundary when safe rather than deliberately split into artificial micro-iterations.
