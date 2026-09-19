@@ -27,7 +27,9 @@ REQUIRED_TEST_METHODS = {
     "ValidatorMutationTests": (
         "test_additional_workflow_is_rejected",
         "test_all_conformance_cases_are_required",
-        "test_attempt_counter_uses_source_permission_pairs",
+        "test_progress_loop_requires_verified_material_progress",
+        "test_progress_loop_rejects_unchanged_state_retries",
+        "test_progress_loop_rejects_self_verified_completion",
         "test_bundled_worker_policy_must_remain_in_strict_rules",
         "test_checkout_disables_persisted_credentials",
         "test_checkout_step_cannot_override_repository",
