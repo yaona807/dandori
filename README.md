@@ -236,9 +236,9 @@ Persistent local changes, external effects, and destructive effects require a se
 
 If verification is unavailable, DANDORI reports the result as unverified rather than entering an approval loop or claiming completion without qualification.
 
-DANDORI limits repeated work by requiring each invocation to produce a concrete delta: a new material fact, artifact, candidate operation, criterion evidence or transition, verification result, conflict resolution, or more specific blocker. Before each execution attempt, DANDORI forms every `<criterion_id>|<source_permission_id>` pair from the Task Card. Any Task Card containing `execute` must therefore reference at least one active criterion; a contract-wide conflict or blocker may omit criteria only when it is observation-only. Each pair has its own two-attempt limit, so changing the Worker, order, grouping, or Task Card ID does not reset it.
+DANDORI limits repeated work by requiring each invocation to produce a concrete delta and by judging refinement from verified current-state progress rather than a low fixed execution count. Any Task Card containing `execute` must reference at least one active criterion; a contract-wide conflict or blocker may omit criteria only when it is observation-only. Productive correction→verification cycles may continue only while current-state verification confirms strict criterion/postcondition advance with no regression; resolving one concrete gap counts only when it is not replaced by an equal-or-worse gap for the same criterion. New evidence, diagnosis, Worker choice, Task Card ID, order, grouping, or wording alone is not progress. Two consecutive no-progress correction→verification cycles stop further correction work. The same verification command may run again after material state changes, while equivalent execution against unchanged material state is not repeated merely to try again, except for one narrow rerun needed to resolve nondeterminism or a concrete conflict.
 
-If the current session's authorization or cumulative loop-control state cannot be established reliably, DANDORI stops with `state_unrecoverable`. Re-observable evidence may be reacquired inside the approved observation boundary, but permission state, cap usage, attempt counts, verification cycles, and pending-revision bindings are never guessed or reset. DANDORI does not provide cross-session resume or durable workflow state.
+If the current session's authorization or cumulative loop-control state cannot be established reliably, DANDORI stops with `state_unrecoverable`. Re-observable evidence may be reacquired inside the approved observation boundary, but permission state, cap usage, the consecutive no-progress counter, and pending-revision bindings are never guessed or reset. DANDORI does not provide cross-session resume or durable workflow state.
 
 ## What's included
 
@@ -410,7 +410,7 @@ The validator proves structural constraints, tool boundaries, required policy an
 - **Only material claims receive evidence-state tracking.**
 - **Verification is narrow and effect-driven.**
 - **Reapproval is differential and risk-based.**
-- **No progress means no repeated delegation.**
+- **Verified progress permits continued refinement; repeated no-progress work stops.**
 
 ## Security boundary
 

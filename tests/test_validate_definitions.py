@@ -135,13 +135,13 @@ class ValidatorMutationTests(unittest.TestCase):
             path.write_text(path.read_text().replace("  issued_review_ids: []\n", "", 1))
             self.assert_invalid(repo, "missing required Orchestrator marker")
 
-    def test_pr1_attempt_counter_schema_is_required(self) -> None:
+    def test_progress_stagnation_schema_is_required(self) -> None:
         temp, repo = self.make_repo()
         with temp:
             path = repo / ".copilot/agents/Orchestrator.agent.md"
             path.write_text(
                 path.read_text().replace(
-                    "attempts_by_criterion_and_permission_boundary:",
+                    "consecutive_no_progress_cycles:",
                     "attempts_by_criterion:",
                     1,
                 )
@@ -193,14 +193,41 @@ class ValidatorMutationTests(unittest.TestCase):
             )
             self.assert_invalid(repo, "missing required Orchestrator marker")
 
-    def test_attempt_counter_uses_source_permission_pairs(self) -> None:
+    def test_progress_loop_requires_verified_material_progress(self) -> None:
         temp, repo = self.make_repo()
         with temp:
             path = repo / ".copilot/agents/Orchestrator.agent.md"
             path.write_text(
                 path.read_text().replace(
-                    "<criterion_id>|<source_permission_id>` pair",
-                    "canonical permission-boundary key",
+                    "Verified material progress exists only when",
+                    "Progress exists when",
+                    1,
+                )
+            )
+            self.assert_invalid(repo, "missing required Orchestrator marker")
+
+    def test_progress_loop_rejects_unchanged_state_retries(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".copilot/agents/Orchestrator.agent.md"
+            path.write_text(
+                path.read_text().replace(
+                    "Do not delegate equivalent execution against unchanged material state merely to try again",
+                    "Equivalent execution against unchanged material state may be retried",
+                    1,
+                )
+            )
+            self.assert_invalid(repo, "missing required Orchestrator marker")
+
+    def test_progress_loop_rejects_self_verified_completion(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".copilot/agents/Orchestrator.agent.md"
+            path.write_text(
+                path.read_text().replace(
+                    "post-change output cannot be the sole completion evidence",
+                    "post-change output may be the sole completion evidence",
+                    1,
                 )
             )
             self.assert_invalid(repo, "missing required Orchestrator marker")
