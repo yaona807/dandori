@@ -434,7 +434,7 @@ ORCHESTRATOR_REQUIRED_SECTION_MARKERS: dict[str, tuple[str, ...]] = {
     "## Worker selection": (
         "Use frontmatter-listed agents only.",
         "Never retry an unchanged blocked candidate",
-        "Never widen the contract for Worker compatibility.",
+        "never widen the contract for Worker compatibility.",
     ),
     "## Result normalization and audit": (
         "repeat while the missing set strictly shrinks",
