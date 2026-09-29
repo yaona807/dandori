@@ -92,8 +92,8 @@ Authorize observation of a bounded set and allow rule-based effects on newly dis
 - A subject discovered in one invocation is not affected in that same invocation.
 - Promotion consumes the shared cap once per unique target.
 - Lowering the cap below already consumed unique targets is rejected without creating a revision.
-- Creating the exact authorized file may create only its missing ancestor directories without consuming additional affect targets.
-- That incidental ancestor creation grants no permission to create siblings, other descendants, or modify existing directory contents.
+- Creating the exact authorized file may derive exact `create_directory+change_local` Task Card operations only for its missing ancestor paths, keeping the file permission as their source.
+- Derived ancestor operations consume no additional affect target/cap and grant no permission to create siblings, other descendants, or modify existing directory contents.
 
 ### CONF-005 — Preserve revision, narrowing, and flow replacement semantics
 
