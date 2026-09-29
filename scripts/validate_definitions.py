@@ -308,7 +308,8 @@ BUNDLED_WORKER_REQUIRED_SECTION_MARKERS: dict[str, dict[str, tuple[str, ...]]] =
             "Do not run terminal commands.",
             "Do not call another agent.",
             "Do not approve, merge, close, or comment on PRs.",
-            "Do not inspect additional diffs, files, comments, checks, threads, or linked resources based only on apparent relevance.",
+            "Native read-only subresources of the assigned pull request may be inspected when needed by the delegated task.",
+            "Do not follow linked issues, other pull requests, repository files, or external resources unless explicitly delegated.",
         ),
     },
     "Researcher": {
@@ -410,6 +411,8 @@ ORCHESTRATOR_REQUIRED_SECTION_MARKERS: dict[str, tuple[str, ...]] = {
     "## Effects and operation subjects": (
         "An exact command ID registered for the runner-selected current workspace is an atomic execution subject.",
         "workspace files changed as a consequence are execution results of that atomic command subject",
+        "An exact file target authorized for creation may create only missing ancestor directories",
+        "grant no rights to siblings or other descendants",
         "A candidate cannot be affected in the same invocation that discovered it",
     ),
     "## Source fidelity routing": (
@@ -428,9 +431,11 @@ ORCHESTRATOR_REQUIRED_SECTION_MARKERS: dict[str, tuple[str, ...]] = {
     ),
     "## Worker selection": (
         "Use frontmatter-listed agents only.",
+        "Never retry an unchanged blocked candidate",
         "never widen the contract because a Worker is incompatible.",
     ),
     "## Result normalization and audit": (
+        "repeat while the missing set strictly shrinks",
         "performed operations ⊆ card operations",
     ),
     "## Task Flow Change: TFC-<short-id>": (
