@@ -84,7 +84,7 @@ Approve one TFR, then submit variants containing extra prose, punctuation, quote
 
 **Input**
 
-Authorize observation of a bounded set and allow rule-based effects on newly discovered members with a finite automatic-target cap.
+Authorize observation of a bounded set and allow rule-based effects on newly discovered members with a finite automatic-target cap. Also authorize creation of one exact file whose required ancestor directories do not yet exist.
 
 **Expected**
 
@@ -92,6 +92,8 @@ Authorize observation of a bounded set and allow rule-based effects on newly dis
 - A subject discovered in one invocation is not affected in that same invocation.
 - Promotion consumes the shared cap once per unique target.
 - Lowering the cap below already consumed unique targets is rejected without creating a revision.
+- Creating the exact authorized file may derive exact `create_directory+change_local` Task Card operations only for its missing ancestor paths, keeping the file permission as their source.
+- Derived ancestor operations consume no additional affect target/cap and grant no permission to create siblings, other descendants, or modify existing directory contents.
 
 ### CONF-005 — Preserve revision, narrowing, and flow replacement semantics
 
@@ -126,24 +128,28 @@ Delegate a Task Card, create a valid new contract revision before accepting the 
 
 **Input**
 
-Provide a task compatible with one Worker, then a task for which the preferred Worker is unavailable, and finally a task for which no compatible Worker exists.
+Provide a task compatible with one Worker, then a task where multiple semantically plausible Workers are incompatible before a later candidate is compatible, and finally a task for which no compatible Worker exists. Also delegate one pull-request research task that needs the assigned PR's diff, changed-file patches, reviews, threads, checks, and comments, while the PR links to an issue and repository files outside the delegated boundary.
 
 **Expected**
 
 - Worker routing does not depend on reading a Worker definition file.
-- An incompatible Worker triggers at most one fallback candidate.
-- No compatible Worker produces `no_suitable_worker` without widening the contract.
+- Each incompatible Worker is excluded and another semantically plausible untried candidate may be tried without a fixed fallback count.
+- An unchanged blocked candidate is not retried and implausible Workers are not probed.
+- No compatible Worker produces `no_suitable_worker` only after plausible untried candidates are exhausted, without widening the contract.
 - Worker incompatibility never changes the approved operation boundary.
+- PullRequestResearcher may inspect native read-only subresources of the assigned PR when needed: metadata, diff, changed-file patches, reviews, review threads, checks, and comments.
+- Linked issues, other PRs, repository files, and external resources remain outside the PR boundary unless explicitly delegated.
 
 ### CONF-008 — Enforce audit, criterion evidence, and progress-driven loop control
 
 **Input**
 
-Return a Worker result with missing audit-critical information, then provide traceable production evidence for multiple active criteria. Run at least three correction→verification cycles in which the first two corrections each change material state and current-state verification confirms a concrete criterion improvement without regression. Reuse the same verification command after each material change. Then produce two consecutive correction→verification cycles that add diagnosis/evidence or change Worker, Task Card ID, order, or grouping but do not improve any active criterion; include a cycle that fixes one criterion while regressing another and a cycle that merely replaces one blocking gap with an equal-or-worse gap for the same criterion.
+Return a Worker result with multiple missing audit-critical fields. Across successive audit-repair responses, strictly reduce the missing-field set more than once, then return one response that leaves the missing set unchanged. Then provide traceable production evidence for multiple active criteria. Run at least three correction→verification cycles in which the first two corrections each change material state and current-state verification confirms a concrete criterion improvement without regression. Reuse the same verification command after each material change. Then produce two consecutive correction→verification cycles that add diagnosis/evidence or change Worker, Task Card ID, order, or grouping but do not improve any active criterion; include a cycle that fixes one criterion while regressing another and a cycle that merely replaces one blocking gap with an equal-or-worse gap for the same criterion.
 
 **Expected**
 
-- Missing audit-critical information is requested at most once.
+- Audit repair may repeat while the set of missing audit-critical facts strictly shrinks.
+- Audit repair stops with `worker_response_contract_failure` when the missing set no longer shrinks; it does not use a fixed retry count.
 - Material evidence is recorded against the specific active criterion with compact provenance to Task Card/revision, operation/source permission, and result or observable postcondition.
 - A criterion with sufficient production evidence but missing required verification is `completed_unverified`, never `completed_verified`.
 - Final synthesis derives `completed+verified|completed+unverified|partial|blocked` per criterion from recorded current-state evidence rather than Worker outcome wording.

@@ -20,7 +20,7 @@ Use GitHub Pull Requests extension context/tools when available in the local VS 
 
 ## Responsibilities
 
-- Inspect only the assigned pull request and the pull-request information explicitly requested.
+- Inspect the assigned pull request and its native read-only subresources when needed: metadata, diff, changed-file patches, reviews, review threads, checks, and comments.
 - Separate must-fix, should-fix, and informational comments.
 - Identify missing codebase context as unknowns.
 - Return compact PR facts only.
@@ -41,7 +41,8 @@ Use GitHub Pull Requests extension context/tools when available in the local VS 
 - Do not run terminal commands.
 - Do not call another agent.
 - Do not decide who should perform follow-up work.
-- Do not inspect additional diffs, files, comments, checks, threads, or linked resources based only on apparent relevance.
+- Native read-only subresources of the assigned pull request may be inspected when needed by the delegated task.
+- Do not follow linked issues, other pull requests, repository files, or external resources unless explicitly delegated.
 - Do not read repository files merely to compensate for unavailable PR information unless those exact files are explicitly included in the current request.
 - If required PR information is unavailable, report the blocker instead of broadening the investigation.
 

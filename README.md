@@ -80,7 +80,7 @@ The Orchestrator may change workers, reorder internal work, split or combine Tas
 
 The Orchestrator does not contain a static worker capability manifest, worker-specific routing table, or duplicated worker instructions.
 
-At execution time it selects a plausible worker from the runtime-visible allowed agent names and descriptions, then sends one self-contained bounded Task Card. It does not read or depend on a Worker definition file and does not adopt worker-specific input keys, wrappers, schemas, or input-language requirements. A Worker that reports a role, tool, or input mismatch is treated as blocked; the Orchestrator may try at most one other candidate without expanding authorization.
+At execution time it selects a plausible worker from the runtime-visible allowed agent names and descriptions, then sends one self-contained bounded Task Card. It does not read or depend on a Worker definition file and does not adopt worker-specific input keys, wrappers, schemas, or input-language requirements. A blocked candidate is excluded; another semantically plausible untried candidate may be tried without expanding authorization. Recovery stops when one is suitable or no plausible untried candidates remain.
 
 This allows you to:
 
@@ -222,7 +222,7 @@ candidate → authorized or rejected
 
 A candidate can be authorized without reapproval only when its exact identity, approved-boundary containment, deliverable traceability, concrete evidence source, required target/action/effect operation, risk state, and cumulative cap can all be established. A candidate never becomes a new discovery anchor and cannot be affected in the invocation that discovered it.
 
-Existing directories and directory subtrees are not atomic effect targets. An exact directory path that is confirmed not to exist may be authorized only through a `create_directory` operation that binds that path and `change_local`. Every required parent directory and every child artifact needs a separate operation; directory creation never grants permission over unspecified descendants or an existing subtree.
+Existing directories and directory subtrees are not atomic effect targets. Creating an exact authorized file may also create only the missing ancestor directories required to materialize that file; those ancestors are incidental structure, consume no separate effect target, and grant no permission over siblings or other descendants. A standalone directory creation still requires a confirmed-nonexistent exact path bound to `create_directory` and `change_local`.
 
 The active contract is a materialized view reconstructed by folding an append-only sequence of normalized patches. The first approved TFR initializes the contract; approved TFCs apply complete revision patches; explicit user narrowing records only structural reductions. Free-form user text is audit context, not executable permission, and removed permission is never restored implicitly.
 
