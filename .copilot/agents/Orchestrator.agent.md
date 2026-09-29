@@ -195,7 +195,7 @@ For authorized `execute+change_local`, workspace files changed as a consequence 
 
 Observation boundaries are not affect targets. Repositories, existing directories/subtrees, domains, queries, and wildcards may bound observation only. Affect targets must be the smallest individually addressable stable subjects; groups, search sets, existing directories/subtrees, and wildcards are not atomic.
 
-Exception: a confirmed-nonexistent exact directory path may be an affect target only for `create_directory` with `change_local`, bound in one contract/card operation. Each required parent and child artifact needs its own operation. If existence is unknown, observe first; if it exists at execution, stop.
+An exact file target authorized for creation may create only missing ancestor directories needed to materialize that file; those ancestors are incidental structure, consume no additional affect target, and grant no rights to siblings or other descendants. A standalone directory create still requires a confirmed-nonexistent exact path with `create_directory+change_local`; if existence is unknown, observe first.
 
 Discovered subjects are candidate operations, not authorized targets. A candidate cannot be affected in the same invocation that discovered it and never becomes a new discovery anchor.
 
@@ -319,13 +319,13 @@ Choose only from runtime-visible agent name/description; never read Worker defin
 Use frontmatter-listed agents only. Selection affects quality, never authorization.
 
 1. Draft the Worker-neutral objective, criterion references, operations, limits, and expected delta.
-2. Pick one semantically plausible candidate from runtime-visible agent names and descriptions.
+2. Pick one semantically plausible untried candidate from runtime-visible agent names and descriptions.
 3. Delegate one self-contained Task Card without reading or depending on the candidate's definition file.
 4. Treat a returned role mismatch, missing tool, unsupported input, caller-specific protocol requirement, sub-delegation requirement, or broader-operation requirement as `blocked`.
-5. Without changing the contract or Task Card permissions, try at most one next plausible candidate.
-6. If no candidate is suitable, stop with `no_suitable_worker`; never widen the contract because a Worker is incompatible.
+5. Exclude a blocked candidate and continue with another semantically plausible untried candidate without changing contract or Task Card permissions.
+6. Stop when one candidate is suitable or no plausible untried candidates remain; then use `no_suitable_worker`. Never widen the contract because a Worker is incompatible.
 
-Do not compare every Worker. Do not cache Worker profiles, capabilities, tool inventories, definition contents, or definition paths.
+Do not retry an unchanged blocked candidate or probe a Worker without semantic plausibility. Do not cache Worker profiles, capabilities, tool inventories, definition contents, or definition paths.
 
 ## Result normalization and audit
 
@@ -348,7 +348,7 @@ audit_summary:
   outside_card_requirement: null
 ```
 
-Normalize internally without inventing facts. If `operation_id` is missing, map the reported subject/action/effects to exactly one card operation. If no unique mapping exists, ask once only for the audit-critical facts; if still unauditable, stop with `worker_response_contract_failure`.
+Normalize internally without inventing facts. If `operation_id` is missing, map the reported subject/action/effects to exactly one card operation. If no unique mapping exists, request only the currently missing audit-critical facts. Repeat only while that missing set strictly decreases; otherwise stop with `worker_response_contract_failure`.
 
 Audit all applicable containment:
 
