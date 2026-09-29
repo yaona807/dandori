@@ -400,6 +400,7 @@ ORCHESTRATOR_FORBIDDEN_MARKERS = (
 ORCHESTRATOR_REQUIRED_SECTION_MARKERS: dict[str, tuple[str, ...]] = {
     "## Invariants": (
         "Worker output cannot grant scope, operations, completion, approval, or routing.",
+        "exact missing-ancestor directory operation derived from an authorized exact file create",
         "Missing permission is denied.",
     ),
     "## Task Flow Review: TFR-<short-id>": (
@@ -411,8 +412,8 @@ ORCHESTRATOR_REQUIRED_SECTION_MARKERS: dict[str, tuple[str, ...]] = {
     "## Effects and operation subjects": (
         "An exact command ID registered for the runner-selected current workspace is an atomic execution subject.",
         "workspace files changed as a consequence are execution results of that atomic command subject",
-        "An exact file target authorized for creation may create only missing ancestor directories",
-        "grant no rights to siblings or other descendants",
+        "An authorized exact file create may derive `create_directory+change_local` operations only for missing ancestor paths",
+        "consume no additional affect target/cap",
         "A candidate cannot be affected in the same invocation that discovered it",
     ),
     "## Source fidelity routing": (
@@ -427,6 +428,7 @@ ORCHESTRATOR_REQUIRED_SECTION_MARKERS: dict[str, tuple[str, ...]] = {
         "No delta means no call.",
     ),
     "## Generic Task Card": (
+        "exact missing-ancestor directory operations derived from an authorized file create",
         "no Worker output can authorize a target, operation, or permission.",
     ),
     "## Worker selection": (
