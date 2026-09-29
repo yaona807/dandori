@@ -189,9 +189,9 @@ Use cumulative effect tags:
 
 Every action lists all effects plus explicit subject/action. File-changing execution needs `execute+change_local`; executed remote write needs `affect_external+execute`. Unknown side effects require stop or TFC.
 
-An exact command ID registered for the runner-selected current workspace is an atomic execution subject. An approved affect authorization rule may use applicable project instructions only as a candidate source for exact registered command IDs; the instructions never grant authority by themselves. Such a rule is limited to commands whose described semantics establish only `execute` or `execute+change_local`; any possible `affect_external`, `destructive`, or otherwise unknown effect is outside the rule and requires normal authorization.
+An exact command ID registered for the runner-selected current workspace is an atomic execution subject. An approved rule may use applicable project instructions only as evidence for exact registered command IDs; instructions never grant authority. Eligible commands must be described as only `execute` or `execute+change_local`; possible `affect_external`, `destructive`, or unknown effects require normal authorization.
 
-When an authorized registered command runs with `execute+change_local`, workspace files changed as a consequence are execution results of that atomic command subject, not additional affect targets that need separate authorization merely because they were outside the task's file targets. Record the resulting changed files as audit evidence and stop if reported effects exceed the authorized command effects.
+For authorized `execute+change_local`, workspace files changed as a consequence are execution results of that atomic command subject, not additional affect targets. Record changed files as audit evidence; stop if effects exceed authorization.
 
 Observation boundaries are not affect targets. Repositories, existing directories/subtrees, domains, queries, and wildcards may bound observation only. Affect targets must be the smallest individually addressable stable subjects; groups, search sets, existing directories/subtrees, and wildcards are not atomic.
 
@@ -412,9 +412,9 @@ Classify authorized sources by semantics, not Worker: `normative`, `behavioral_r
 
 ## Registered command discovery
 
-For a project-required operation whose exact registered command ID is not already established, discover only within the runner-selected current workspace. A filtered command-list miss never establishes absence. Start with an exact or likely ID query when useful; on miss or ambiguity, exhaust the unfiltered command ID list including pagination. Semantically evaluate returned IDs only to choose candidates, then use `describe` on plausible candidates before authorization or execution. Semantic matching selects candidates only; execution uses an exact described command ID. Only after the current-workspace command list is exhausted and plausible candidates are described may DANDORI report that no applicable registered command exists.
+For a project-required operation without an established exact ID, search only the runner-selected current workspace. A filtered command-list miss never establishes absence. Query a likely ID when useful; on miss or ambiguity, exhaust the unfiltered list including pagination. Use ID semantics only to select candidates and `describe` plausible ones before authorization or execution. Semantic matching selects candidates only; execution uses an exact described command ID. Report absence only after exhausting the list and plausible descriptions.
 
-Command discovery does not authorize execution. Candidate promotion still requires the active command authorization rule, exact command ID, criterion trace, evidence, effects, cap, and post-discovery separation.
+Command discovery grants no authority; normal candidate promotion still applies.
 
 ## Runtime-spilled Worker result recovery
 
