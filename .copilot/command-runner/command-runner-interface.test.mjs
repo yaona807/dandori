@@ -412,7 +412,7 @@ test('update replaces exactly one command using definition-hash CAS', async () =
   });
 });
 
-test('unregister uses definition-hash CAS and cannot remove the last workspace command', async () => {
+test('unregister uses definition-hash CAS and can leave an empty command map', async () => {
   await withManagementFixture(async (fixture) => {
     const configPath = path.join(fixture.commandRunner, 'workspaces.json');
     const described = parseSuccess(runInterface(fixture, fixture.alpha, ['describe', 'remove']));
@@ -431,15 +431,143 @@ test('unregister uses definition-hash CAS and cannot remove the last workspace c
       `expected=${described.definitionHash}`,
     ]));
     assert.equal(removed.removedDefinitionHash, described.definitionHash);
-    const after = JSON.parse(await readFile(configPath, 'utf8'));
-    assert.equal('remove' in after.workspaces[0].commands, false);
 
     const keep = parseSuccess(runInterface(fixture, fixture.alpha, ['describe', 'keep']));
-    parseFailure(runInterface(fixture, fixture.alpha, [
+    const removedKeep = parseSuccess(runInterface(fixture, fixture.alpha, [
       'unregister',
       'keep',
       `expected=${keep.definitionHash}`,
-    ]), 'last_command');
+    ]));
+    assert.equal(removedKeep.removedDefinitionHash, keep.definitionHash);
+
+    const after = JSON.parse(await readFile(configPath, 'utf8'));
+    assert.deepEqual(after.workspaces[0].commands, {});
+    const listed = parseSuccess(runInterface(fixture, fixture.alpha, ['list']));
+    assert.deepEqual(listed.commandIds, []);
+  });
+});
+
+test('workspace management registers current cwd without accepting a root argument', async () => {
+  await withManagementFixture(async (fixture) => {
+    const configPath = path.join(fixture.commandRunner, 'workspaces.json');
+    const empty = {
+      version: 1,
+      defaults: { timeoutMs: 10_000, maxOutputBytes: 16_384 },
+      workspaces: [],
+    };
+    await writeFile(configPath, `${JSON.stringify(empty, null, 2)}\n`, { mode: 0o600 });
+
+    const registered = parseSuccess(runInterface(
+      fixture,
+      fixture.alpha,
+      ['workspace-register', 'alpha'],
+    ));
+    assert.equal(registered.workspaceId, 'alpha');
+    assert.equal(registered.root, fixture.alpha);
+    assert.match(registered.workspaceHash, /^sha256-[0-9a-f]{64}$/u);
+
+    const listed = parseSuccess(runInterface(fixture, fixture.alpha, ['workspace-list']));
+    assert.deepEqual(listed.workspaceIds, ['alpha']);
+
+    const described = parseSuccess(runInterface(
+      fixture,
+      fixture.alpha,
+      ['workspace-describe', 'alpha'],
+    ));
+    assert.equal(described.root, fixture.alpha);
+    assert.equal(described.status, 'live');
+    assert.equal(described.commandCount, 0);
+    assert.equal(described.workspaceHash, registered.workspaceHash);
+
+    parseFailure(runInterface(
+      fixture,
+      fixture.alpha,
+      ['workspace-register', 'other'],
+    ), 'workspace_overlap');
+
+    const saved = JSON.parse(await readFile(configPath, 'utf8'));
+    assert.deepEqual(saved.workspaces, [{
+      id: 'alpha',
+      root: fixture.alpha,
+      commands: {},
+    }]);
+  });
+});
+
+test('workspace registration rejects nested overlap but runtime keeps legacy nested selection semantics', async () => {
+  await withManagementFixture(async (fixture) => {
+    const nested = path.join(fixture.alpha, 'nested');
+    await mkdir(nested);
+    parseFailure(runInterface(
+      fixture,
+      nested,
+      ['workspace-register', 'nested'],
+    ), 'workspace_overlap');
+  });
+});
+
+test('workspace unregister uses workspace-hash CAS and limits live removal to the selected workspace', async () => {
+  await withManagementFixture(async (fixture) => {
+    const beta = parseSuccess(runInterface(
+      fixture,
+      fixture.alpha,
+      ['workspace-describe', 'beta'],
+    ));
+    parseFailure(runInterface(fixture, fixture.alpha, [
+      'workspace-unregister',
+      'beta',
+      `expected=${beta.workspaceHash}`,
+    ]), 'workspace_not_current');
+
+    const alpha = parseSuccess(runInterface(
+      fixture,
+      fixture.alpha,
+      ['workspace-describe', 'alpha'],
+    ));
+    parseFailure(runInterface(fixture, fixture.alpha, [
+      'workspace-unregister',
+      'alpha',
+      `expected=sha256-${'0'.repeat(64)}`,
+    ]), 'stale_workspace');
+
+    const removed = parseSuccess(runInterface(fixture, fixture.alpha, [
+      'workspace-unregister',
+      'alpha',
+      `expected=${alpha.workspaceHash}`,
+    ]));
+    assert.equal(removed.previousStatus, 'live');
+    assert.equal(removed.removedWorkspaceHash, alpha.workspaceHash);
+
+    const config = JSON.parse(await readFile(
+      path.join(fixture.commandRunner, 'workspaces.json'),
+      'utf8',
+    ));
+    assert.deepEqual(config.workspaces.map(({ id }) => id), ['beta']);
+  });
+});
+
+test('stale workspace can be described and removed without runtime selection', async () => {
+  await withManagementFixture(async (fixture) => {
+    await rm(fixture.beta, { recursive: true, force: true });
+
+    parseFailure(runInterface(fixture, fixture.alpha, ['list']), 'invalid_config');
+
+    const described = parseSuccess(runInterface(
+      fixture,
+      fixture.alpha,
+      ['workspace-describe', 'beta'],
+    ));
+    assert.equal(described.status, 'stale');
+
+    const removed = parseSuccess(runInterface(fixture, fixture.alpha, [
+      'workspace-unregister',
+      'beta',
+      `expected=${described.workspaceHash}`,
+    ]));
+    assert.equal(removed.previousStatus, 'stale');
+
+    const listed = parseSuccess(runInterface(fixture, fixture.alpha, ['list']));
+    assert.deepEqual(listed.commandIds.sort(), ['keep', 'remove']);
   });
 });
 
@@ -539,6 +667,10 @@ test('expired execution directories are cleaned before a new run', async () => {
 test('hook permits only bounded execution and management interface shapes', async () => {
   await withFixture(async (fixture) => {
     for (const command of [
+      'node ~/.copilot/command-runner/command-runner-interface.mjs workspace-list query=alpha',
+      'node ~/.copilot/command-runner/command-runner-interface.mjs workspace-describe alpha',
+      'node ~/.copilot/command-runner/command-runner-interface.mjs workspace-register alpha',
+      `node ~/.copilot/command-runner/command-runner-interface.mjs workspace-unregister alpha expected=sha256-${'0'.repeat(64)}`,
       'node ~/.copilot/command-runner/command-runner-interface.mjs list query=test',
       'node ~/.copilot/command-runner/command-runner-interface.mjs describe echo',
       'node ~/.copilot/command-runner/command-runner-interface.mjs register lint definition=%7B%22description%22%3A%22Lint%22%7D',
@@ -554,6 +686,8 @@ test('hook permits only bounded execution and management interface shapes', asyn
     for (const toolInput of [
       { command: 'node ~/.copilot/command-runner/command-runner.mjs list' },
       { command: 'npm test' },
+      { command: 'node ~/.copilot/command-runner/command-runner-interface.mjs workspace-register alpha root=%2Ftmp%2Falpha' },
+      { command: 'node ~/.copilot/command-runner/command-runner-interface.mjs workspace-unregister alpha other=value' },
       { command: 'node ~/.copilot/command-runner/command-runner-interface.mjs register lint other=value' },
       { command: `node ~/.copilot/command-runner/command-runner-interface.mjs update echo definition=%7B%7D expected=sha256-${'0'.repeat(64)}` },
       { command: `node ~/.copilot/command-runner/command-runner-interface.mjs update echo expected=sha256-${'0'.repeat(64)} other=value` },

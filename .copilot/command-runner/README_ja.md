@@ -26,7 +26,7 @@ test -f ~/.copilot/command-runner/workspaces.json \
   || cp .copilot/command-runner/workspaces.example.json ~/.copilot/command-runner/workspaces.json
 ```
 
-`~/.copilot/command-runner/workspaces.json`を編集し、サンプルのrootをcanonicalな絶対Workspaceパスへ置き換えます。この個人用ファイルはDANDORIリポジトリへコミットしません。Workspace自体を用意した後は、コマンドmapを手動編集するほか、後述の固定 `register` / `unregister` interfaceから管理できます。
+コピーされる初期設定は空のWorkspace registryです。Workspaceにしたいrootディレクトリで `workspace-register <id>` を実行すると、Runnerが実際のカレントディレクトリからcanonical rootを取得して登録します。root引数や `workspaces.json` の手編集は不要です。この個人用ファイルはDANDORIリポジトリへコミットしません。
 
 Agent固有HookはPreview機能のため、VS Codeの `chat.useCustomAgentHooks` を `true` にします。Chat Diagnosticsで、`CommandRunner`が `~/.copilot/agents/CommandRunner.agent.md` から読み込まれていることを確認してください。
 
@@ -44,7 +44,7 @@ Runnerは実行時に次の処理を行います。
 
 実行位置はWorkspace rootでも、その配下のディレクトリでも構いません。AgentからWorkspace IDを指定したり、別のWorkspaceを選択したり、ターミナルのcwd・環境変数・shell・profileを上書きしたり、バックグラウンド実行を要求したりすることはできません。リポジトリ名やGit remoteは認可境界として使用しません。
 
-コマンド管理にも同じ選択規則を使用します。`register` / `update` / `unregister` が変更できるのは、実際のカレントディレクトリから選択されたWorkspaceのcommand mapだけです。Workspace IDやrootを引数で指定することはできません。
+コマンド管理にも同じ選択規則を使用します。`register` / `update` / `unregister` が変更できるのは、実際のカレントディレクトリから選択されたWorkspaceのcommand mapだけです。Workspace IDやrootを引数で指定することはできません。Workspace管理は別系統で、`workspace-register` は実際のカレントディレクトリだけを登録します。liveなWorkspaceの削除は現在選択されているWorkspaceだけに限定し、rootが消えたstale Workspaceだけはexact IDとworkspace hash CASで削除できます。
 
 ## 設定
 
@@ -85,9 +85,13 @@ Runnerは実行時に次の処理を行います。
 
 ## Runnerのインターフェース
 
-現在のWorkspace内から実行します。
+command操作は現在のWorkspace内から実行します。stale Workspaceの確認・削除はruntime選択が壊れていても利用できます。
 
 ```bash
+node ~/.copilot/command-runner/command-runner-interface.mjs workspace-list [query=<encoded-id-fragment>] [offset=<n>]
+node ~/.copilot/command-runner/command-runner-interface.mjs workspace-describe <workspace-id>
+node ~/.copilot/command-runner/command-runner-interface.mjs workspace-register <workspace-id>
+node ~/.copilot/command-runner/command-runner-interface.mjs workspace-unregister <workspace-id> expected=<workspace-hash>
 node ~/.copilot/command-runner/command-runner-interface.mjs list [query=<encoded-id-fragment>] [offset=<n>]
 node ~/.copilot/command-runner/command-runner-interface.mjs describe test
 node ~/.copilot/command-runner/command-runner-interface.mjs register lint definition=<encoded-json>
@@ -134,7 +138,7 @@ Runnerがterminalへ返すレスポンスはすべて固定上限以下です。
 
 `update`は既存1コマンドの定義を完全置換し、upsertは行いません。`describe`で取得した現在の `definitionHash` が必須で、古いhashは `stale_definition` で拒否します。置換定義をstrict JSONとして解析し、候補設定全体を検証してからatomicに保存します。
 
-`unregister`には、`describe`で取得した現在の `definitionHash` が必須です。観測後に定義が変わっていた場合は `stale_definition` で拒否します。これにより、同じIDが別定義へ差し替わった後に古い削除要求で消してしまうことを防ぎます。バージョン1では既存の「登録Workspaceのcommand mapは空にしない」という不変条件を維持するため、最後の1コマンドは削除できません。
+`unregister`には、`describe`で取得した現在の `definitionHash` が必須です。観測後に定義が変わっていた場合は `stale_definition` で拒否します。これにより、同じIDが別定義へ差し替わった後に古い削除要求で消してしまうことを防ぎます。空のcommand mapを有効とするため、最後の1コマンドも削除できます。
 
 管理操作はユーザーレベルの `workspaces.lock` で直列化します。候補設定は同じディレクトリのmode `0600` 一時ファイルへ書き、設定全体の検証と元ファイル不変確認が通った場合だけatomic renameします。生きているlockがある場合は `configuration_busy`、5分を超えたlockは `stale_configuration_lock` として報告し、自動破壊はせず手動削除を要求します。
 
@@ -168,7 +172,9 @@ $COPILOT_HOME/command-runner/executions/<workspace-id>/<UTC-timestamp>_<UUID>/
 
 - 未登録のWorkspaceとcommandはfail-closedで拒否します。
 - 一致するrootが複数ある場合は、最も具体的なrootを選択します。
-- AgentからWorkspaceを登録または選択することはできません。
+- runtime WorkspaceはAgentから指定・選択できず、実際のカレントディレクトリからのみ決定します。
+- 明示委譲されたWorkspace追加・削除だけを固定interfaceから実行できます。追加はroot引数を受け取らず、新規overlap rootを拒否します。live Workspace削除はcurrent Workspace限定、stale削除はexact ID + workspace hash CAS必須です。
+- Workspace登録をcommand不足や未登録runtime Workspaceの自動fallbackとして使うことは禁止します。
 - commandの登録・削除は現在Workspace向けの固定管理operationだけで可能です。Agentの通常write toolによる `workspaces.json` 直接編集は引き続きHookで拒否します。
 - `register`は既存IDを上書きせず、`unregister`は観測したdefinition hashへ束縛されます。
 - 管理候補はatomic更新前にRunner設定全体として検証されます。

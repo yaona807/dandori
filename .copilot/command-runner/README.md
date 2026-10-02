@@ -26,7 +26,7 @@ test -f ~/.copilot/command-runner/workspaces.json \
   || cp .copilot/command-runner/workspaces.example.json ~/.copilot/command-runner/workspaces.json
 ```
 
-Edit `~/.copilot/command-runner/workspaces.json` and replace every example root with a canonical absolute workspace path. This personal file is not part of the DANDORI repository. After a workspace exists, its command map can be maintained manually or through the fixed `register` / `unregister` interface described below.
+The copied configuration starts with an empty workspace registry. From the root directory that should become a workspace, register an explicit ID through `workspace-register <id>`. The runner derives and stores the canonical root from the actual current working directory, so no manual `workspaces.json` edit or root argument is required. This personal file is not part of the DANDORI repository.
 
 Set `chat.useCustomAgentHooks` to `true` in VS Code because agent-scoped hooks are a preview feature. Confirm in Chat Diagnostics that `CommandRunner` is loaded from `~/.copilot/agents/CommandRunner.agent.md`.
 
@@ -44,7 +44,7 @@ At runtime the runner:
 
 The active directory may be the workspace root or any directory below it. The agent cannot provide a workspace ID, select another workspace, override the terminal working directory, change the environment or shell, or request background execution. Repository names and Git remotes are not authorization boundaries.
 
-The same selection rule applies to command management. `register`, `update`, and `unregister` can mutate only the command map of the workspace selected from the real current directory; none accepts a workspace ID or root.
+The same selection rule applies to command management. `register`, `update`, and `unregister` can mutate only the command map of the workspace selected from the real current directory; none accepts a workspace ID or root. Workspace management is separate: `workspace-register` registers only the actual current directory, while live workspace removal is allowed only for the workspace selected by that directory. A missing-root stale workspace may be removed by exact ID plus workspace-hash CAS so broken registrations remain recoverable.
 
 ## Configuration
 
@@ -85,9 +85,13 @@ A command's public `describe` representation is also bounded. It includes a `def
 
 ## Runner interface
 
-Run from the active workspace:
+Run command operations from the active workspace. Workspace inspection/removal can also operate on stale registrations:
 
 ```bash
+node ~/.copilot/command-runner/command-runner-interface.mjs workspace-list [query=<encoded-id-fragment>] [offset=<n>]
+node ~/.copilot/command-runner/command-runner-interface.mjs workspace-describe <workspace-id>
+node ~/.copilot/command-runner/command-runner-interface.mjs workspace-register <workspace-id>
+node ~/.copilot/command-runner/command-runner-interface.mjs workspace-unregister <workspace-id> expected=<workspace-hash>
 node ~/.copilot/command-runner/command-runner-interface.mjs list [query=<encoded-id-fragment>] [offset=<n>]
 node ~/.copilot/command-runner/command-runner-interface.mjs describe test
 node ~/.copilot/command-runner/command-runner-interface.mjs register lint definition=<encoded-json>
@@ -134,7 +138,7 @@ Argument kinds are `flag`, `option`, and `positional`. Non-flag arguments carry 
 
 `update` replaces exactly one existing command definition and is not an upsert. It requires the current `definitionHash` returned by `describe`; a stale hash fails with `stale_definition`. The replacement is strict-JSON parsed, the whole candidate configuration is validated, and only then is it persisted atomically.
 
-`unregister` requires the current `definitionHash` returned by `describe`. If the definition changed since it was observed, removal fails with `stale_definition`; this prevents an approval or request for one command definition from deleting a later replacement that reused the same ID. Version 1 retains the existing non-empty command-map invariant, so the last command in a registered workspace cannot be removed.
+`unregister` requires the current `definitionHash` returned by `describe`. If the definition changed since it was observed, removal fails with `stale_definition`; this prevents an approval or request for one command definition from deleting a later replacement that reused the same ID. Empty command maps are valid, so the last command may be removed without deleting the workspace.
 
 Management operations serialize through a user-level `workspaces.lock`. A candidate is written to a mode-`0600` temporary file in the same directory and atomically renamed over `workspaces.json` only after full validation and a final unchanged-source check. A live lock fails with `configuration_busy`. A lock older than five minutes is reported as `stale_configuration_lock` and must be removed manually rather than being broken automatically.
 
@@ -168,7 +172,9 @@ The cache is temporary observation data, not an audit log. Before a new run, the
 
 - Unknown workspaces and commands fail closed.
 - The most specific matching registered root is selected.
-- The agent cannot register or select a workspace.
+- Runtime workspace selection cannot be supplied by the agent; it always derives from the actual current directory.
+- Explicitly delegated workspace registration/removal is available only through the fixed interface. Registration accepts no root argument, new overlapping roots are rejected, live removal is current-workspace-only, and stale removal requires exact ID plus workspace-hash CAS.
+- Workspace registration is never a fallback for a missing command or unregistered runtime workspace.
 - Command registration/removal is possible only through the fixed management operations for the current workspace; direct agent writes to `workspaces.json` remain denied by the hook.
 - `register` does not overwrite an existing ID, and `unregister` is bound to the observed definition hash.
 - Management candidates are validated as complete runner configurations before an atomic update.

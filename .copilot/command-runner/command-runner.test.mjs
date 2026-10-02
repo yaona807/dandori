@@ -269,6 +269,34 @@ test('unregistered workspace fails closed', async () => {
   });
 });
 
+test('empty workspace collection is valid and runtime selection still fails closed', async () => {
+  await withFixture(async (fixture) => {
+    await writeFile(
+      path.join(fixture.home, 'command-runner', 'workspaces.json'),
+      `${JSON.stringify({
+        version: 1,
+        defaults: { timeoutMs: 10_000, maxOutputBytes: 16_384 },
+        workspaces: [],
+      }, null, 2)}\n`,
+    );
+    const result = runRunner(fixture, fixture.alpha, ['list']);
+    assert.equal(result.status, 2);
+    assert.match(result.stderr, /workspace is not registered/u);
+    assert.doesNotMatch(result.stderr, /non-empty array/u);
+  });
+});
+
+test('registered workspace may have an empty command map', async () => {
+  await withFixture(async (fixture) => {
+    const result = runRunner(fixture, fixture.alpha, ['list']);
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(JSON.parse(result.stdout).commands, []);
+  }, (configuration) => {
+    configuration.workspaces[0].commands = {};
+    return configuration;
+  });
+});
+
 test('deepest registered root wins for nested workspaces', async () => {
   await withFixture(async (fixture) => {
     const nested = path.join(fixture.alpha, 'nested');
