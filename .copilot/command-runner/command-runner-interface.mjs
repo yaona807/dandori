@@ -395,13 +395,161 @@ async function validateCandidateConfiguration(configuration, expectedWorkspaceId
       `${JSON.stringify(configuration, null, 2)}\n`,
       { encoding: 'utf8', mode: 0o600 },
     );
-    const result = await runCore(['list'], { ...process.env, COPILOT_HOME: temporaryHome });
-    if (result?.workspaceId !== expectedWorkspaceId) {
-      throw new InterfaceError('workspace_identity_changed', 'candidate configuration changes the selected workspace identity');
+    const env = { ...process.env, COPILOT_HOME: temporaryHome };
+    await runCore(['validate-config'], env);
+    if (expectedWorkspaceId !== undefined) {
+      const result = await runCore(['list'], env);
+      if (result?.workspaceId !== expectedWorkspaceId) {
+        throw new InterfaceError(
+          'workspace_identity_changed',
+          'candidate configuration changes the selected workspace identity',
+        );
+      }
     }
   } finally {
     await rm(temporaryHome, { recursive: true, force: true });
   }
+}
+
+async function readManagementConfiguration() {
+  const before = await readConfigurationSource();
+  await validateCandidateConfiguration(before.raw);
+  const afterSource = await readFile(configurationPath(), 'utf8');
+  if (afterSource !== before.source) {
+    throw new InterfaceError(
+      'configuration_changed',
+      'workspaces.json changed while it was being inspected',
+    );
+  }
+  return before;
+}
+
+async function inspectWorkspaceRoot(root) {
+  try {
+    const canonical = await realpath(root);
+    if (!(await stat(canonical)).isDirectory()) {
+      throw new InterfaceError('invalid_config', 'workspace root must identify a directory');
+    }
+    return { status: 'live', canonicalRoot: canonical };
+  } catch (error) {
+    if (error instanceof InterfaceError) throw error;
+    if (['ENOENT', 'ENOTDIR'].includes(error?.code)) {
+      return { status: 'stale', canonicalRoot: null };
+    }
+    throw new InterfaceError(
+      'workspace_status_unknown',
+      'workspace root status could not be determined safely',
+    );
+  }
+}
+
+function workspaceHash(workspace) {
+  return definitionHash(workspace);
+}
+
+async function describeConfiguredWorkspace(id) {
+  const snapshot = await readManagementConfiguration();
+  const workspace = snapshot.raw.workspaces.find((entry) => entry.id === id);
+  if (!workspace) {
+    throw new InterfaceError('workspace_not_registered', `workspace is not registered: ${id}`);
+  }
+  const state = await inspectWorkspaceRoot(workspace.root);
+  return {
+    workspaceId: id,
+    root: workspace.root,
+    status: state.status,
+    commandCount: Object.keys(workspace.commands).length,
+    workspaceHash: workspaceHash(workspace),
+  };
+}
+
+async function registerConfiguredWorkspace(id) {
+  return withConfigurationLock(async () => {
+    const snapshot = await readManagementConfiguration();
+    if (snapshot.raw.workspaces.some((entry) => entry.id === id)) {
+      throw new InterfaceError('workspace_already_registered', `workspace is already registered: ${id}`);
+    }
+
+    let current;
+    try {
+      current = await realpath(process.cwd());
+      if (!(await stat(current)).isDirectory()) {
+        throw new InterfaceError('workspace_not_found', 'current working directory must be a directory');
+      }
+    } catch (error) {
+      if (error instanceof InterfaceError) throw error;
+      throw new InterfaceError(
+        'workspace_not_found',
+        `current working directory does not exist: ${process.cwd()}`,
+      );
+    }
+
+    for (const workspace of snapshot.raw.workspaces) {
+      const state = await inspectWorkspaceRoot(workspace.root);
+      const existingRoot = state.canonicalRoot ?? path.resolve(workspace.root);
+      if (inside(existingRoot, current) || inside(current, existingRoot)) {
+        throw new InterfaceError(
+          'workspace_overlap',
+          `current directory overlaps registered workspace ${workspace.id}`,
+        );
+      }
+    }
+
+    const candidate = JSON.parse(JSON.stringify(snapshot.raw));
+    const workspace = { id, root: current, commands: {} };
+    candidate.workspaces.push(workspace);
+    await validateCandidateConfiguration(candidate);
+    await writeConfigurationAtomically(snapshot.source, candidate);
+    return {
+      status: 'completed',
+      workspaceId: id,
+      root: current,
+      workspaceHash: workspaceHash(workspace),
+    };
+  });
+}
+
+async function unregisterConfiguredWorkspace(id, expectedHash) {
+  if (!DEFINITION_HASH_RE.test(expectedHash)) {
+    throw new InterfaceError(
+      'invalid_argument',
+      'expected must be a sha256 workspace hash returned by workspace-describe',
+    );
+  }
+  return withConfigurationLock(async () => {
+    const snapshot = await readManagementConfiguration();
+    const workspace = snapshot.raw.workspaces.find((entry) => entry.id === id);
+    if (!workspace) {
+      throw new InterfaceError('workspace_not_registered', `workspace is not registered: ${id}`);
+    }
+    const currentHash = workspaceHash(workspace);
+    if (currentHash !== expectedHash) {
+      throw new InterfaceError('stale_workspace', 'registered workspace changed after it was described');
+    }
+
+    const state = await inspectWorkspaceRoot(workspace.root);
+    if (state.status === 'live') {
+      const selected = await runCore(['list']);
+      if (selected?.workspaceId !== id) {
+        throw new InterfaceError(
+          'workspace_not_current',
+          'a live workspace can be removed only when it is selected by the actual current directory',
+        );
+      }
+    }
+
+    const candidate = JSON.parse(JSON.stringify(snapshot.raw));
+    candidate.workspaces = candidate.workspaces.filter((entry) => entry.id !== id);
+    await validateCandidateConfiguration(candidate);
+    await writeConfigurationAtomically(snapshot.source, candidate);
+    return {
+      status: 'completed',
+      workspaceId: id,
+      root: workspace.root,
+      previousStatus: state.status,
+      removedWorkspaceHash: currentHash,
+    };
+  });
 }
 
 async function writeConfigurationAtomically(source, configuration) {
@@ -560,9 +708,6 @@ async function unregisterConfiguredCommand(id, expectedHash) {
     const currentHash = definitionHash(command);
     if (currentHash !== expectedHash) {
       throw new InterfaceError('stale_definition', 'registered command changed after it was described');
-    }
-    if (Object.keys(snapshot.workspace.commands).length <= 1) {
-      throw new InterfaceError('last_command', 'cannot remove the last command from a registered workspace');
     }
     const candidate = JSON.parse(JSON.stringify(snapshot.raw));
     const workspace = candidate.workspaces.find((entry) => entry.id === snapshot.workspaceId);
@@ -776,11 +921,80 @@ async function readOutput(workspace, id, provided) {
 
 async function main() {
   const [operation, subject, ...rest] = process.argv.slice(2);
-  if (!['list', 'describe', 'register', 'update', 'unregister', 'run', 'output'].includes(operation)) {
+  if (![
+    'workspace-list',
+    'workspace-describe',
+    'workspace-register',
+    'workspace-unregister',
+    'list',
+    'describe',
+    'register',
+    'update',
+    'unregister',
+    'run',
+    'output',
+  ].includes(operation)) {
     throw new InterfaceError(
       'usage',
-      'usage: command-runner-interface.mjs list [query=<value>] [offset=<n>] | describe <id> | register <id> definition=<encoded-json> | update <id> expected=<definition-hash> definition=<encoded-json> | unregister <id> expected=<definition-hash> | run <id> [name=encoded-value ...] | output <execution-id> stream=stdout|stderr [offset=<n>]',
+      'usage: command-runner-interface.mjs workspace-list [query=<value>] [offset=<n>] | workspace-describe <id> | workspace-register <id> | workspace-unregister <id> expected=<workspace-hash> | list [query=<value>] [offset=<n>] | describe <id> | register <id> definition=<encoded-json> | update <id> expected=<definition-hash> definition=<encoded-json> | unregister <id> expected=<definition-hash> | run <id> [name=encoded-value ...] | output <execution-id> stream=stdout|stderr [offset=<n>]',
     );
+  }
+
+  if (operation === 'workspace-list') {
+    const tokens = subject === undefined ? rest : [subject, ...rest];
+    const provided = parseArguments(tokens);
+    allowOnly(provided, new Set(['query', 'offset']));
+    const query = one(provided, 'query');
+    if (query !== undefined && !QUERY_RE.test(query)) {
+      throw new InterfaceError('invalid_argument', 'query must use workspace-ID characters');
+    }
+    const start = offset(one(provided, 'offset'));
+    const snapshot = await readManagementConfiguration();
+    const ids = snapshot.raw.workspaces
+      .map((workspace) => workspace.id)
+      .sort()
+      .filter((id) => query === undefined || id.includes(query));
+    if (start > ids.length) {
+      throw new InterfaceError('invalid_argument', 'offset exceeds matching workspace count');
+    }
+    const page = ids.slice(start, start + LIMITS.listPageSize);
+    const nextOffset = start + page.length;
+    emit({
+      workspaceIds: page,
+      offset: start,
+      nextOffset: nextOffset < ids.length ? nextOffset : null,
+      total: ids.length,
+    });
+    return 0;
+  }
+
+  if (operation === 'workspace-describe') {
+    if (!COMMAND_ID_RE.test(subject ?? '') || rest.length) {
+      throw new InterfaceError('usage', 'workspace-describe accepts exactly one safe workspace ID');
+    }
+    emit(await describeConfiguredWorkspace(subject));
+    return 0;
+  }
+
+  if (operation === 'workspace-register') {
+    if (!COMMAND_ID_RE.test(subject ?? '') || rest.length) {
+      throw new InterfaceError('usage', 'workspace-register accepts exactly one safe workspace ID');
+    }
+    emit(await registerConfiguredWorkspace(subject));
+    return 0;
+  }
+
+  if (operation === 'workspace-unregister') {
+    if (!COMMAND_ID_RE.test(subject ?? '')) {
+      throw new InterfaceError('usage', 'workspace-unregister requires a safe workspace ID');
+    }
+    const provided = parseArguments(rest);
+    allowOnly(provided, new Set(['expected']));
+    emit(await unregisterConfiguredWorkspace(
+      subject,
+      one(provided, 'expected', true),
+    ));
+    return 0;
   }
 
   if (operation === 'list') {
