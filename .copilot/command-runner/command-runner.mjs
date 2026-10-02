@@ -209,14 +209,17 @@ function inside(root, candidate) {
     );
 }
 
-async function canonicalExistingDirectory(value, location) {
+async function canonicalExistingDirectory(value, location, allowMissing = false) {
   if (!safeString(value) || !path.isAbsolute(value)) {
     throw new RunnerError('invalid_config', `${location} must be an absolute path`);
   }
   let canonical;
   try {
     canonical = await realpath(value);
-  } catch {
+  } catch (error) {
+    if (allowMissing && ['ENOENT', 'ENOTDIR'].includes(error?.code)) {
+      return path.resolve(value);
+    }
     throw new RunnerError('invalid_config', `${location} must identify an existing directory`);
   }
   if (!(await stat(canonical)).isDirectory()) {
@@ -325,9 +328,6 @@ function validateArgument(spec, location) {
 
 function validateCommands(rawCommands, defaults, location) {
   requireObject(rawCommands, location);
-  if (!Object.keys(rawCommands).length) {
-    throw new RunnerError('invalid_config', `${location} must not be empty`);
-  }
   const commands = {};
   for (const [id, command] of Object.entries(rawCommands)) {
     if (!ID_RE.test(id)) {
@@ -398,7 +398,7 @@ function validateCommands(rawCommands, defaults, location) {
   return commands;
 }
 
-async function validateConfig(raw) {
+async function validateConfig(raw, { allowMissingRoots = false } = {}) {
   requireObject(raw, 'configuration');
   requireKeys(raw, ['version', 'defaults', 'workspaces'], 'configuration');
   if (raw.version !== 1) {
@@ -420,10 +420,10 @@ async function validateConfig(raw) {
         16_777_216,
       ),
   };
-  if (!Array.isArray(raw.workspaces) || !raw.workspaces.length) {
+  if (!Array.isArray(raw.workspaces)) {
     throw new RunnerError(
       'invalid_config',
-      'configuration.workspaces must be a non-empty array',
+      'configuration.workspaces must be an array',
     );
   }
   const ids = new Set();
@@ -440,7 +440,11 @@ async function validateConfig(raw) {
       throw new RunnerError('invalid_config', `duplicate workspace ID: ${workspace.id}`);
     }
     ids.add(workspace.id);
-    const root = await canonicalExistingDirectory(workspace.root, `${location}.root`);
+    const root = await canonicalExistingDirectory(
+      workspace.root,
+      `${location}.root`,
+      allowMissingRoots,
+    );
     const rootKey = process.platform === 'win32' ? root.toLowerCase() : root;
     if (roots.has(rootKey)) {
       throw new RunnerError('invalid_config', `duplicate workspace root: ${root}`);
@@ -874,11 +878,34 @@ async function execute(workspace, id, command, provided) {
 
 async function main() {
   const [operation, commandId, ...argumentTokens] = process.argv.slice(2);
-  if (!['list', 'describe', 'run'].includes(operation)) {
+  if (!['validate-config', 'list', 'describe', 'run'].includes(operation)) {
     throw new RunnerError(
       'usage',
-      'usage: command-runner.mjs list | describe <id> | run <id> [name=encoded-value ...]',
+      'usage: command-runner.mjs validate-config | list | describe <id> | run <id> [name=encoded-value ...]',
     );
+  }
+
+  if (operation === 'validate-config') {
+    if (commandId !== undefined) {
+      throw new RunnerError('usage', 'validate-config does not accept arguments');
+    }
+    const configurationPath = configPath();
+    let source;
+    try {
+      await access(configurationPath, fsConstants.R_OK);
+      source = await readFile(configurationPath, 'utf8');
+    } catch {
+      throw new RunnerError(
+        'configuration_not_found',
+        `unable to read ${configurationPath}`,
+      );
+    }
+    await validateConfig(
+      parseStrictJson(source, configurationPath),
+      { allowMissingRoots: true },
+    );
+    emit({ status: 'valid' });
+    return 0;
   }
 
   const workspace = await loadWorkspace();
