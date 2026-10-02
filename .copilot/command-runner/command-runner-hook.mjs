@@ -88,8 +88,27 @@ function validateRunnerInvocation(tokens) {
   }
 
   const operation = tokens[2];
-  if (operation === 'list') {
+  if (operation === 'workspace-list' || operation === 'list') {
     for (const token of tokens.slice(3)) validateEncodedParameter(token);
+    return;
+  }
+
+  if (operation === 'workspace-describe' || operation === 'workspace-register') {
+    const workspaceId = tokens[3];
+    if (!COMMAND_ID_PATTERN.test(workspaceId ?? '') || tokens.length !== 4) {
+      throw new Error(`${operation} accepts exactly one safe workspace ID`);
+    }
+    return;
+  }
+
+  if (operation === 'workspace-unregister') {
+    const workspaceId = tokens[3];
+    if (!COMMAND_ID_PATTERN.test(workspaceId ?? '')) {
+      throw new Error('workspace-unregister requires a safe workspace ID');
+    }
+    if (tokens.length !== 5 || validateEncodedParameter(tokens[4]) !== 'expected') {
+      throw new Error('workspace-unregister accepts exactly expected=<workspace-hash>');
+    }
     return;
   }
 
