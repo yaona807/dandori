@@ -247,7 +247,7 @@ If the current session's authorization or cumulative loop-control state cannot b
   agents/
     Orchestrator.agent.md
     Researcher.agent.md
-    PullRequestResearcher.agent.md
+    GitHubResearcher.agent.md
     Writer.agent.md
     CommandRunner.agent.md
     Reviewer.agent.md
@@ -278,7 +278,7 @@ assets/
 | Component | Role |
 | --- | --- |
 | `Orchestrator` | Control-plane agent for intake, compact approval, contract management, Task Card creation, worker selection, audit, loop control, and synthesis |
-| Reference workers | Optional workers for investigation, pull-request inspection, implementation, review, and browser-based verification |
+| Reference workers | Optional workers for investigation, exact GitHub issue/pull-request inspection, implementation, review, and browser-based verification |
 | `CommandRunner` | Optional execution worker that exposes registered commands through a fixed bounded interface and keeps large command output in its own temporary execution cache |
 | `code-review` skill | Focused review guidance used by the reference review worker |
 
@@ -286,7 +286,7 @@ assets/
 
 - DANDORI agents explicitly target VS Code.
 - Subagent restriction uses the `agents` allowlist, which is currently an experimental VS Code feature.
-- `PullRequestResearcher` requires the GitHub Pull Requests extension and its exposed tools.
+- `GitHubResearcher` requires the GitHub Pull Requests extension and its exposed tools.
 - `BrowserQA` requires the configured browser tool set.
 - Unavailable or unrecognized tool names can be ignored by the runtime; verify actual tool availability before use.
 - A bundled Worker calls a tool only when the tool arguments and runtime behavior can enforce the delegated boundary. If the available tool can operate only on a broader scope, the Worker returns `blocked` and identifies the narrower capability required.
@@ -341,16 +341,18 @@ Copying a new version over an existing installation does not remove files that w
 User-level cleanup:
 
 ```bash
-rm -f ~/.copilot/agents/{Orchestrator,Researcher,PullRequestResearcher,Writer,CommandRunner,Reviewer,BrowserQA}.agent.md
+rm -f ~/.copilot/agents/{Orchestrator,Researcher,GitHubResearcher,PullRequestResearcher,Writer,CommandRunner,Reviewer,BrowserQA}.agent.md
 rm -rf ~/.copilot/skills/code-review
 ```
 
 Standard workspace cleanup:
 
 ```bash
-rm -f .github/agents/{Orchestrator,Researcher,PullRequestResearcher,Writer,CommandRunner,Reviewer,BrowserQA}.agent.md
+rm -f .github/agents/{Orchestrator,Researcher,GitHubResearcher,PullRequestResearcher,Writer,CommandRunner,Reviewer,BrowserQA}.agent.md
 rm -rf .github/skills/code-review
 ```
+
+The legacy `PullRequestResearcher.agent.md` name is also removed during this rename migration so an obsolete Worker definition cannot remain discoverable.
 
 After cleanup, run the installation commands for the selected scope and verify discovery again. For a custom `.copilot` workspace installation, remove the same managed filenames from the configured discovery paths.
 

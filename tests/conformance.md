@@ -130,7 +130,7 @@ Delegate a Task Card, create a valid new contract revision before accepting the 
 
 **Input**
 
-Provide a task compatible with one Worker, then a task where multiple semantically plausible Workers are incompatible before a later candidate is compatible, and finally a task for which no compatible Worker exists. Also delegate one pull-request research task that needs the assigned PR's diff, changed-file patches, reviews, threads, checks, and comments, while the PR links to an issue and repository files outside the delegated boundary.
+Provide a task compatible with one Worker, then a task where multiple semantically plausible Workers are incompatible before a later candidate is compatible, and finally a task for which no compatible Worker exists. Also delegate one GitHub research task for an exact pull request identified by repository and pull-request number, then one task for an exact issue identified by repository and issue number. Include linked artifacts and workspace files that are outside the delegated boundary.
 
 **Expected**
 
@@ -139,8 +139,10 @@ Provide a task compatible with one Worker, then a task where multiple semantical
 - An unchanged blocked candidate is not retried and implausible Workers are not probed.
 - No compatible Worker produces `no_suitable_worker` only after plausible untried candidates are exhausted, without widening the contract.
 - Worker incompatibility never changes the approved operation boundary.
-- PullRequestResearcher may inspect native read-only subresources of the assigned PR when needed: metadata, diff, changed-file patches, reviews, review threads, checks, and comments.
-- Linked issues, other PRs, repository files, and external resources remain outside the PR boundary unless explicitly delegated.
+- GitHubResearcher uses only read-only GitHub tools whose inputs identify the exact delegated repository and issue or pull-request number.
+- For an exact pull request, GitHubResearcher may inspect metadata, body, comments, reviewers, file changes, and requested status checks when exposed by those tools.
+- For an exact issue, GitHubResearcher may inspect the issue metadata, body, comments, and other fields exposed by the exact-target tool.
+- Linked issues, pull requests, workspace files, repository files, and external resources remain outside the assigned GitHub artifact boundary unless explicitly delegated.
 
 ### CONF-008 — Enforce audit, criterion evidence, and progress-driven loop control
 

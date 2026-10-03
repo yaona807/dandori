@@ -202,12 +202,9 @@ BOUNDARY_ENFORCEMENT_POLICY = (
 
 BUNDLED_WORKER_TOOLS: dict[str, set[str]] = {
     "BrowserQA": {"browser"},
-    "PullRequestResearcher": {
-        "GitHub.vscode-pull-request-github/activePullRequest",
-        "GitHub.vscode-pull-request-github/openPullRequest",
+    "GitHubResearcher": {
         "GitHub.vscode-pull-request-github/pullRequestStatusChecks",
         "GitHub.vscode-pull-request-github/issue_fetch",
-        "read/readFile",
     },
     "Researcher": {
         "search/codebase",
@@ -269,7 +266,7 @@ BUNDLED_AGENT_MIN_BODY_CHARS = {
     "Orchestrator": 20_000,
     "BrowserQA": 1_000,
     "CommandRunner": 2_500,
-    "PullRequestResearcher": 1_200,
+    "GitHubResearcher": 1_200,
     "Researcher": 1_100,
     "Reviewer": 1_000,
     "Writer": 1_200,
@@ -305,16 +302,17 @@ BUNDLED_WORKER_REQUIRED_SECTION_MARKERS: dict[str, dict[str, tuple[str, ...]]] =
             "If an interaction could cause a persistent effect not clearly required by the delegated flow, stop before performing it and report the uncertainty.",
         ),
     },
-    "PullRequestResearcher": {
+    "GitHubResearcher": {
         "## Delegated task contract": ("Treat the delegated request as the complete task boundary.",),
         "## Strict rules": (
             BOUNDARY_ENFORCEMENT_POLICY,
             "Do not modify files.",
             "Do not run terminal commands.",
             "Do not call another agent.",
-            "Do not approve, merge, close, or comment on PRs.",
-            "Native read-only subresources of the assigned pull request may be inspected when needed by the delegated task.",
-            "Do not follow linked issues, other pull requests, repository files, or external resources unless explicitly delegated.",
+            "Do not approve, merge, close, or comment on issues or pull requests.",
+            "Use only read-only GitHub tools whose inputs can identify the exact delegated repository and issue or pull-request number.",
+            "Do not follow linked issues, pull requests, repository files, or external resources unless explicitly delegated.",
+            "Do not inspect workspace files as a substitute for unavailable GitHub artifact information.",
         ),
     },
     "Researcher": {
