@@ -291,13 +291,19 @@ FORBIDDEN_AGENT_FRONTMATTER_KEYS = frozenset({"hooks", "handoffs", "mcp-servers"
 BUNDLED_WORKER_REQUIRED_SECTION_MARKERS: dict[str, dict[str, tuple[str, ...]]] = {
     "BrowserQA": {
         "## Delegated task contract": ("Treat the delegated request as the complete task boundary.",),
+        "## Blocked work": (
+            "If browser work cannot continue, report the interaction that could not be completed, the observed tool or runtime result, the last successful browser interaction when known, and any remaining unknowns.",
+            "Do not infer an unobserved cause.",
+        ),
         "## Strict rules": (
             BOUNDARY_ENFORCEMENT_POLICY,
             "Do not modify files.",
             "Do not run terminal commands.",
             "Do not call another agent.",
-            "Never submit, save, publish, send, delete, confirm a transaction, change settings, or mutate persistent data.",
-            "Stop before an action when its persistence or side effects are unclear.",
+            "Perform only browser interactions explicitly included in the delegated request.",
+            "Do not infer permission for an additional interaction from the requested outcome or flow.",
+            "Prefer the narrowest available browser capability that can enforce the delegated interaction boundary.",
+            "If the target or effect of an interaction is unclear, stop before performing it and report the uncertainty.",
         ),
     },
     "PullRequestResearcher": {
@@ -449,6 +455,7 @@ ORCHESTRATOR_REQUIRED_INVARIANTS = tuple(
     marker for markers in ORCHESTRATOR_REQUIRED_SECTION_MARKERS.values() for marker in markers
 )
 DANDORI_COUPLING_PATTERNS = {
+    "DANDORI brand": re.compile(r"\bdandori\b", re.IGNORECASE),
     "Task Card": re.compile(r"\btask[\s_-]*cards?\b", re.IGNORECASE),
     "TFR": re.compile(r"\btfr\b", re.IGNORECASE),
     "TFC": re.compile(r"\btfc\b", re.IGNORECASE),
