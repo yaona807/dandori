@@ -123,8 +123,8 @@ Delegate a Task Card, create a valid new contract revision before accepting the 
 - The Worker does not call a tool that can operate only on a broader scope.
 - The Worker returns `blocked` and identifies the narrower capability required.
 - Writer does not use workspace-wide Problems data as implementation context.
-- BrowserQA may perform an explicitly delegated browser interaction when its target and effect remain within the assigned boundary.
-- BrowserQA does not infer an additional interaction from the requested outcome or flow and stops before an interaction whose target or effect is unclear.
+- BrowserQA may choose the browser interactions necessary to carry out the delegated flow while staying within its stated application, route, screen, and side-effect constraints.
+- BrowserQA does not introduce an additional persistent effect or leave the delegated flow, and stops before a persistent effect that is not clearly required by the flow.
 
 ### CONF-007 — Route without reading Worker definitions or widening scope
 
@@ -177,7 +177,7 @@ Install DANDORI, optionally add an external Worker, and open VS Code Chat Diagno
 - Orchestrator allowlist entries resolve to the intended Worker definitions.
 - External Worker sources and actual tool availability are confirmed before use.
 - Missing or unrecognized tools are treated as unavailable rather than assumed to exist.
-- When BrowserQA cannot continue, it reports the interaction that could not be completed, the observed tool or runtime result, the last successful browser interaction when known, and remaining unknowns.
+- When BrowserQA cannot continue, it reports the last confirmed browser state, the interaction that could not be completed, and observed errors or remaining unknowns.
 - BrowserQA does not infer an unobserved cause and does not require a framework-specific blocker taxonomy or retry recommendation.
 
 
