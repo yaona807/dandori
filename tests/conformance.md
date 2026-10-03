@@ -113,7 +113,7 @@ Perform a pure narrowing, a display-only wording correction, and a mixed revisio
 
 **Input**
 
-Delegate a Task Card, create a valid new contract revision before accepting the older Worker result, and then process that late result. Separately delegate a Task Card whose assigned operation boundary is narrower than a Worker's available tool can technically enforce. Also delegate one BrowserQA task that explicitly includes a browser interaction and another whose next interaction has an unclear target or effect. Include a Researcher task whose available test-failure view would exceed the assigned observation boundary and a Reviewer task whose available source-control change view would exceed its assigned boundary.
+Delegate a Task Card, create a valid new contract revision before accepting the older Worker result, and then process that late result. Separately delegate a Task Card whose assigned operation boundary is narrower than a Worker's available tool can technically enforce. Also delegate one BrowserQA task that explicitly includes a browser interaction and another whose next interaction has an unclear target or effect.
 
 **Expected**
 
@@ -123,15 +123,14 @@ Delegate a Task Card, create a valid new contract revision before accepting the 
 - The Worker does not call a tool that can operate only on a broader scope.
 - The Worker returns `blocked` and identifies the narrower capability required.
 - Writer does not use workspace-wide Problems data as implementation context.
-- BrowserQA may perform an explicitly delegated browser interaction when its target and effect remain within the assigned boundary.
-- BrowserQA does not infer an additional interaction from the requested outcome or flow and stops before an interaction whose target or effect is unclear.
-- Researcher and Reviewer do not use test-failure or source-control change tools when those tools can only expose a broader observation boundary than assigned.
+- BrowserQA may choose the browser interactions necessary to carry out the delegated flow while staying within its stated application, route, screen, and side-effect constraints.
+- BrowserQA does not introduce an additional persistent effect or leave the delegated flow, and stops before a persistent effect that is not clearly required by the flow.
 
 ### CONF-007 — Route without reading Worker definitions or widening scope
 
 **Input**
 
-Provide a task compatible with one Worker, then a task where multiple semantically plausible Workers are incompatible before a later candidate is compatible, and finally a task for which no compatible Worker exists. Also delegate one GitHub research task for an exact pull request that needs its diff, changed-file patches, reviews, threads, checks, and comments while it links to an issue and repository files outside the delegated boundary, then one task for an exact issue that links to another pull request.
+Provide a task compatible with one Worker, then a task where multiple semantically plausible Workers are incompatible before a later candidate is compatible, and finally a task for which no compatible Worker exists. Also delegate one GitHub research task for an exact pull request identified by repository and pull-request number, then one task for an exact issue identified by repository and issue number. Include linked artifacts and workspace files that are outside the delegated boundary.
 
 **Expected**
 
@@ -140,9 +139,10 @@ Provide a task compatible with one Worker, then a task where multiple semantical
 - An unchanged blocked candidate is not retried and implausible Workers are not probed.
 - No compatible Worker produces `no_suitable_worker` only after plausible untried candidates are exhausted, without widening the contract.
 - Worker incompatibility never changes the approved operation boundary.
-- GitHubResearcher may inspect native read-only subresources of the exact assigned pull request when needed: metadata, diff, changed-file patches, reviews, review threads, checks, and comments.
-- GitHubResearcher may inspect native read-only context of the exact assigned issue when available.
-- Linked issues, pull requests, repository files, and external resources remain outside the assigned GitHub artifact boundary unless explicitly delegated.
+- GitHubResearcher uses only read-only GitHub tools whose inputs identify the exact delegated repository and issue or pull-request number.
+- For an exact pull request, GitHubResearcher may inspect metadata, body, comments, reviewers, file changes, and requested status checks when exposed by those tools.
+- For an exact issue, GitHubResearcher may inspect the issue metadata, body, comments, and other fields exposed by the exact-target tool.
+- Linked issues, pull requests, workspace files, repository files, and external resources remain outside the assigned GitHub artifact boundary unless explicitly delegated.
 
 ### CONF-008 — Enforce audit, criterion evidence, and progress-driven loop control
 
@@ -179,8 +179,7 @@ Install DANDORI, optionally add an external Worker, and open VS Code Chat Diagno
 - Orchestrator allowlist entries resolve to the intended Worker definitions.
 - External Worker sources and actual tool availability are confirmed before use.
 - Missing or unrecognized tools are treated as unavailable rather than assumed to exist.
-- Researcher's `execute/testFailure` and Reviewer's `search/changes` are confirmed in the actual runtime before use and remain subject to the assigned observation boundary.
-- When BrowserQA cannot continue, it reports the interaction that could not be completed, the observed tool or runtime result, the last successful browser interaction when known, and remaining unknowns.
+- When BrowserQA cannot continue, it reports the last confirmed browser state, the interaction that could not be completed, and observed errors or remaining unknowns.
 - BrowserQA does not infer an unobserved cause and does not require a framework-specific blocker taxonomy or retry recommendation.
 
 
