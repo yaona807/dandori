@@ -203,11 +203,8 @@ BOUNDARY_ENFORCEMENT_POLICY = (
 BUNDLED_WORKER_TOOLS: dict[str, set[str]] = {
     "BrowserQA": {"browser"},
     "GitHubResearcher": {
-        "GitHub.vscode-pull-request-github/activePullRequest",
-        "GitHub.vscode-pull-request-github/openPullRequest",
         "GitHub.vscode-pull-request-github/pullRequestStatusChecks",
         "GitHub.vscode-pull-request-github/issue_fetch",
-        "read/readFile",
     },
     "Researcher": {
         "search/codebase",
@@ -217,11 +214,9 @@ BUNDLED_WORKER_TOOLS: dict[str, set[str]] = {
         "search/listDirectory",
         "read/readFile",
         "read/problems",
-        "execute/testFailure",
         "web/fetch",
     },
     "Reviewer": {
-        "search/changes",
         "search/codebase",
         "search/usages",
         "read/readFile",
@@ -294,7 +289,6 @@ BUNDLED_WORKER_REQUIRED_SECTION_MARKERS: dict[str, dict[str, tuple[str, ...]]] =
     "BrowserQA": {
         "## Delegated task contract": ("Treat the delegated request as the complete task boundary.",),
         "## Blocked work": (
-            "If browser work cannot continue, report the interaction that could not be completed, the observed tool or runtime result, the last successful browser interaction when known, and any remaining unknowns.",
             "Do not infer an unobserved cause.",
         ),
         "## Strict rules": (
@@ -302,10 +296,10 @@ BUNDLED_WORKER_REQUIRED_SECTION_MARKERS: dict[str, dict[str, tuple[str, ...]]] =
             "Do not modify files.",
             "Do not run terminal commands.",
             "Do not call another agent.",
-            "Perform only browser interactions explicitly included in the delegated request.",
-            "Do not infer permission for an additional interaction from the requested outcome or flow.",
+            "Perform browser interactions that are necessary to carry out the delegated flow within its stated application, route, screen, and side-effect constraints.",
+            "Do not introduce an additional persistent effect or leave the delegated application flow.",
             "Prefer the narrowest available browser capability that can enforce the delegated interaction boundary.",
-            "If the target or effect of an interaction is unclear, stop before performing it and report the uncertainty.",
+            "If an interaction could cause a persistent effect not clearly required by the delegated flow, stop before performing it and report the uncertainty.",
         ),
     },
     "GitHubResearcher": {
@@ -316,8 +310,9 @@ BUNDLED_WORKER_REQUIRED_SECTION_MARKERS: dict[str, dict[str, tuple[str, ...]]] =
             "Do not run terminal commands.",
             "Do not call another agent.",
             "Do not approve, merge, close, or comment on issues or pull requests.",
-            "Native read-only subresources of the exact assigned GitHub artifact may be inspected when needed by the delegated task.",
+            "Use only read-only GitHub tools whose inputs can identify the exact delegated repository and issue or pull-request number.",
             "Do not follow linked issues, pull requests, repository files, or external resources unless explicitly delegated.",
+            "Do not inspect workspace files as a substitute for unavailable GitHub artifact information.",
         ),
     },
     "Researcher": {
@@ -457,7 +452,6 @@ ORCHESTRATOR_REQUIRED_INVARIANTS = tuple(
     marker for markers in ORCHESTRATOR_REQUIRED_SECTION_MARKERS.values() for marker in markers
 )
 DANDORI_COUPLING_PATTERNS = {
-    "DANDORI brand": re.compile(r"\bdandori\b", re.IGNORECASE),
     "Task Card": re.compile(r"\btask[\s_-]*cards?\b", re.IGNORECASE),
     "TFR": re.compile(r"\btfr\b", re.IGNORECASE),
     "TFC": re.compile(r"\btfc\b", re.IGNORECASE),
