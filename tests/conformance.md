@@ -175,6 +175,9 @@ Install DANDORI, optionally add an external Worker, and open VS Code Chat Diagno
 - Orchestrator allowlist entries resolve to the intended Worker definitions.
 - External Worker sources and actual tool availability are confirmed before use.
 - Missing or unrecognized tools are treated as unavailable rather than assumed to exist.
+- When BrowserQA cannot continue, it returns `status: blocked` with exactly one blocker kind from `policy_blocked|tool_unavailable|tool_call_failed|page_access_lost|unknown`.
+- A DANDORI policy denial is reported as `policy_blocked`; a missing or dropped browser capability is `tool_unavailable`; an exposed capability that errors, times out, or hangs is `tool_call_failed`; and loss of a previously usable page/session is `page_access_lost`.
+- BrowserQA uses `unknown` instead of attributing a failure to the user, tool availability, or page loss without supporting runtime evidence.
 
 
 ### CONF-010 — Allow non-mutating execution during verification
