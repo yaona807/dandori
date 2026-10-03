@@ -424,6 +424,7 @@ class ValidatorMutationTests(unittest.TestCase):
 
     def test_dandori_coupling_format_variants_are_rejected(self) -> None:
         variants = (
+            "DANDORI",
             "task_card",
             "task-card",
             "task card",
