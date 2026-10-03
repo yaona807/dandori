@@ -342,16 +342,18 @@ Copying a new version over an existing installation does not remove files that w
 User-level cleanup:
 
 ```bash
-rm -f ~/.copilot/agents/{Orchestrator,Researcher,GitHubResearcher,Writer,CommandRunner,Reviewer,BrowserQA}.agent.md
+rm -f ~/.copilot/agents/{Orchestrator,Researcher,GitHubResearcher,PullRequestResearcher,Writer,CommandRunner,Reviewer,BrowserQA}.agent.md
 rm -rf ~/.copilot/skills/code-review
 ```
 
 Standard workspace cleanup:
 
 ```bash
-rm -f .github/agents/{Orchestrator,Researcher,GitHubResearcher,Writer,CommandRunner,Reviewer,BrowserQA}.agent.md
+rm -f .github/agents/{Orchestrator,Researcher,GitHubResearcher,PullRequestResearcher,Writer,CommandRunner,Reviewer,BrowserQA}.agent.md
 rm -rf .github/skills/code-review
 ```
+
+The legacy `PullRequestResearcher.agent.md` name is also removed during this rename migration so an obsolete Worker definition cannot remain discoverable.
 
 After cleanup, run the installation commands for the selected scope and verify discovery again. For a custom `.copilot` workspace installation, remove the same managed filenames from the configured discovery paths.
 
