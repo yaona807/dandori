@@ -250,7 +250,7 @@ DANDORIは、低い固定実行回数ではなく、現在状態に対する検�
   agents/
     Orchestrator.agent.md
     Researcher.agent.md
-    PullRequestResearcher.agent.md
+    GitHubResearcher.agent.md
     Writer.agent.md
     CommandRunner.agent.md
     Reviewer.agent.md
@@ -281,7 +281,7 @@ assets/
 | Component | 役割 |
 | --- | --- |
 | `Orchestrator` | 要求整理、短い承認、契約管理、Task Card作成、Worker選択、監査、ループ制御、最終統合を担当するcontrol-plane agent |
-| Reference workers | 調査、Pull Request確認、実装、レビュー、ブラウザ確認用の任意Worker |
+| Reference workers | 調査、指定されたGitHub Issue / Pull Request確認、実装、レビュー、ブラウザ確認用の任意Worker |
 | `CommandRunner` | 登録済みcommandだけを固定bounded interface経由で実行し、大きな出力を自身の一時execution cacheへ保持する任意の実行Worker |
 | `code-review` skill | Reference Reviewerが使用するfocused review guidance |
 
@@ -289,7 +289,8 @@ assets/
 
 - DANDORI Agentは明示的にVS Codeを対象とします。
 - Subagent制限には、現在Experimentalである`agents` allowlistを使用します。
-- `PullRequestResearcher`にはGitHub Pull Requests拡張機能と、その拡張機能が公開するToolが必要です。
+- `GitHubResearcher`にはGitHub Pull Requests拡張機能と、その拡張機能が公開するToolが必要です。
+- `Researcher`はruntimeが公開する場合に`execute/testFailure`、`Reviewer`は`search/changes`を利用できます。どちらも委譲された観察境界を超えて使用しません。
 - `BrowserQA`には設定済みのbrowser Tool群が必要です。
 - 利用できない、または認識されないTool名はruntimeに無視される場合があるため、実際のTool可用性を確認してください。
 - 同梱Workerは、Toolの引数とruntime挙動で委譲境界を強制できる場合だけ、そのToolを呼び出します。利用可能なToolがより広い範囲でしか動作できない場合は、実行せず`blocked`を返し、必要な狭いcapabilityを示します。
@@ -344,14 +345,14 @@ workspace内の `.copilot/agents` と `.copilot/skills` を使うには、`chat.
 ユーザーレベル配置の削除対象：
 
 ```bash
-rm -f ~/.copilot/agents/{Orchestrator,Researcher,PullRequestResearcher,Writer,CommandRunner,Reviewer,BrowserQA}.agent.md
+rm -f ~/.copilot/agents/{Orchestrator,Researcher,GitHubResearcher,Writer,CommandRunner,Reviewer,BrowserQA}.agent.md
 rm -rf ~/.copilot/skills/code-review
 ```
 
 標準workspace配置の削除対象：
 
 ```bash
-rm -f .github/agents/{Orchestrator,Researcher,PullRequestResearcher,Writer,CommandRunner,Reviewer,BrowserQA}.agent.md
+rm -f .github/agents/{Orchestrator,Researcher,GitHubResearcher,Writer,CommandRunner,Reviewer,BrowserQA}.agent.md
 rm -rf .github/skills/code-review
 ```
 
