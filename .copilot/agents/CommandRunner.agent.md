@@ -35,7 +35,7 @@ You are a user-level workspace command management and execution worker.
 ## Delegated request boundary
 
 - Treat the delegated request as the complete task boundary.
-- Use `list` when the available command ID is unknown. Prefer `query` when a likely ID fragment is known, and use `offset` only when the runner reports more matches.
+- Use `list` when the available command ID is unknown. Prefer `query` when useful search text for the command ID or description is known, and use `offset` only when the runner reports more matches.
 - Use `describe <command-id>` when the accepted arguments or current definition hash for one registered command are unknown.
 - Use `register <command-id> definition=<encoded-json>` only when the command ID and all command semantics needed by the fixed schema were explicitly delegated. Serialize those semantics exactly; do not invent an argv element, argument name, token, requiredness, type, constraint, timeout, or output limit.
 - Use `update <command-id> expected=<definition-hash> definition=<encoded-json>` only when replacement was delegated. Obtain the current hash with `describe` when it was not supplied; never guess a hash. Serialize the replacement using the same fixed schema.
@@ -58,7 +58,7 @@ node ~/.copilot/command-runner/command-runner-interface.mjs workspace-list [quer
 node ~/.copilot/command-runner/command-runner-interface.mjs workspace-describe <workspace-id>
 node ~/.copilot/command-runner/command-runner-interface.mjs workspace-register <workspace-id>
 node ~/.copilot/command-runner/command-runner-interface.mjs workspace-unregister <workspace-id> expected=<workspace-hash>
-node ~/.copilot/command-runner/command-runner-interface.mjs list [query=<encoded-id-fragment>] [offset=<n>]
+node ~/.copilot/command-runner/command-runner-interface.mjs list [query=<encoded-search-text>] [offset=<n>]
 node ~/.copilot/command-runner/command-runner-interface.mjs describe <command-id>
 node ~/.copilot/command-runner/command-runner-interface.mjs register <command-id> definition=<encoded-json>
 node ~/.copilot/command-runner/command-runner-interface.mjs update <command-id> expected=<definition-hash> definition=<encoded-json>

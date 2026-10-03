@@ -92,7 +92,7 @@ node ~/.copilot/command-runner/command-runner-interface.mjs workspace-list [quer
 node ~/.copilot/command-runner/command-runner-interface.mjs workspace-describe <workspace-id>
 node ~/.copilot/command-runner/command-runner-interface.mjs workspace-register <workspace-id>
 node ~/.copilot/command-runner/command-runner-interface.mjs workspace-unregister <workspace-id> expected=<workspace-hash>
-node ~/.copilot/command-runner/command-runner-interface.mjs list [query=<encoded-id-fragment>] [offset=<n>]
+node ~/.copilot/command-runner/command-runner-interface.mjs list [query=<encoded-search-text>] [offset=<n>]
 node ~/.copilot/command-runner/command-runner-interface.mjs describe test
 node ~/.copilot/command-runner/command-runner-interface.mjs register lint definition=<encoded-json>
 node ~/.copilot/command-runner/command-runner-interface.mjs update lint expected=<definition-hash> definition=<encoded-json>
@@ -105,7 +105,7 @@ Argument values use URI component encoding. Workspace path arguments are resolve
 
 The agent and hook expose only `command-runner-interface.mjs`. Execution still delegates command schema validation and process execution to the fixed `command-runner.mjs` core. Management validates the complete candidate configuration through that same core before persisting it.
 
-All interface responses are bounded below the terminal spill threshold. `list` returns only command IDs, at most 100 per call, with `nextOffset` when more matches remain. `query` performs a simple command-ID substring match. `describe` returns one public command definition plus its stable canonical SHA-256 `definitionHash`.
+All interface responses are bounded below the terminal spill threshold. `list` returns only command IDs, at most 100 per call, with `nextOffset` when more matches remain. `query` performs a case-insensitive substring match against command IDs and descriptions; it only narrows discovery and never authorizes execution. `describe` returns one public command definition plus its stable canonical SHA-256 `definitionHash`.
 
 ### Command management
 
@@ -143,6 +143,67 @@ Argument kinds are `flag`, `option`, and `positional`. Non-flag arguments carry 
 Management operations serialize through a user-level `workspaces.lock`. A candidate is written to a mode-`0600` temporary file in the same directory and atomically renamed over `workspaces.json` only after full validation and a final unchanged-source check. A live lock fails with `configuration_busy`. A lock older than five minutes is reported as `stale_configuration_lock` and must be removed manually rather than being broken automatically.
 
 These management primitives do not decide whether a command should be registered, replaced, removed, or subsequently executed. They only apply an exact requested mutation while preserving configuration integrity.
+
+### Recommended read-only Git recipes
+
+Git does not receive special runtime privileges. When a workspace needs repository observation, register ordinary commands such as the following and authorize them like any other exact command ID.
+
+`git-status` can expose a script-stable status view while suppressing optional index refresh and configured filesystem monitoring:
+
+```json
+{
+  "description": "Inspect repository status without optional index refresh.",
+  "run": [
+    "git",
+    "-c",
+    "core.fsmonitor=false",
+    "--no-pager",
+    "--no-optional-locks",
+    "status",
+    "--porcelain=v2",
+    "--branch",
+    "--untracked-files=all",
+    "--ignore-submodules=all"
+  ],
+  "cwd": ".",
+  "arguments": {}
+}
+```
+
+For file-scoped diffs, force literal pathspec handling, keep Git's external diff and text-conversion hooks disabled, and bind each path to the workspace. `mustExist: false` also permits an explicitly named deleted file while still rejecting paths that escape the workspace root:
+
+```json
+{
+  "description": "Inspect unstaged changes for explicitly supplied workspace files.",
+  "run": [
+    "git",
+    "-c",
+    "core.fsmonitor=false",
+    "--no-pager",
+    "--no-optional-locks",
+    "--literal-pathspecs",
+    "diff",
+    "--no-ext-diff",
+    "--no-textconv",
+    "--ignore-submodules=all",
+    "--"
+  ],
+  "cwd": ".",
+  "arguments": {
+    "paths": {
+      "kind": "positional",
+      "required": true,
+      "repeatable": true,
+      "maxItems": 20,
+      "value": { "type": "workspace-file", "mustExist": false }
+    }
+  }
+}
+```
+
+Use the same definition with `"--cached"` immediately after `"diff"` for a `git-diff-staged` command. These are recipes, not defaults: `workspace-register` still creates an empty command map and never injects Git commands automatically.
+
+For project-wide validation, prefer one project-owned command such as `verify` that matches the repository's normal CI entry point. Register that exact command rather than adding a generic command-sequencing feature to the runner.
 
 ### Execution output
 

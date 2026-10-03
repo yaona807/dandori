@@ -92,7 +92,7 @@ node ~/.copilot/command-runner/command-runner-interface.mjs workspace-list [quer
 node ~/.copilot/command-runner/command-runner-interface.mjs workspace-describe <workspace-id>
 node ~/.copilot/command-runner/command-runner-interface.mjs workspace-register <workspace-id>
 node ~/.copilot/command-runner/command-runner-interface.mjs workspace-unregister <workspace-id> expected=<workspace-hash>
-node ~/.copilot/command-runner/command-runner-interface.mjs list [query=<encoded-id-fragment>] [offset=<n>]
+node ~/.copilot/command-runner/command-runner-interface.mjs list [query=<encoded-search-text>] [offset=<n>]
 node ~/.copilot/command-runner/command-runner-interface.mjs describe test
 node ~/.copilot/command-runner/command-runner-interface.mjs register lint definition=<encoded-json>
 node ~/.copilot/command-runner/command-runner-interface.mjs update lint expected=<definition-hash> definition=<encoded-json>
@@ -105,7 +105,7 @@ node ~/.copilot/command-runner/command-runner-interface.mjs output <execution-id
 
 AgentとHookが直接呼べるのは `command-runner-interface.mjs` だけです。実行時のcommand schema検証とprocess起動は、従来どおり固定 `command-runner.mjs` coreへ委譲します。管理操作でも、保存前に候補となる設定全体を同じcoreで検証します。
 
-Runnerがterminalへ返すレスポンスはすべて固定上限以下です。`list`はcommand IDだけを1回最大100件返し、続きがある場合は `nextOffset` を返します。`query`はcommand IDの単純な部分一致です。`describe`は1コマンドの公開定義と、canonical SHA-256の `definitionHash` を返します。
+Runnerがterminalへ返すレスポンスはすべて固定上限以下です。`list`はcommand IDだけを1回最大100件返し、続きがある場合は `nextOffset` を返します。`query`はcommand IDとdescriptionをcase-insensitiveな部分一致で検索します。これは候補発見を絞り込むだけで、実行権限にはなりません。`describe`は1コマンドの公開定義と、canonical SHA-256の `definitionHash` を返します。
 
 ### コマンド管理
 
@@ -143,6 +143,67 @@ Runnerがterminalへ返すレスポンスはすべて固定上限以下です。
 管理操作はユーザーレベルの `workspaces.lock` で直列化します。候補設定は同じディレクトリのmode `0600` 一時ファイルへ書き、設定全体の検証と元ファイル不変確認が通った場合だけatomic renameします。生きているlockがある場合は `configuration_busy`、5分を超えたlockは `stale_configuration_lock` として報告し、自動破壊はせず手動削除を要求します。
 
 これらの管理primitiveは「何を登録・置換・削除・実行すべきか」を判断しません.指定されたexact mutationを設定整合性を維持しながら適用するだけです。
+
+### 推奨read-only Gitレシピ
+
+Gitをruntime上の特別な能力にはしません。リポジトリ観測が必要なWorkspaceだけ、次のような通常commandを登録し、他のexact command IDと同じ認可で扱います。
+
+`git-status` はoptionalなindex refreshと設定済みfilesystem monitorを抑えつつ、script向けに安定したstatusを取得できます。
+
+```json
+{
+  "description": "Inspect repository status without optional index refresh.",
+  "run": [
+    "git",
+    "-c",
+    "core.fsmonitor=false",
+    "--no-pager",
+    "--no-optional-locks",
+    "status",
+    "--porcelain=v2",
+    "--branch",
+    "--untracked-files=all",
+    "--ignore-submodules=all"
+  ],
+  "cwd": ".",
+  "arguments": {}
+}
+```
+
+file-scoped diffではpathspecをliteral固定し、external diffとtext conversionを無効化したうえで、各pathをWorkspace境界へ束縛します。`mustExist: false` により明示指定された削除済みファイルも扱えますが、Workspace root外へ逃げるpathは引き続き拒否します。
+
+```json
+{
+  "description": "Inspect unstaged changes for explicitly supplied workspace files.",
+  "run": [
+    "git",
+    "-c",
+    "core.fsmonitor=false",
+    "--no-pager",
+    "--no-optional-locks",
+    "--literal-pathspecs",
+    "diff",
+    "--no-ext-diff",
+    "--no-textconv",
+    "--ignore-submodules=all",
+    "--"
+  ],
+  "cwd": ".",
+  "arguments": {
+    "paths": {
+      "kind": "positional",
+      "required": true,
+      "repeatable": true,
+      "maxItems": 20,
+      "value": { "type": "workspace-file", "mustExist": false }
+    }
+  }
+}
+```
+
+`git-diff-staged` は同じ定義で、`"diff"` の直後に `"--cached"` を追加します。これらはdefaultではなくレシピです。`workspace-register` は今までどおり空のcommand mapを作成し、Git commandを自動注入しません。
+
+project全体の検証は、通常のCI入口と揃えたproject-ownedな `verify` のような1コマンドを推奨します。Runner側へ汎用command sequence機構を追加せず、そのexact commandを登録します。
 
 ### 実行出力
 

@@ -412,7 +412,7 @@ Classify authorized sources by semantics, not Worker: `normative`, `behavioral_r
 
 ## Registered command discovery
 
-For a project-required operation without an established exact ID, search only the runner-selected current workspace. A filtered command-list miss never establishes absence. Query a likely ID when useful; on miss or ambiguity, exhaust the unfiltered list including pagination. Use ID semantics only to select candidates and `describe` plausible ones before authorization or execution. Semantic matching selects candidates only; execution uses an exact described command ID. Report absence only after exhausting the list and plausible descriptions.
+For a project-required operation without an established exact ID, search only the runner-selected current workspace. A filtered command-list miss never establishes absence. Query useful command-ID or description text when available; on miss or ambiguity, exhaust the unfiltered list including pagination. Use returned IDs and described command semantics only to select candidates, and `describe` plausible ones before authorization or execution. Semantic matching selects candidates only; execution uses an exact described command ID. Report absence only after exhausting the list and plausible descriptions.
 
 Command discovery grants no authority; normal candidate promotion still applies.
 
