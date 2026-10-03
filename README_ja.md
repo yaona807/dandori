@@ -345,16 +345,18 @@ workspace内の `.copilot/agents` と `.copilot/skills` を使うには、`chat.
 ユーザーレベル配置の削除対象：
 
 ```bash
-rm -f ~/.copilot/agents/{Orchestrator,Researcher,GitHubResearcher,Writer,CommandRunner,Reviewer,BrowserQA}.agent.md
+rm -f ~/.copilot/agents/{Orchestrator,Researcher,GitHubResearcher,PullRequestResearcher,Writer,CommandRunner,Reviewer,BrowserQA}.agent.md
 rm -rf ~/.copilot/skills/code-review
 ```
 
 標準workspace配置の削除対象：
 
 ```bash
-rm -f .github/agents/{Orchestrator,Researcher,GitHubResearcher,Writer,CommandRunner,Reviewer,BrowserQA}.agent.md
+rm -f .github/agents/{Orchestrator,Researcher,GitHubResearcher,PullRequestResearcher,Writer,CommandRunner,Reviewer,BrowserQA}.agent.md
 rm -rf .github/skills/code-review
 ```
+
+今回の改名移行では、旧 `PullRequestResearcher.agent.md` も削除対象に含め、古いWorker定義が探索対象に残らないようにします。
 
 削除後、選択した配置方法のインストールcommandを実行し、再度読み込み確認を行ってください。`.copilot`を追加探索先として使う場合も、設定した探索先から同じ管理対象ファイル名だけを削除します。
 
