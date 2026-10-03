@@ -113,7 +113,7 @@ Perform a pure narrowing, a display-only wording correction, and a mixed revisio
 
 **Input**
 
-Delegate a Task Card, create a valid new contract revision before accepting the older Worker result, and then process that late result. Separately delegate a Task Card whose assigned operation boundary is narrower than a Worker's available tool can technically enforce.
+Delegate a Task Card, create a valid new contract revision before accepting the older Worker result, and then process that late result. Separately delegate a Task Card whose assigned operation boundary is narrower than a Worker's available tool can technically enforce. Also delegate one BrowserQA task that explicitly includes a browser interaction and another whose next interaction has an unclear target or effect.
 
 **Expected**
 
@@ -123,6 +123,8 @@ Delegate a Task Card, create a valid new contract revision before accepting the 
 - The Worker does not call a tool that can operate only on a broader scope.
 - The Worker returns `blocked` and identifies the narrower capability required.
 - Writer does not use workspace-wide Problems data as implementation context.
+- BrowserQA may choose the browser interactions necessary to carry out the delegated flow while staying within its stated application, route, screen, and side-effect constraints.
+- BrowserQA does not introduce an additional persistent effect or leave the delegated flow, and stops before a persistent effect that is not clearly required by the flow.
 
 ### CONF-007 — Route without reading Worker definitions or widening scope
 
@@ -175,6 +177,8 @@ Install DANDORI, optionally add an external Worker, and open VS Code Chat Diagno
 - Orchestrator allowlist entries resolve to the intended Worker definitions.
 - External Worker sources and actual tool availability are confirmed before use.
 - Missing or unrecognized tools are treated as unavailable rather than assumed to exist.
+- When BrowserQA cannot continue, it reports the last confirmed browser state, the interaction that could not be completed, and observed errors or remaining unknowns.
+- BrowserQA does not infer an unobserved cause and does not require a framework-specific blocker taxonomy or retry recommendation.
 
 
 ### CONF-010 — Allow non-mutating execution during verification

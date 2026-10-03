@@ -291,13 +291,18 @@ FORBIDDEN_AGENT_FRONTMATTER_KEYS = frozenset({"hooks", "handoffs", "mcp-servers"
 BUNDLED_WORKER_REQUIRED_SECTION_MARKERS: dict[str, dict[str, tuple[str, ...]]] = {
     "BrowserQA": {
         "## Delegated task contract": ("Treat the delegated request as the complete task boundary.",),
+        "## Blocked work": (
+            "Do not infer an unobserved cause.",
+        ),
         "## Strict rules": (
             BOUNDARY_ENFORCEMENT_POLICY,
             "Do not modify files.",
             "Do not run terminal commands.",
             "Do not call another agent.",
-            "Never submit, save, publish, send, delete, confirm a transaction, change settings, or mutate persistent data.",
-            "Stop before an action when its persistence or side effects are unclear.",
+            "Perform browser interactions that are necessary to carry out the delegated flow within its stated application, route, screen, and side-effect constraints.",
+            "Do not introduce an additional persistent effect or leave the delegated application flow.",
+            "Prefer the narrowest available browser capability that can enforce the delegated interaction boundary.",
+            "If an interaction could cause a persistent effect not clearly required by the delegated flow, stop before performing it and report the uncertainty.",
         ),
     },
     "PullRequestResearcher": {
