@@ -290,7 +290,6 @@ assets/
 - DANDORI Agentは明示的にVS Codeを対象とします。
 - Subagent制限には、現在Experimentalである`agents` allowlistを使用します。
 - `GitHubResearcher`にはGitHub Pull Requests拡張機能と、その拡張機能が公開するToolが必要です。
-- `Researcher`はruntimeが公開する場合に`execute/testFailure`、`Reviewer`は`search/changes`を利用できます。どちらも委譲された観察境界を超えて使用しません。
 - `BrowserQA`には設定済みのbrowser Tool群が必要です。
 - 利用できない、または認識されないTool名はruntimeに無視される場合があるため、実際のTool可用性を確認してください。
 - 同梱Workerは、Toolの引数とruntime挙動で委譲境界を強制できる場合だけ、そのToolを呼び出します。利用可能なToolがより広い範囲でしか動作できない場合は、実行せず`blocked`を返し、必要な狭いcapabilityを示します。
