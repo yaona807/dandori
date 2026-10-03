@@ -89,10 +89,14 @@ async function makeFixture(commandCount = 3) {
 
   const commands = {};
   for (let index = 0; index < commandCount; index += 1) {
-    commands[`cmd_${String(index).padStart(3, '0')}`] = { description: `Command ${index}` };
+    commands[`cmd_${String(index).padStart(3, '0')}`] = {
+      description: `Command ${index}${index < 120 ? ' shared-search' : ''}`,
+    };
   }
   commands.large = { description: 'Large output.', outputBytes: 40_000, stdout: 'a', stderr: 'b', exitCode: 1 };
   commands.echo = { description: 'Echo.', stdout: 'ok' };
+  commands.verify = { description: 'Run Formatter, lint, type check and tests.', stdout: 'verified' };
+  commands.japanese = { description: 'ソースをフォーマットする。', stdout: 'ok' };
   commands.unicode = { description: 'Multibyte output.', outputBytes: 5_000, stdout: `${'a'.repeat(26)}あ` };
   const config = {
     workspaces: [
@@ -235,6 +239,43 @@ test('list is paged, searchable, and bounded with many registered commands', asy
 
     const filtered = parseSuccess(runInterface(fixture, fixture.alpha, ['list', 'query=cmd_14']));
     assert.deepEqual(filtered.commandIds, Array.from({ length: 10 }, (_, index) => `cmd_14${index}`));
+
+    const byDescription = parseSuccess(runInterface(fixture, fixture.alpha, ['list', 'query=FORMATTER']));
+    assert.deepEqual(byDescription.commandIds, ['verify']);
+
+    const byDescriptionPhrase = parseSuccess(runInterface(
+      fixture,
+      fixture.alpha,
+      ['list', `query=${encodeURIComponent('type check')}`],
+    ));
+    assert.deepEqual(byDescriptionPhrase.commandIds, ['verify']);
+
+    const byUnicodeDescription = parseSuccess(runInterface(
+      fixture,
+      fixture.alpha,
+      ['list', `query=${encodeURIComponent('フォーマット')}`],
+    ));
+    assert.deepEqual(byUnicodeDescription.commandIds, ['japanese']);
+
+    const descriptionPage = parseSuccess(runInterface(fixture, fixture.alpha, ['list', 'query=shared-search']));
+    assert.equal(descriptionPage.commandIds.length, 100);
+    assert.equal(descriptionPage.total, 120);
+    assert.equal(descriptionPage.nextOffset, 100);
+
+    const descriptionPageTwo = parseSuccess(runInterface(
+      fixture,
+      fixture.alpha,
+      ['list', 'query=shared-search', 'offset=100'],
+    ));
+    assert.equal(descriptionPageTwo.commandIds.length, 20);
+    assert.equal(descriptionPageTwo.nextOffset, null);
+
+    parseFailure(runInterface(fixture, fixture.alpha, ['list', 'query=']), 'invalid_argument');
+    parseFailure(
+      runInterface(fixture, fixture.alpha, ['list', `query=${'a'.repeat(129)}`]),
+      'invalid_argument',
+    );
+    parseFailure(runInterface(fixture, fixture.alpha, ['list', 'query=%0A']), 'invalid_argument');
   }, 160);
 });
 
