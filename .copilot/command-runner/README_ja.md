@@ -170,7 +170,7 @@ Gitをruntime上の特別な能力にはしません。リポジトリ観測が�
 }
 ```
 
-file-scoped diffではexternal diffとtext conversionを無効化し、各pathをWorkspace境界へ束縛します。`mustExist: false` により明示指定された削除済みファイルも扱えますが、Workspace root外へ逃げるpathは引き続き拒否します。
+file-scoped diffではpathspecをliteral固定し、external diffとtext conversionを無効化したうえで、各pathをWorkspace境界へ束縛します。`mustExist: false` により明示指定された削除済みファイルも扱えますが、Workspace root外へ逃げるpathは引き続き拒否します。
 
 ```json
 {
@@ -181,6 +181,7 @@ file-scoped diffではexternal diffとtext conversionを無効化し、各path�
     "core.fsmonitor=false",
     "--no-pager",
     "--no-optional-locks",
+    "--literal-pathspecs",
     "diff",
     "--no-ext-diff",
     "--no-textconv",
