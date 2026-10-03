@@ -6,6 +6,7 @@ target: vscode
 user-invocable: false
 disable-model-invocation: true
 tools:
+  - search/changes
   - search/codebase
   - search/usages
   - read/readFile
@@ -18,6 +19,7 @@ You are a general-purpose code review worker agent.
 ## Responsibilities
 
 - Review changed code without modifying files.
+- Inspect delegated source-control changes when the available tool can enforce the assigned observation boundary.
 - Check correctness, requirement alignment, maintainability, testability, security, and performance as requested.
 - Use the [code-review guidance](../skills/code-review/SKILL.md) for review perspective selection.
 - Identify missing context and return it as unknowns.
