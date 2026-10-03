@@ -30,6 +30,7 @@ const LIMITS = {
   responseBytes: 12_288,
   describeBytes: 10_000,
   listPageSize: 100,
+  commandQueryBytes: 128,
   previewBytes: 512,
   outputChunkBytes: 1_536,
   parameterCount: 50,
@@ -1002,16 +1003,20 @@ async function main() {
     const provided = parseArguments(tokens);
     allowOnly(provided, new Set(['query', 'offset']));
     const query = one(provided, 'query');
-    if (query !== undefined && !QUERY_RE.test(query)) {
-      throw new InterfaceError('invalid_argument', 'query must use command-ID characters');
+    if (query !== undefined && (query.length === 0 || Buffer.byteLength(query) > LIMITS.commandQueryBytes)) {
+      throw new InterfaceError('invalid_argument', `query must be non-empty and at most ${LIMITS.commandQueryBytes} bytes`);
     }
     const start = offset(one(provided, 'offset'));
     const result = await runCore(['list']);
+    const normalizedQuery = query?.toLowerCase();
     const ids = (Array.isArray(result.commands) ? result.commands : [])
-      .map((command) => command?.id)
-      .filter((id) => typeof id === 'string' && COMMAND_ID_RE.test(id))
-      .sort()
-      .filter((id) => query === undefined || id.includes(query));
+      .filter((command) => typeof command?.id === 'string' && COMMAND_ID_RE.test(command.id))
+      .filter((command) => normalizedQuery === undefined
+        || command.id.toLowerCase().includes(normalizedQuery)
+        || (typeof command.description === 'string'
+          && command.description.toLowerCase().includes(normalizedQuery)))
+      .map((command) => command.id)
+      .sort();
     if (start > ids.length) throw new InterfaceError('invalid_argument', 'offset exceeds matching command count');
     const page = ids.slice(start, start + LIMITS.listPageSize);
     const nextOffset = start + page.length;
