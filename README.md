@@ -287,7 +287,6 @@ assets/
 - DANDORI agents explicitly target VS Code.
 - Subagent restriction uses the `agents` allowlist, which is currently an experimental VS Code feature.
 - `GitHubResearcher` requires the GitHub Pull Requests extension and its exposed tools.
-- `Researcher` can use `execute/testFailure` when the runtime exposes it; `Reviewer` can use `search/changes` when the runtime exposes it. Both remain subject to the delegated observation boundary.
 - `BrowserQA` requires the configured browser tool set.
 - Unavailable or unrecognized tool names can be ignored by the runtime; verify actual tool availability before use.
 - A bundled Worker calls a tool only when the tool arguments and runtime behavior can enforce the delegated boundary. If the available tool can operate only on a broader scope, the Worker returns `blocked` and identifies the narrower capability required.
