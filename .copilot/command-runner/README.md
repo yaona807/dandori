@@ -170,7 +170,7 @@ Git does not receive special runtime privileges. When a workspace needs reposito
 }
 ```
 
-For file-scoped diffs, keep Git's external diff and text-conversion hooks disabled and bind each path to the workspace. `mustExist: false` also permits an explicitly named deleted file while still rejecting paths that escape the workspace root:
+For file-scoped diffs, force literal pathspec handling, keep Git's external diff and text-conversion hooks disabled, and bind each path to the workspace. `mustExist: false` also permits an explicitly named deleted file while still rejecting paths that escape the workspace root:
 
 ```json
 {
@@ -181,6 +181,7 @@ For file-scoped diffs, keep Git's external diff and text-conversion hooks disabl
     "core.fsmonitor=false",
     "--no-pager",
     "--no-optional-locks",
+    "--literal-pathspecs",
     "diff",
     "--no-ext-diff",
     "--no-textconv",
