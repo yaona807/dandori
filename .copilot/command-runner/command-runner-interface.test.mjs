@@ -43,6 +43,9 @@ const canonical = (v) => Array.isArray(v) ? v.map(canonical) : v && typeof v ===
   ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, canonical(v[k])])) : v;
 const digest = (v) => 'sha256-' + createHash('sha256').update(JSON.stringify(canonical(v))).digest('hex');
 const workspaceIdentity = digest([workspace.id, workspace.root, workspace.registrationId ?? null]);
+const executionHash = (command) => digest({ ...command,
+  timeoutMs: command.timeoutMs ?? config.defaults?.timeoutMs ?? 300000,
+  maxOutputBytes: command.maxOutputBytes ?? config.defaults?.maxOutputBytes ?? 1048576 });
 const publicCommand = ([commandId, command]) => ({ id: commandId, description: command.description, arguments: command.arguments ?? [] });
 if (operation === 'list') {
   emit({ workspaceId: workspace.id, workspaceIdentity, commands: Object.entries(workspace.commands).map(publicCommand) });
@@ -64,7 +67,7 @@ if (operation === 'list') {
     emit({ status: 'error', error: { code: 'command_not_registered', message: 'command not registered' } }, process.stderr);
     process.exit(2);
   }
-  if (args[2] !== '--expected-definition=' + digest(command)) {
+  if (args[2] !== '--expected-definition=' + executionHash(command)) {
     emit({ status: 'error', error: { code: 'stale_definition', message: 'definition changed' } }, process.stderr);
     process.exit(2);
   }
@@ -201,6 +204,14 @@ function digest(value) {
   return `sha256-${createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex')}`;
 }
 
+function executionHash(command, defaults = {}) {
+  return digest({
+    ...command,
+    timeoutMs: command.timeoutMs ?? defaults.timeoutMs ?? 300_000,
+    maxOutputBytes: command.maxOutputBytes ?? defaults.maxOutputBytes ?? 1_048_576,
+  });
+}
+
 function guarded(fixture, cwd, args) {
   if (args[0] !== 'run' || args[3]?.startsWith('--expected-identity=')) return args;
   const selected = cwd === fixture.beta ? 'beta' : 'alpha';
@@ -209,7 +220,7 @@ function guarded(fixture, cwd, args) {
   const config = JSON.parse(readFileSync(path.join(fixture.commandRunner, 'workspaces.json'), 'utf8'));
   const workspace = config.workspaces.find((w) => w.id === expectedId);
   const identity = digest([expectedId, realpathSync(workspace.root), workspace.registrationId ?? null]);
-  const definition = digest(workspace.commands[args[1]] ?? {});
+  const definition = executionHash(workspace.commands[args[1]] ?? {}, config.defaults);
   const remaining = args[2]?.startsWith('--expected-workspace=') ? args.slice(3) : args.slice(2);
   return [args[0], args[1], `--expected-workspace=${expectedId}`,
     `--expected-identity=${identity}`, `--expected-definition=${definition}`, ...remaining];
@@ -352,6 +363,8 @@ test('describe returns one bounded command definition and stable hash', async ()
     assert.equal(first.command.id, 'echo');
     assert.match(first.definitionHash, /^sha256-[0-9a-f]{64}$/u);
     assert.equal(first.definitionHash, second.definitionHash);
+    assert.match(first.executionHash, /^sha256-[0-9a-f]{64}$/u);
+    assert.equal(first.executionHash, second.executionHash);
   });
 });
 
