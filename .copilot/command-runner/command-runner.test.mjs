@@ -264,6 +264,82 @@ test('list exposes commands only for the current workspace', async () => {
   });
 });
 
+test('filtered command misses do not imply absence from selected workspace', async () => {
+  await withFixture(async (fixture) => {
+    const filtered = runInterface(fixture, fixture.alpha, ['list', 'query=nonexistent-term']);
+    assert.equal(filtered.status, 0, filtered.stderr);
+    const filteredResult = JSON.parse(filtered.stdout);
+    assert.equal(filteredResult.workspaceId, 'alpha');
+    assert.equal(filteredResult.total, 0);
+    assert.deepEqual(filteredResult.commandIds, []);
+    assert.equal(filteredResult.nextOffset, null);
+
+    const unfiltered = runInterface(fixture, fixture.alpha, ['list']);
+    assert.equal(unfiltered.status, 0, unfiltered.stderr);
+    const unfilteredResult = JSON.parse(unfiltered.stdout);
+    assert.equal(unfilteredResult.workspaceId, 'alpha');
+    assert.ok(unfilteredResult.total > 0);
+    assert.ok(unfilteredResult.commandIds.includes('sample'));
+
+    const exact = runInterface(fixture, fixture.alpha, ['describe', 'sample']);
+    assert.equal(exact.status, 0, exact.stderr);
+    assert.equal(JSON.parse(exact.stdout).command.id, 'sample');
+
+    const wrongWorkspace = runInterface(fixture, fixture.beta, ['describe', 'sample']);
+    assert.equal(wrongWorkspace.status, 2);
+    assert.match(wrongWorkspace.stderr, /command is not registered for workspace beta: sample/u);
+    const inBeta = runInterface(fixture, fixture.beta, ['list', 'query=beta']);
+    assert.equal(inBeta.status, 0, inBeta.stderr);
+    assert.deepEqual(JSON.parse(inBeta.stdout).commandIds, ['beta']);
+  });
+});
+
+test('command beyond first page remains discoverable in the selected workspace', async () => {
+  await withFixture(async (fixture) => {
+    const first = runInterface(fixture, fixture.alpha, ['list']);
+    assert.equal(first.status, 0, first.stderr);
+    const start = JSON.parse(first.stdout);
+    assert.equal(start.workspaceId, 'alpha');
+    assert.equal(start.commandIds.length, 100);
+    assert.ok(start.total > 100);
+    assert.equal(start.commandIds.includes('zz-last-command'), false);
+    assert.ok(Number.isInteger(start.nextOffset));
+
+    const second = runInterface(fixture, fixture.alpha, ['list', `offset=${start.nextOffset}`]);
+    assert.equal(second.status, 0, second.stderr);
+    const last = JSON.parse(second.stdout);
+    assert.equal(last.workspaceId, 'alpha');
+    assert.equal(last.nextOffset, null);
+    assert.ok(last.commandIds.includes('zz-last-command'));
+    assert.equal(start.commandIds.length + last.commandIds.length, start.total);
+
+    const search = runInterface(fixture, fixture.alpha, ['list', 'query=LAST%20COMMAND']);
+    assert.equal(search.status, 0, search.stderr);
+    const matching = JSON.parse(search.stdout);
+    assert.equal(matching.workspaceId, 'alpha');
+    assert.deepEqual(matching.commandIds, ['zz-last-command']);
+    assert.equal(matching.nextOffset, null);
+    assert.equal(matching.total, 1);
+  }, (configuration) => {
+    const commands = configuration.workspaces[0].commands;
+    for (let i = 0; i < 108; i += 1) {
+      commands[`batch-${String(i).padStart(3, '0')}`] = {
+        description: 'Batch command for paginated discovery.',
+        run: [process.execPath, 'echo-args.mjs'],
+        cwd: '.',
+        arguments: {},
+      };
+    }
+    commands['zz-last-command'] = {
+      description: 'Last command for specific search.',
+      run: [process.execPath, 'echo-args.mjs'],
+      cwd: '.',
+      arguments: {},
+    };
+    return configuration;
+  });
+});
+
 test('unregistered workspace fails closed', async () => {
   await withFixture(async (fixture) => {
     const outside = path.join(fixture.root, 'outside');
