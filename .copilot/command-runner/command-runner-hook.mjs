@@ -154,7 +154,16 @@ function validateRunnerInvocation(tokens) {
     return;
   }
   if (operation === 'run') {
-    for (const token of tokens.slice(4)) validateEncodedParameter(token);
+    const expected = tokens[4];
+    const prefix = '--expected-workspace=';
+    if (
+      typeof expected !== 'string'
+      || !expected.startsWith(prefix)
+      || !COMMAND_ID_PATTERN.test(expected.slice(prefix.length))
+    ) {
+      throw new Error('run requires --expected-workspace=<id> first');
+    }
+    for (const token of tokens.slice(5)) validateEncodedParameter(token);
     return;
   }
   throw new Error(`unsupported command-runner operation: ${operation}`);
