@@ -109,9 +109,9 @@ node ~/.copilot/command-runner/command-runner-interface.mjs output <execution-id
 
 AgentとHookが直接呼べるのは `command-runner-interface.mjs` だけです。実行時のcommand schema検証とprocess起動は、従来どおり固定 `command-runner.mjs` coreへ委譲します。管理操作でも、保存前に候補となる設定全体を同じcoreで検証します。
 
-登録済みコマンドの実行には、事前の`describe`で確認したWorkspace ID・Workspaceの識別ハッシュ・コマンド定義ハッシュを渡します。`--expected-workspace`・`--expected-identity`・`--expected-definition`は対象の選択ではなく実行前の一致条件です。不一致・省略時は起動しません。新規Workspace登録には世代IDを付け、同じWorkspace IDで登録し直した場合も以前の承認を引き継ぎません。既存の登録設定はそのまま読み込めます。`describe`でコマンドが未登録だった場合は、エラーにも照会対象の`workspaceId`を返します。
+登録済みコマンドの実行には、事前の`describe`で確認したWorkspace ID・Workspaceの識別ハッシュ・実行設定ハッシュ`executionHash`（継承されたタイムアウトと出力上限を含む）を渡します。`--expected-workspace`・`--expected-identity`・`--expected-definition`は対象の選択ではなく実行前の一致条件です。不一致・省略時は起動しません。新規Workspace登録には世代IDを付け、同じWorkspace IDで登録し直した場合も以前の承認を引き継ぎません。既存の登録設定はそのまま読み込めます。`describe`でコマンドが未登録だった場合は、エラーにも照会対象の`workspaceId`を返します。
 
-Runnerがターミナルに返すレスポンスにはサイズ上限があります。`list`は設定リビジョン`revision`を返し、2ページ目以降はその値を渡します。途中でコマンド一覧やWorkspaceが変わると`stale_listing`となり、その結果から未登録と断定できません。`list`は**実際のカレントディレクトリから選ばれたWorkspace内**のcommand IDを1回最大100件返し、`total`と、続きがある場合の`nextOffset`を返します。`query`はIDとdescriptionの大文字小文字を区別しない部分一致検索であり、候補を絞るだけです。**検索結果が0件でも、フィルタ付き・未取得ページあり・別Workspaceの結果なら「未登録」とは断定できません。** 完全に取得したフィルタなしの一覧か、実行Workspaceを確認したうえでの正確なIDの照会結果だけが、そのWorkspace内の存在・不在の根拠になります。ツールの失敗や対象Workspaceの不明は「未確認」として扱います。`describe`は公開定義とSHA-256の`definitionHash`を返します。検索ミスを根拠にIDを推測したり、代替コマンドを新規登録したりしてはいけません。
+Runnerがターミナルに返すレスポンスにはサイズ上限があります。`list`は設定リビジョン`revision`を返し、2ページ目以降はその値を渡します。途中でコマンド一覧やWorkspaceが変わると`stale_listing`となり、その結果から未登録と断定できません。`list`は**実際のカレントディレクトリから選ばれたWorkspace内**のcommand IDを1回最大100件返し、`total`と、続きがある場合の`nextOffset`を返します。`query`はIDとdescriptionの大文字小文字を区別しない部分一致検索であり、候補を絞るだけです。**検索結果が0件でも、フィルタ付き・未取得ページあり・別Workspaceの結果なら「未登録」とは断定できません。** 完全に取得したフィルタなしの一覧か、実行Workspaceを確認したうえでの正確なIDの照会結果だけが、そのWorkspace内の存在・不在の根拠になります。ツールの失敗や対象Workspaceの不明は「未確認」として扱います。`describe`は公開定義と、管理操作用の`definitionHash`および実行前照合用の`executionHash`を返します。検索ミスを根拠にIDを推測したり、代替コマンドを新規登録したりしてはいけません。
 
 ### コマンド管理
 
