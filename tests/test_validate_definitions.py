@@ -343,6 +343,17 @@ class ValidatorMutationTests(unittest.TestCase):
             path.write_text(f"---{frontmatter}---\n\n{marker_only_body}\n")
             self.assert_invalid(repo, "missing required Orchestrator section")
 
+    def test_orchestrator_body_rejects_bundled_worker_names(self) -> None:
+        for worker_name in ("CommandRunner", "GitHubResearcher"):
+            with self.subTest(worker=worker_name):
+                temp, repo = self.make_repo()
+                with temp:
+                    path = repo / ".copilot/agents/Orchestrator.agent.md"
+                    path.write_text(
+                        path.read_text() + f"\nUse {worker_name} for discovery.\n"
+                    )
+                    self.assert_invalid(repo, "worker-specific agent name in Orchestrator body")
+
     def test_each_orchestrator_invariant_is_required(self) -> None:
         for invariant in validator.ORCHESTRATOR_REQUIRED_INVARIANTS:
             with self.subTest(invariant=invariant):
@@ -899,7 +910,7 @@ Inspect only the delegated resource. Do not call another agent.
             path = repo / "tests/conformance.md"
             path.write_text(
                 path.read_text()
-                + "\n\n### CONF-016 — Future case\n\n**Input**\n\nFuture input.\n\n**Expected**\n\n- Future result.\n"
+                + "\n\n### CONF-999 — Future case\n\n**Input**\n\nFuture input.\n\n**Expected**\n\n- Future result.\n"
             )
             self.assert_invalid(repo, "run-record template is missing cases")
 
