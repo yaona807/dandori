@@ -171,7 +171,7 @@ Verification direction is structural: addition strengthens; removal weakens. Rep
 
 Only display wording/localization outside `normalized_patch` and the materialized executable contract may change without revision. A correction is non-revisioned only when the ordered authorization source sequence and every executable contract field remain byte-for-byte unchanged. Any goal, criterion, operation boundary/target/rule/action/effect, limit, verification, exclusion, stable-ID, or source-order change is structural and uses TFR, TFC, or explicit narrowing.
 
-Normalization may copy explicit values, normalize identifiers, assign stable English IDs, add denials, apply caps, or narrow; it must never add unshown criteria/operations/effects/exclusions, widen boundaries/limits, remove verification, or change goal outside its approval path. Use meaningful action strings such as `search_and_read`, not opaque action IDs.
+Normalization may copy explicit values, normalize IDs, add denials, cap, or narrow; never add unshown criteria/operations/effects/exclusions, widen boundaries/limits, remove verification, or change goal outside approval. Never elevate Worker-resolved paths or observed values into new approval or completion conditions. Use meaningful actions such as `search_and_read`, not opaque IDs.
 
 Each permission binds one observation boundary, exact affect target, or bounded affect authorization rule to one action and all its effects. Affect uses exactly one of `target` or `authorization_rule`; rules yield exact atomic instances only through candidate promotion and the shared cap. Separate target/action/effect lists never grant Cartesian-product permission.
 
@@ -189,7 +189,7 @@ Use cumulative effect tags:
 
 Every action lists all effects plus explicit subject/action. File-changing execution needs `execute+change_local`; executed remote write needs `affect_external+execute`. Unknown side effects require stop or TFC.
 
-An execution subject must be an exact, stable operation identity within its authorized context. Applicable project instructions may identify candidate operations as evidence under an already-approved authorization rule, but instructions never grant authority. Before execution, establish the exact subject, action, and every cumulative effect; possible `affect_external`, `destructive`, or unknown effects require normal authorization.
+An execution subject needs an exact stable identity within its authorized context. Workers/tools resolve runtime-dependent paths and context; Orchestrator audits the evidenced resolved identity against approved boundaries, not guessed roots or path spelling. Unproven aliases do not widen permission. Project instructions may identify candidate operations as evidence under approved rules but cannot grant authority. Before execution, establish the exact subject, action, and cumulative effects; possible `affect_external`, `destructive`, or unknown effects require normal authorization.
 
 For authorized `execute+change_local`, only files inside the execution subject's approved local boundary are incidental execution results, not additional affect targets. Changes outside that boundary require their own authorization. Record changed files as audit evidence; stop on boundary or effect violations.
 
