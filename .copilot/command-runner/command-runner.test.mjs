@@ -187,6 +187,14 @@ function digest(value) {
   return `sha256-${createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex')}`;
 }
 
+function executionHash(command, defaults = {}) {
+  return digest({
+    ...command,
+    timeoutMs: command.timeoutMs ?? defaults.timeoutMs ?? 300_000,
+    maxOutputBytes: command.maxOutputBytes ?? defaults.maxOutputBytes ?? 1_048_576,
+  });
+}
+
 function guarded(fixture, cwd, args) {
   if (args[0] !== 'run' || args[3]?.startsWith('--expected-identity=')) return args;
   const expectedId = args[2]?.startsWith('--expected-workspace=')
@@ -194,7 +202,7 @@ function guarded(fixture, cwd, args) {
   const config = JSON.parse(readFileSync(path.join(fixture.home, 'command-runner', 'workspaces.json'), 'utf8'));
   const workspace = config.workspaces.find((w) => w.id === expectedId);
   const identity = digest([expectedId, realpathSync(workspace.root), workspace.registrationId ?? null]);
-  const definition = digest(workspace.commands[args[1]] ?? {});
+  const definition = executionHash(workspace.commands[args[1]] ?? {}, config.defaults);
   const remaining = args[2]?.startsWith('--expected-workspace=') ? args.slice(3) : args.slice(2);
   return [args[0], args[1], `--expected-workspace=${expectedId}`,
     `--expected-identity=${identity}`, `--expected-definition=${definition}`, ...remaining];
@@ -575,7 +583,7 @@ test('reused workspace ID and changed command definition are rejected before eff
     const initial = JSON.parse(readFileSync(configPath, 'utf8'));
     const command = initial.workspaces[0].commands.sample;
     const originalIdentity = digest(['alpha', realpathSync(fixture.alpha), null]);
-    const expectedDefinition = digest(command);
+    const expectedDefinition = executionHash(command, initial.defaults);
     const bound = ['run', 'sample', '--expected-workspace=alpha',
       `--expected-identity=${originalIdentity}`, `--expected-definition=${expectedDefinition}`];
     initial.workspaces[0].registrationId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -590,6 +598,12 @@ test('reused workspace ID and changed command definition are rejected before eff
     const changed = runRunner(fixture, fixture.alpha, bound);
     assert.equal(changed.status, 2);
     assert.match(changed.stderr, /stale_definition/u);
+    initial.workspaces[0].commands.sample = command;
+    initial.defaults.timeoutMs = (initial.defaults.timeoutMs ?? 300_000) + 1;
+    await writeFile(configPath, `${JSON.stringify(initial, null, 2)}\n`);
+    const inherited = runRunner(fixture, fixture.alpha, bound);
+    assert.equal(inherited.status, 2);
+    assert.match(inherited.stderr, /stale_definition/u);
   });
 });
 
