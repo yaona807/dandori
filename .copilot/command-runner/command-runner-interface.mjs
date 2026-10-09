@@ -1018,7 +1018,7 @@ async function main() {
     }
     const start = offset(one(provided, 'offset'));
     const snapshot = await readStableConfiguration();
-    const revision = definitionHash(snapshot.workspace.commands);
+    const revision = definitionHash([snapshot.workspaceIdentity, snapshot.workspace.commands]);
     const expectedRevision = one(provided, 'revision');
     if (start > 0 && expectedRevision === undefined) {
       throw new InterfaceError('invalid_argument', 'list pagination requires revision from the first page');
