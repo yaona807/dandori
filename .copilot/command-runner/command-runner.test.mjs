@@ -232,10 +232,13 @@ test('distributed agent is user-level, agent-scoped, and fixed-runner-only', asy
   assert.match(source, /node ~\/\.copilot\/command-runner\/command-runner-interface\.mjs list/u);
   assert.match(source, /node ~\/\.copilot\/command-runner\/command-runner-interface\.mjs output/u);
   assert.match(source, /Do not execute a raw project command\./u);
-  assert.match(source, /description: >-[\s\S]*?The runner resolves the actual terminal working/u);
-  assert.match(source, /directory and symlinks, selects the active workspace/u);
-  assert.match(source, /Terminal cwd can differ from the editor-opened workspace/u);
+  assert.match(source, /description: >-[\s\S]*?Command searches/u);
+  assert.match(source, /are filtered, paginated, and scoped to the active workspace/u);
+  assert.match(source, /Terminal cwd may differ from the editor-opened workspace/u);
   assert.match(source, /require evidence that it is the same directory before registration/u);
+  assert.match(source, /A filtered or incomplete miss proves no absence/u);
+  assert.match(source, /Before reporting a command missing, confirm the returned `workspaceId`/u);
+  assert.match(source, /Do not claim a command is unregistered solely from a query miss/u);
   assert.match(source, /Do not specify, override, or infer a workspace ID/u);
   assert.match(source, /Never request a terminal working-directory/u);
   assert.doesNotMatch(
