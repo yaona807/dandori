@@ -96,12 +96,12 @@ node ~/.copilot/command-runner/command-runner-interface.mjs workspace-list [quer
 node ~/.copilot/command-runner/command-runner-interface.mjs workspace-describe <workspace-id>
 node ~/.copilot/command-runner/command-runner-interface.mjs workspace-register <workspace-id>
 node ~/.copilot/command-runner/command-runner-interface.mjs workspace-unregister <workspace-id> expected=<workspace-hash>
-node ~/.copilot/command-runner/command-runner-interface.mjs list [query=<encoded-search-text>] [offset=<n>]
+node ~/.copilot/command-runner/command-runner-interface.mjs list [query=<encoded-search-text>] [offset=<n>] [revision=<sha256>]
 node ~/.copilot/command-runner/command-runner-interface.mjs describe test
 node ~/.copilot/command-runner/command-runner-interface.mjs register lint definition=<encoded-json>
 node ~/.copilot/command-runner/command-runner-interface.mjs update lint expected=<definition-hash> definition=<encoded-json>
 node ~/.copilot/command-runner/command-runner-interface.mjs unregister lint expected=<definition-hash>
-node ~/.copilot/command-runner/command-runner-interface.mjs run test --expected-workspace=example runInBand=true
+node ~/.copilot/command-runner/command-runner-interface.mjs run test --expected-workspace=example --expected-identity=<sha256> --expected-definition=<sha256> runInBand=true
 node ~/.copilot/command-runner/command-runner-interface.mjs output <execution-id> stream=stdout|stderr [offset=<n>]
 ```
 
@@ -109,9 +109,9 @@ Argument values use URI component encoding. Workspace path arguments are resolve
 
 The agent and hook expose only `command-runner-interface.mjs`. Execution still delegates command schema validation and process execution to the fixed `command-runner.mjs` core. Management validates the complete candidate configuration through that same core before persisting it.
 
-Running a registered command requires `--expected-workspace=<id>`, established from authorized discovery of the intended workspace. This guard does not select a workspace: the fixed runner compares it with the actual cwd-selected workspace **before spawning the command** and rejects a mismatch or missing guard. A missing exact command returned by `describe` includes the selected `workspaceId` in its structured error.
+Running a registered command requires the previously observed workspace ID, `workspaceIdentity`, and command `definitionHash` from `describe` as `--expected-workspace`, `--expected-identity`, and `--expected-definition`. These guards cannot select a workspace. The core runner checks all three against its selected workspace and loaded command **before spawning**; mismatches fail closed. New workspace registrations include a generation ID, so reuse of an ID is not reuse of the prior authorization; legacy configurations remain readable. A missing exact command returned by `describe` includes the selected `workspaceId` in its structured error.
 
-All interface responses are bounded below the terminal spill threshold. `list` returns only command IDs **for the selected terminal-cwd workspace**, at most 100 per call, with `total` and `nextOffset` when more matches remain. `query` performs a case-insensitive substring match against command IDs and descriptions; it only narrows discovery and never authorizes execution. **A filtered miss, an unfinished page, or a different selected workspace does not prove that a command is unregistered.** A successful exact-ID `describe` confirms presence for its returned `workspaceId`. A complete unfiltered list (or a verified exact-ID missing response) can establish absence **only in the verified selected workspace**; tool failures and unknown scope cannot. `describe` returns one public command definition plus its stable canonical SHA-256 `definitionHash`. Never register a replacement or invent an ID from a search miss.
+All interface responses are bounded below the terminal spill threshold. `list` includes a `revision` tied to the selected workspace and command catalog. Pass it with the same query when fetching subsequent pages; changed catalogs reject with `stale_listing` rather than implying absence. `list` returns only command IDs **for the selected terminal-cwd workspace**, at most 100 per call, with `total` and `nextOffset` when more matches remain. `query` performs a case-insensitive substring match against command IDs and descriptions; it only narrows discovery and never authorizes execution. **A filtered miss, an unfinished page, or a different selected workspace does not prove that a command is unregistered.** A successful exact-ID `describe` confirms presence for its returned `workspaceId`. A complete unfiltered list (or a verified exact-ID missing response) can establish absence **only in the verified selected workspace**; tool failures and unknown scope cannot. `describe` returns one public command definition plus its stable canonical SHA-256 `definitionHash`. Never register a replacement or invent an ID from a search miss.
 
 ### Command management
 
