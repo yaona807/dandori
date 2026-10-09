@@ -410,6 +410,25 @@ test('effectful run denies wrong workspace before executing a matching command',
   });
 });
 
+test('effective execution hash changes with inherited defaults but management CAS hash does not', async () => {
+  await withManagementFixture(async (fixture) => {
+    const before = parseSuccess(runInterface(fixture, fixture.alpha, ['describe', 'keep']));
+    const file = path.join(fixture.commandRunner, 'workspaces.json');
+    const config = JSON.parse(await readFile(file, 'utf8'));
+    config.defaults.timeoutMs += 1;
+    await writeFile(file, `${JSON.stringify(config, null, 2)}\n`);
+    const after = parseSuccess(runInterface(fixture, fixture.alpha, ['describe', 'keep']));
+    assert.equal(after.definitionHash, before.definitionHash);
+    assert.notEqual(after.executionHash, before.executionHash);
+    const stale = runInterface(fixture, fixture.alpha, [
+      'run', 'keep', '--expected-workspace=alpha',
+      `--expected-identity=${before.workspaceIdentity}`,
+      `--expected-definition=${before.executionHash}`,
+    ]);
+    parseFailure(stale, 'stale_definition');
+  });
+});
+
 test('register preserves required and optional argument definitions', async () => {
   await withManagementFixture(async (fixture) => {
     const definition = {
