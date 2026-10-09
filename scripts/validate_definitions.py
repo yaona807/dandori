@@ -417,8 +417,8 @@ ORCHESTRATOR_REQUIRED_SECTION_MARKERS: dict[str, tuple[str, ...]] = {
         "Do not turn Worker-resolved paths or observed values into new approval or completion conditions.",
     ),
     "## Effects and operation subjects": (
-        "All resource subjects need exact, stable identities within their authorized context.",
-        "Workers/tools resolve symlinks and aliases only when supported;",
+        "Exact resource subjects, including executions, need stable identities within approved contexts.",
+        "Workers/tools resolve aliases when supported;",
         "Unverified aliases do not widen permission;",
         "only files inside the execution subject's approved local boundary are incidental execution results",
         "An authorized exact file create may derive `create_directory+change_local` operations only for missing ancestor paths",
