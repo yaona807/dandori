@@ -319,6 +319,31 @@ test('list is paged, searchable, and bounded with many registered commands', asy
   }, 160);
 });
 
+test('pagination rejects a changed catalog even if total command count stays constant', async () => {
+  await withFixture(async (fixture) => {
+    const first = parseSuccess(runInterface(fixture, fixture.alpha, ['list']));
+    assert.ok(first.nextOffset > 0);
+    assert.match(first.revision, /^sha256-[0-9a-f]{64}$/u);
+    const file = path.join(fixture.commandRunner, 'workspaces.json');
+    const config = JSON.parse(await readFile(file, 'utf8'));
+    delete config.workspaces[0].commands.cmd_000;
+    config.workspaces[0].commands.zz_replacement = { description: 'New later-sorted command.' };
+    await writeFile(file, `${JSON.stringify(config, null, 2)}\n`);
+    const stale = runInterface(fixture, fixture.alpha, [
+      'list', `offset=${first.nextOffset}`, `revision=${first.revision}`,
+    ]);
+    parseFailure(stale, 'stale_listing');
+    parseFailure(runInterface(fixture, fixture.alpha, ['list', 'offset=100']), 'invalid_argument');
+    const refreshed = parseSuccess(runInterface(fixture, fixture.alpha, ['list']));
+    assert.notEqual(refreshed.revision, first.revision);
+    const next = parseSuccess(runInterface(fixture, fixture.alpha, [
+      'list', `offset=${refreshed.nextOffset}`, `revision=${refreshed.revision}`,
+    ]));
+    assert.equal(next.nextOffset, null);
+    assert.ok(next.commandIds.includes('zz_replacement'));
+  }, 160);
+});
+
 test('describe returns one bounded command definition and stable hash', async () => {
   await withFixture(async (fixture) => {
     const first = parseSuccess(runInterface(fixture, fixture.alpha, ['describe', 'echo']));
