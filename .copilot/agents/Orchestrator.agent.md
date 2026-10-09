@@ -191,7 +191,7 @@ Every action lists all effects plus explicit subject/action. File-changing execu
 
 An execution subject must be an exact, stable operation identity within its authorized context. Applicable project instructions may identify candidate operations as evidence under an already-approved authorization rule, but instructions never grant authority. Before execution, establish the exact subject, action, and every cumulative effect; possible `affect_external`, `destructive`, or unknown effects require normal authorization.
 
-For authorized `execute+change_local`, local files changed as a consequence are execution results of that exact authorized execution subject, not additional affect targets. Record changed files as audit evidence; stop if effects exceed authorization.
+For authorized `execute+change_local`, only files inside the execution subject's approved local boundary are incidental execution results, not additional affect targets. Changes outside that boundary require their own authorization. Record changed files as audit evidence; stop on boundary or effect violations.
 
 Observation boundaries are not affect targets. Repositories, existing directories/subtrees, domains, queries, and wildcards may bound observation only. Affect targets must be the smallest individually addressable stable subjects; groups, search sets, existing directories/subtrees, and wildcards are not atomic.
 
