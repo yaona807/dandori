@@ -47,6 +47,11 @@ if (operation === 'list') {
   }
   emit({ workspaceId: workspace.id, command: publicCommand([id, command]) });
 } else if (operation === 'run') {
+  const guard = args[0];
+  if (guard !== '--expected-workspace=' + workspace.id) {
+    emit({ status: 'error', error: { code: 'workspace_identity_changed', message: 'workspace mismatch' } }, process.stderr);
+    process.exit(2);
+  }
   const command = workspace.commands[id];
   if (!command) {
     emit({ status: 'error', error: { code: 'command_not_registered', message: 'command not registered' } }, process.stderr);
@@ -59,7 +64,7 @@ if (operation === 'list') {
     status: command.exitCode ? 'failed' : 'completed',
     workspaceId: workspace.id,
     commandId: id,
-    arguments: Object.fromEntries(args.map((token) => [token.split('=', 1)[0], decodeURIComponent(token.slice(token.indexOf('=') + 1))])),
+    arguments: Object.fromEntries(args.slice(1).map((token) => [token.split('=', 1)[0], decodeURIComponent(token.slice(token.indexOf('=') + 1))])),
     cwd: '.',
     exitCode: command.exitCode ?? 0,
     signal: null,
@@ -177,9 +182,13 @@ async function withManagementFixture(callback) {
 }
 
 function runInterface(fixture, cwd, args) {
+  const selected = cwd === fixture.beta ? 'beta' : 'alpha';
+  const guardedArgs = args[0] === 'run' && !args[2]?.startsWith('--expected-workspace=')
+    ? [...args.slice(0, 2), `--expected-workspace=${selected}`, ...args.slice(2)]
+    : args;
   return spawnSync(
     process.execPath,
-    [path.join(fixture.commandRunner, 'command-runner-interface.mjs'), ...args],
+    [path.join(fixture.commandRunner, 'command-runner-interface.mjs'), ...guardedArgs],
     { cwd, encoding: 'utf8', env: { ...process.env, COPILOT_HOME: fixture.home } },
   );
 }
@@ -287,6 +296,48 @@ test('describe returns one bounded command definition and stable hash', async ()
     assert.equal(first.command.id, 'echo');
     assert.match(first.definitionHash, /^sha256-[0-9a-f]{64}$/u);
     assert.equal(first.definitionHash, second.definitionHash);
+  });
+});
+
+test('describe not-found errors include the selected workspace identity', async () => {
+  await withFixture(async (fixture) => {
+    const absent = parseFailure(runInterface(fixture, fixture.beta, ['describe', 'echo']), 'command_not_registered');
+    assert.equal(absent.workspaceId, 'beta');
+    const found = parseSuccess(runInterface(fixture, fixture.alpha, ['describe', 'echo']));
+    assert.equal(found.workspaceId, 'alpha');
+  });
+});
+
+test('effectful run denies wrong workspace before executing a matching command', async () => {
+  await withManagementFixture(async (fixture) => {
+    const configPath = path.join(fixture.commandRunner, 'workspaces.json');
+    const cfg = JSON.parse(await readFile(configPath, 'utf8'));
+    cfg.workspaces[1].commands.keep = {
+      description: 'Side effect sentinel',
+      run: [process.execPath, '-e', "require('fs').writeFileSync('wrong-workspace.txt','unexpected')"],
+      cwd: '.',
+      arguments: {},
+    };
+    await writeFile(configPath, `${JSON.stringify(cfg, null, 2)}\n`);
+
+    const denied = parseFailure(runInterface(fixture, fixture.beta, [
+      'run', 'keep', '--expected-workspace=alpha',
+    ]), 'workspace_identity_changed');
+    assert.equal(denied.status, 'error');
+    await assert.rejects(readFile(path.join(fixture.beta, 'wrong-workspace.txt')), { code: 'ENOENT' });
+
+    const allowed = parseSuccess(runInterface(fixture, fixture.alpha, [
+      'run', 'keep', '--expected-workspace=alpha',
+    ]));
+    assert.equal(allowed.workspaceId, 'alpha');
+    assert.equal(allowed.commandId, 'keep');
+
+    const raw = spawnSync(
+      process.execPath,
+      [path.join(fixture.commandRunner, 'command-runner-interface.mjs'), 'run', 'keep'],
+      { cwd: fixture.alpha, encoding: 'utf8', env: { ...process.env, COPILOT_HOME: fixture.home } },
+    );
+    parseFailure(raw, 'invalid_argument');
   });
 });
 
@@ -717,7 +768,7 @@ test('hook permits only bounded execution and management interface shapes', asyn
       'node ~/.copilot/command-runner/command-runner-interface.mjs register lint definition=%7B%22description%22%3A%22Lint%22%7D',
       `node ~/.copilot/command-runner/command-runner-interface.mjs update echo expected=sha256-${'0'.repeat(64)} definition=%7B%22description%22%3A%22Echo%22%7D`,
       `node ~/.copilot/command-runner/command-runner-interface.mjs unregister echo expected=sha256-${'0'.repeat(64)}`,
-      'node ~/.copilot/command-runner/command-runner-interface.mjs run echo',
+      'node ~/.copilot/command-runner/command-runner-interface.mjs run echo --expected-workspace=alpha',
       'node ~/.copilot/command-runner/command-runner-interface.mjs output 20260829T010203.004Z_00000000-0000-4000-8000-000000000000 stream=stdout',
     ]) {
       const result = runHook(fixture, { command });
@@ -726,6 +777,7 @@ test('hook permits only bounded execution and management interface shapes', asyn
 
     for (const toolInput of [
       { command: 'node ~/.copilot/command-runner/command-runner.mjs list' },
+      { command: 'node ~/.copilot/command-runner/command-runner-interface.mjs run echo' },
       { command: 'npm test' },
       { command: 'node ~/.copilot/command-runner/command-runner-interface.mjs workspace-register alpha root=%2Ftmp%2Falpha' },
       { command: 'node ~/.copilot/command-runner/command-runner-interface.mjs workspace-unregister alpha other=value' },
