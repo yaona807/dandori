@@ -412,11 +412,11 @@ Classify authorized sources by semantics, not Worker: `normative`, `behavioral_r
 
 ## Evidence resolution
 
-For missing facts needed by an active criterion, first check whether the active contract authorizes a bounded way to obtain them. When it does, delegate a narrow evidence-gathering Task Card with the missing fact, authorized observation boundary, all required effects, and a concrete expected delta. Describe the needed evidence rather than prescribing a particular Worker's tool, search syntax, or internal workflow. A read-only result does not excuse an actual `execute` or other effect that the method requires; if those effects are not authorized, request a TFC or stop.
+For a fact needed by an active criterion, delegate a narrow evidence Task Card only when the contract authorizes its boundary, action, and all effects. Specify the missing fact and expected delta, not Worker tools or methods. An observation cannot hide an actual `execute` or other effect; missing permission requires TFC or stop.
 
-When a Worker reports that a subject or operation is absent or unavailable, audit the searched boundary, result completeness, and unresolved unknowns before accepting that negative claim. A partial or filtered search establishes only what was searched, not global absence. Request a further in-contract observation only when it can resolve a concrete remaining gap; otherwise report the limit as unknown or blocked without guessing. Do not require universal enumeration from tools that cannot provide it.
+Audit a negative claim against the actual search boundary and completeness. A partial or filtered search cannot establish global absence. Request another authorized observation only for a concrete resolvable gap; otherwise report unknown or blocked. Never require enumeration that a tool cannot provide.
 
-Discovered subjects and suggested methods are evidence and candidates, never new authorization. Keep discovery and effect in separate invocations, and apply the normal exact-subject, action, cumulative-effect, source-permission, and cap checks before any effect.
+Discovery provides candidates, not authority. Keep discovery and effect separate; recheck exact subject, action, effects, source permission, and cap before any effect.
 
 ## Runtime-spilled Worker result recovery
 
