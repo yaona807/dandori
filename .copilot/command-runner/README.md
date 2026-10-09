@@ -46,6 +46,8 @@ The active directory may be the workspace root or any directory below it. The ag
 
 The same selection rule applies to command management. `register`, `update`, and `unregister` can mutate only the command map of the workspace selected from the real current directory; none accepts a workspace ID or root. Workspace management is separate: `workspace-register` registers only the actual current directory, while live workspace removal is allowed only for the workspace selected by that directory. A missing-root stale workspace may be removed by exact ID plus workspace-hash CAS so broken registrations remain recoverable.
 
+An alias path for the current directory and its resolved real path may differ while identifying the same registered workspace. The runner determines that identity, not the caller. Workspace registration stores the canonical real directory; an alias does not authorize another workspace or bypass the checks that reject symlinks escaping a selected workspace.
+
 ## Configuration
 
 Each workspace contains a stable ID, an absolute root, and its own command map. Commands use fixed argv arrays and optional validated named arguments.
