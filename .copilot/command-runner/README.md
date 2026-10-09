@@ -44,7 +44,11 @@ At runtime the runner:
 
 The active directory may be the workspace root or any directory below it. The agent cannot provide a workspace ID, select another workspace, override the terminal working directory, change the environment or shell, or request background execution. Repository names and Git remotes are not authorization boundaries.
 
+The runner's **terminal current working directory** is not necessarily the folder currently open in VS Code. If registration is requested for the editor-opened folder rather than explicitly for the terminal cwd, confirm those are the same target from authorized evidence before calling `workspace-register`. The runner cannot select the editor folder or override the terminal cwd; a successfully returned root alone does not establish that the intended folder was registered.
+
 The same selection rule applies to command management. `register`, `update`, and `unregister` can mutate only the command map of the workspace selected from the real current directory; none accepts a workspace ID or root. Workspace management is separate: `workspace-register` registers only the actual current directory, while live workspace removal is allowed only for the workspace selected by that directory. A missing-root stale workspace may be removed by exact ID plus workspace-hash CAS so broken registrations remain recoverable.
+
+An alias path for the current directory and its resolved real path may differ while identifying the same registered workspace. The runner determines that identity, not the caller. Workspace registration stores the canonical real directory; an alias does not authorize another workspace or bypass the checks that reject symlinks escaping a selected workspace.
 
 ## Configuration
 
@@ -92,12 +96,12 @@ node ~/.copilot/command-runner/command-runner-interface.mjs workspace-list [quer
 node ~/.copilot/command-runner/command-runner-interface.mjs workspace-describe <workspace-id>
 node ~/.copilot/command-runner/command-runner-interface.mjs workspace-register <workspace-id>
 node ~/.copilot/command-runner/command-runner-interface.mjs workspace-unregister <workspace-id> expected=<workspace-hash>
-node ~/.copilot/command-runner/command-runner-interface.mjs list [query=<encoded-search-text>] [offset=<n>]
+node ~/.copilot/command-runner/command-runner-interface.mjs list [query=<encoded-search-text>] [offset=<n>] [revision=<sha256>]
 node ~/.copilot/command-runner/command-runner-interface.mjs describe test
 node ~/.copilot/command-runner/command-runner-interface.mjs register lint definition=<encoded-json>
 node ~/.copilot/command-runner/command-runner-interface.mjs update lint expected=<definition-hash> definition=<encoded-json>
 node ~/.copilot/command-runner/command-runner-interface.mjs unregister lint expected=<definition-hash>
-node ~/.copilot/command-runner/command-runner-interface.mjs run test runInBand=true
+node ~/.copilot/command-runner/command-runner-interface.mjs run test --expected-workspace=example --expected-identity=<sha256> --expected-definition=<sha256> runInBand=true
 node ~/.copilot/command-runner/command-runner-interface.mjs output <execution-id> stream=stdout|stderr [offset=<n>]
 ```
 
@@ -105,7 +109,9 @@ Argument values use URI component encoding. Workspace path arguments are resolve
 
 The agent and hook expose only `command-runner-interface.mjs`. Execution still delegates command schema validation and process execution to the fixed `command-runner.mjs` core. Management validates the complete candidate configuration through that same core before persisting it.
 
-All interface responses are bounded below the terminal spill threshold. `list` returns only command IDs, at most 100 per call, with `nextOffset` when more matches remain. `query` performs a case-insensitive substring match against command IDs and descriptions; it only narrows discovery and never authorizes execution. `describe` returns one public command definition plus its stable canonical SHA-256 `definitionHash`.
+Running a registered command requires the previously observed workspace ID, `workspaceIdentity`, and command `executionHash` from `describe` as `--expected-workspace`, `--expected-identity`, and `--expected-definition`. These guards cannot select a workspace. The core runner checks all three against its selected workspace and loaded command **before spawning**; mismatches fail closed. New workspace registrations include a generation ID, so reuse of an ID is not reuse of the prior authorization; legacy configurations remain readable. A missing exact command returned by `describe` includes the selected `workspaceId` in its structured error.
+
+All interface responses are bounded below the terminal spill threshold. `list` includes a `revision` tied to the selected workspace and command catalog. Pass it with the same query when fetching subsequent pages; changed catalogs reject with `stale_listing` rather than implying absence. `list` returns only command IDs **for the selected terminal-cwd workspace**, at most 100 per call, with `total` and `nextOffset` when more matches remain. `query` performs a case-insensitive substring match against command IDs and descriptions; it only narrows discovery and never authorizes execution. **A filtered miss, an unfinished page, or a different selected workspace does not prove that a command is unregistered.** A successful exact-ID `describe` confirms presence for its returned `workspaceId`. A complete unfiltered list (or a verified exact-ID missing response) can establish absence **only in the verified selected workspace**; tool failures and unknown scope cannot. `describe` returns both the canonical `definitionHash` for management CAS and `executionHash` covering effective inherited timeout and output defaults for safe execution. Never register a replacement or invent an ID from a search miss.
 
 ### Command management
 

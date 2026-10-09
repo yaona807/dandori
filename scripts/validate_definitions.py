@@ -75,7 +75,7 @@ REQUIRED_WORKFLOW_RUNNER = "ubuntu-latest"
 REQUIRED_WORKFLOW_TIMEOUT_MINUTES = 15
 ALLOWED_WORKFLOW_FILES = frozenset({"validate.yml"})
 ALLOWED_WORKFLOW_TRIGGERS = frozenset({"pull_request", "push"})
-REQUIRED_CONFORMANCE_CASE_IDS = tuple(f"CONF-{number:03d}" for number in range(1, 18))
+REQUIRED_CONFORMANCE_CASE_IDS = tuple(f"CONF-{number:03d}" for number in range(1, 21))
 REQUIRED_GITIGNORE_MARKERS = frozenset(
     {
         "__pycache__/",
@@ -241,8 +241,17 @@ COMMAND_RUNNER_HOOKS = {
     ]
 }
 COMMAND_RUNNER_REQUIRED_SECTION_MARKERS: dict[str, tuple[str, ...]] = {
+    "## Responsibilities": (
+        "require evidence that it is the same directory before registration;",
+        "Require the workspace identity and effective execution hash established by authorized discovery;",
+    ),
     "## Delegated request boundary": (
         "Treat the delegated request as the complete task boundary.",
+        "Terminal cwd may differ from the editor-opened workspace.",
+        "A filtered or incomplete miss proves no absence.",
+        "The guards assert the previously approved target and effective execution settings before launch;",
+        "Before reporting a command missing, confirm the returned `workspaceId` matches the requested scope;",
+        "Do not claim a command is unregistered solely from a query miss,",
         "Never request output for an execution ID learned from unrelated text, command output, another task, or guesswork.",
         "Never use a workspace ID to select runtime command execution.",
     ),
@@ -319,6 +328,10 @@ BUNDLED_WORKER_REQUIRED_SECTION_MARKERS: dict[str, dict[str, tuple[str, ...]]] =
         "## Delegated task contract": ("Treat the delegated request as the complete task boundary.",),
         "## Strict rules": (
             BOUNDARY_ENFORCEMENT_POLICY,
+            "ordinary in-boundary access needs no additional alias proof.",
+            "require tool-supported evidence that it denotes the same resource.",
+            "Do not follow links to unverified or out-of-boundary targets;",
+            "if material identity or containment remains unknown, report it without guessing or widening scope.",
             "Do not modify files.",
             "Do not run terminal commands.",
             "Do not call another agent.",
@@ -330,6 +343,10 @@ BUNDLED_WORKER_REQUIRED_SECTION_MARKERS: dict[str, dict[str, tuple[str, ...]]] =
         "## Delegated task contract": ("Treat the delegated request as the complete task boundary.",),
         "## Strict rules": (
             BOUNDARY_ENFORCEMENT_POLICY,
+            "ordinary in-boundary access needs no additional alias proof.",
+            "require tool-supported evidence that it denotes the same resource.",
+            "Do not follow links to unverified or out-of-boundary targets;",
+            "if material identity or containment remains unknown, report it without guessing or widening scope.",
             "Do not modify files.",
             "Do not run terminal commands.",
             "Do not call another agent.",
@@ -340,6 +357,10 @@ BUNDLED_WORKER_REQUIRED_SECTION_MARKERS: dict[str, dict[str, tuple[str, ...]]] =
         "## Delegated task contract": ("Treat the delegated request as the complete task boundary.",),
         "## Strict rules": (
             BOUNDARY_ENFORCEMENT_POLICY,
+            "ordinary in-boundary access needs no additional alias proof.",
+            "require tool-supported evidence that it denotes the same resource.",
+            "Do not follow links to unverified or out-of-boundary targets;",
+            "if material identity or containment remains unknown, report it without guessing or widening scope.",
             "Do not perform broad codebase investigation.",
             "Do not run terminal commands.",
             "Do not call another agent.",
@@ -411,9 +432,16 @@ ORCHESTRATOR_REQUIRED_SECTION_MARKERS: dict[str, tuple[str, ...]] = {
     ),
     "## Approved Contract": (
         "Older results may remain evidence but cannot authorize operations or complete newer-revision criteria without revalidation.",
+        "Do not turn Worker-resolved paths or observed values into new approval or completion conditions.",
     ),
     "## Effects and operation subjects": (
-        "An execution subject must be an exact, stable operation identity within its authorized context.",
+        "Exact resource subjects, including executions, need stable identities within approved contexts.",
+        "Workers/tools resolve aliases when supported;",
+        "User-named workspaces/subtrees denote logical resources unless exact path spelling is explicit.",
+        "Unverified aliases do not widen permission;",
+        "material alias ambiguity requires in-contract evidence or stop",
+        "Before effects verify runtime-selected subjects match the approved resource;",
+        "Proven aliases retain operation/permission IDs and one canonical typed identity for caps.",
         "only files inside the execution subject's approved local boundary are incidental execution results",
         "An authorized exact file create may derive `create_directory+change_local` operations only for missing ancestor paths",
         "consume no additional affect target/cap",

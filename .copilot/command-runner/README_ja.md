@@ -44,7 +44,11 @@ Runnerは実行時に次の処理を行います。
 
 実行位置はWorkspace rootでも、その配下のディレクトリでも構いません。AgentからWorkspace IDを指定したり、別のWorkspaceを選択したり、ターミナルのcwd・環境変数・shell・profileを上書きしたり、バックグラウンド実行を要求したりすることはできません。リポジトリ名やGit remoteは認可境界として使用しません。
 
+Runnerが参照するのは**ターミナルのカレントディレクトリ**であり、VS Codeで開いているフォルダとは異なる場合があります。依頼対象が「エディタで開いているWorkspace」の場合は、登録前に許可された情報から両者の同一性を確認します。Runnerがエディタ側のフォルダを選び直したり、ターミナルのcwdを上書きしたりはできません。登録結果にrootが返ってきたというだけでは、依頼したフォルダが登録されたことにはなりません。
+
 コマンド管理にも同じ選択規則を使用します。`register` / `update` / `unregister` が変更できるのは、実際のカレントディレクトリから選択されたWorkspaceのcommand mapだけです。Workspace IDやrootを引数で指定することはできません。Workspace管理は別系統で、`workspace-register` は実際のカレントディレクトリだけを登録します。liveなWorkspaceの削除は現在選択されているWorkspaceだけに限定し、rootが消えたstale Workspaceだけはexact IDとworkspace hash CASで削除できます。
+
+カレントディレクトリのシンボリックリンク経由のパスと実体パスは、表記が違っていても同じWorkspaceを指す場合があります。同一性の解決は呼び出し元ではなくRunnerが担当し、Workspace登録には正規化後の実体パスを保存します。ただし、別Workspaceの選択やWorkspace外を指すシンボリックリンクへのアクセスが許可されるわけではありません。
 
 ## 設定
 
@@ -92,12 +96,12 @@ node ~/.copilot/command-runner/command-runner-interface.mjs workspace-list [quer
 node ~/.copilot/command-runner/command-runner-interface.mjs workspace-describe <workspace-id>
 node ~/.copilot/command-runner/command-runner-interface.mjs workspace-register <workspace-id>
 node ~/.copilot/command-runner/command-runner-interface.mjs workspace-unregister <workspace-id> expected=<workspace-hash>
-node ~/.copilot/command-runner/command-runner-interface.mjs list [query=<encoded-search-text>] [offset=<n>]
+node ~/.copilot/command-runner/command-runner-interface.mjs list [query=<encoded-search-text>] [offset=<n>] [revision=<sha256>]
 node ~/.copilot/command-runner/command-runner-interface.mjs describe test
 node ~/.copilot/command-runner/command-runner-interface.mjs register lint definition=<encoded-json>
 node ~/.copilot/command-runner/command-runner-interface.mjs update lint expected=<definition-hash> definition=<encoded-json>
 node ~/.copilot/command-runner/command-runner-interface.mjs unregister lint expected=<definition-hash>
-node ~/.copilot/command-runner/command-runner-interface.mjs run test runInBand=true
+node ~/.copilot/command-runner/command-runner-interface.mjs run test --expected-workspace=example --expected-identity=<sha256> --expected-definition=<sha256> runInBand=true
 node ~/.copilot/command-runner/command-runner-interface.mjs output <execution-id> stream=stdout|stderr [offset=<n>]
 ```
 
@@ -105,7 +109,9 @@ node ~/.copilot/command-runner/command-runner-interface.mjs output <execution-id
 
 AgentとHookが直接呼べるのは `command-runner-interface.mjs` だけです。実行時のcommand schema検証とprocess起動は、従来どおり固定 `command-runner.mjs` coreへ委譲します。管理操作でも、保存前に候補となる設定全体を同じcoreで検証します。
 
-Runnerがterminalへ返すレスポンスはすべて固定上限以下です。`list`はcommand IDだけを1回最大100件返し、続きがある場合は `nextOffset` を返します。`query`はcommand IDとdescriptionをcase-insensitiveな部分一致で検索します。これは候補発見を絞り込むだけで、実行権限にはなりません。`describe`は1コマンドの公開定義と、canonical SHA-256の `definitionHash` を返します。
+登録済みコマンドの実行には、事前の`describe`で確認したWorkspace ID・Workspaceの識別ハッシュ・実行設定ハッシュ`executionHash`（継承されたタイムアウトと出力上限を含む）を渡します。`--expected-workspace`・`--expected-identity`・`--expected-definition`は対象の選択ではなく実行前の一致条件です。不一致・省略時は起動しません。新規Workspace登録には世代IDを付け、同じWorkspace IDで登録し直した場合も以前の承認を引き継ぎません。既存の登録設定はそのまま読み込めます。`describe`でコマンドが未登録だった場合は、エラーにも照会対象の`workspaceId`を返します。
+
+Runnerがターミナルに返すレスポンスにはサイズ上限があります。`list`は設定リビジョン`revision`を返し、2ページ目以降はその値を渡します。途中でコマンド一覧やWorkspaceが変わると`stale_listing`となり、その結果から未登録と断定できません。`list`は**実際のカレントディレクトリから選ばれたWorkspace内**のcommand IDを1回最大100件返し、`total`と、続きがある場合の`nextOffset`を返します。`query`はIDとdescriptionの大文字小文字を区別しない部分一致検索であり、候補を絞るだけです。**検索結果が0件でも、フィルタ付き・未取得ページあり・別Workspaceの結果なら「未登録」とは断定できません。** 完全に取得したフィルタなしの一覧か、実行Workspaceを確認したうえでの正確なIDの照会結果だけが、そのWorkspace内の存在・不在の根拠になります。ツールの失敗や対象Workspaceの不明は「未確認」として扱います。`describe`は公開定義と、管理操作用の`definitionHash`および実行前照合用の`executionHash`を返します。検索ミスを根拠にIDを推測したり、代替コマンドを新規登録したりしてはいけません。
 
 ### コマンド管理
 

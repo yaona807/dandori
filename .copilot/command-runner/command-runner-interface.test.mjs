@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { readFileSync, realpathSync } from 'node:fs';
 import {
   mkdir,
   mkdtemp,
@@ -21,6 +23,7 @@ const AGENT_SOURCE = path.join(SOURCE_DIRECTORY, '..', 'agents', 'CommandRunner.
 const RESPONSE_LIMIT = 12_288;
 
 const STUB_CORE = String.raw`#!/usr/bin/env node
+import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
@@ -36,9 +39,16 @@ if (!workspace) {
   process.exit(2);
 }
 const [operation, id, ...args] = process.argv.slice(2);
+const canonical = (v) => Array.isArray(v) ? v.map(canonical) : v && typeof v === 'object'
+  ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, canonical(v[k])])) : v;
+const digest = (v) => 'sha256-' + createHash('sha256').update(JSON.stringify(canonical(v))).digest('hex');
+const workspaceIdentity = digest([workspace.id, workspace.root, workspace.registrationId ?? null]);
+const executionHash = (command) => digest({ ...command,
+  timeoutMs: command.timeoutMs ?? config.defaults?.timeoutMs ?? 300000,
+  maxOutputBytes: command.maxOutputBytes ?? config.defaults?.maxOutputBytes ?? 1048576 });
 const publicCommand = ([commandId, command]) => ({ id: commandId, description: command.description, arguments: command.arguments ?? [] });
 if (operation === 'list') {
-  emit({ workspaceId: workspace.id, commands: Object.entries(workspace.commands).map(publicCommand) });
+  emit({ workspaceId: workspace.id, workspaceIdentity, commands: Object.entries(workspace.commands).map(publicCommand) });
 } else if (operation === 'describe') {
   const command = workspace.commands[id];
   if (!command) {
@@ -47,9 +57,18 @@ if (operation === 'list') {
   }
   emit({ workspaceId: workspace.id, command: publicCommand([id, command]) });
 } else if (operation === 'run') {
+  const guard = args[0];
+  if (guard !== '--expected-workspace=' + workspace.id || args[1] !== '--expected-identity=' + workspaceIdentity) {
+    emit({ status: 'error', error: { code: 'workspace_identity_changed', message: 'workspace mismatch' } }, process.stderr);
+    process.exit(2);
+  }
   const command = workspace.commands[id];
   if (!command) {
     emit({ status: 'error', error: { code: 'command_not_registered', message: 'command not registered' } }, process.stderr);
+    process.exit(2);
+  }
+  if (args[2] !== '--expected-definition=' + executionHash(command)) {
+    emit({ status: 'error', error: { code: 'stale_definition', message: 'definition changed' } }, process.stderr);
     process.exit(2);
   }
   const size = command.outputBytes ?? 0;
@@ -59,7 +78,7 @@ if (operation === 'list') {
     status: command.exitCode ? 'failed' : 'completed',
     workspaceId: workspace.id,
     commandId: id,
-    arguments: Object.fromEntries(args.map((token) => [token.split('=', 1)[0], decodeURIComponent(token.slice(token.indexOf('=') + 1))])),
+    arguments: Object.fromEntries(args.slice(3).map((token) => [token.split('=', 1)[0], decodeURIComponent(token.slice(token.indexOf('=') + 1))])),
     cwd: '.',
     exitCode: command.exitCode ?? 0,
     signal: null,
@@ -176,10 +195,42 @@ async function withManagementFixture(callback) {
   }
 }
 
+function digest(value) {
+  const canonical = (v) => Array.isArray(v)
+    ? v.map(canonical)
+    : v !== null && typeof v === 'object'
+      ? Object.fromEntries(Object.keys(v).sort().map((key) => [key, canonical(v[key])]))
+      : v;
+  return `sha256-${createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex')}`;
+}
+
+function executionHash(command, defaults = {}) {
+  return digest({
+    ...command,
+    timeoutMs: command.timeoutMs ?? defaults.timeoutMs ?? 300_000,
+    maxOutputBytes: command.maxOutputBytes ?? defaults.maxOutputBytes ?? 1_048_576,
+  });
+}
+
+function guarded(fixture, cwd, args) {
+  if (args[0] !== 'run' || args[3]?.startsWith('--expected-identity=')) return args;
+  const selected = cwd === fixture.beta ? 'beta' : 'alpha';
+  const expectedId = args[2]?.startsWith('--expected-workspace=')
+    ? args[2].slice('--expected-workspace='.length) : selected;
+  const config = JSON.parse(readFileSync(path.join(fixture.commandRunner, 'workspaces.json'), 'utf8'));
+  const workspace = config.workspaces.find((w) => w.id === expectedId);
+  const identity = digest([expectedId, realpathSync(workspace.root), workspace.registrationId ?? null]);
+  const definition = executionHash(workspace.commands[args[1]] ?? {}, config.defaults);
+  const remaining = args[2]?.startsWith('--expected-workspace=') ? args.slice(3) : args.slice(2);
+  return [args[0], args[1], `--expected-workspace=${expectedId}`,
+    `--expected-identity=${identity}`, `--expected-definition=${definition}`, ...remaining];
+}
+
 function runInterface(fixture, cwd, args) {
+  const guardedArgs = guarded(fixture, cwd, args);
   return spawnSync(
     process.execPath,
-    [path.join(fixture.commandRunner, 'command-runner-interface.mjs'), ...args],
+    [path.join(fixture.commandRunner, 'command-runner-interface.mjs'), ...guardedArgs],
     { cwd, encoding: 'utf8', env: { ...process.env, COPILOT_HOME: fixture.home } },
   );
 }
@@ -233,7 +284,7 @@ test('list is paged, searchable, and bounded with many registered commands', asy
     assert.equal(first.nextOffset, 100);
     assert.ok(first.total > 150);
 
-    const second = parseSuccess(runInterface(fixture, fixture.alpha, ['list', 'offset=100']));
+    const second = parseSuccess(runInterface(fixture, fixture.alpha, ['list', 'offset=100', `revision=${first.revision}`]));
     assert.ok(second.commandIds.length > 0);
     assert.equal(second.offset, 100);
 
@@ -265,7 +316,7 @@ test('list is paged, searchable, and bounded with many registered commands', asy
     const descriptionPageTwo = parseSuccess(runInterface(
       fixture,
       fixture.alpha,
-      ['list', 'query=shared-search', 'offset=100'],
+      ['list', 'query=shared-search', 'offset=100', `revision=${descriptionPage.revision}`],
     ));
     assert.equal(descriptionPageTwo.commandIds.length, 20);
     assert.equal(descriptionPageTwo.nextOffset, null);
@@ -279,6 +330,31 @@ test('list is paged, searchable, and bounded with many registered commands', asy
   }, 160);
 });
 
+test('pagination rejects a changed catalog even if total command count stays constant', async () => {
+  await withFixture(async (fixture) => {
+    const first = parseSuccess(runInterface(fixture, fixture.alpha, ['list']));
+    assert.ok(first.nextOffset > 0);
+    assert.match(first.revision, /^sha256-[0-9a-f]{64}$/u);
+    const file = path.join(fixture.commandRunner, 'workspaces.json');
+    const config = JSON.parse(await readFile(file, 'utf8'));
+    delete config.workspaces[0].commands.cmd_000;
+    config.workspaces[0].commands.zz_replacement = { description: 'New later-sorted command.' };
+    await writeFile(file, `${JSON.stringify(config, null, 2)}\n`);
+    const stale = runInterface(fixture, fixture.alpha, [
+      'list', `offset=${first.nextOffset}`, `revision=${first.revision}`,
+    ]);
+    parseFailure(stale, 'stale_listing');
+    parseFailure(runInterface(fixture, fixture.alpha, ['list', 'offset=100']), 'invalid_argument');
+    const refreshed = parseSuccess(runInterface(fixture, fixture.alpha, ['list']));
+    assert.notEqual(refreshed.revision, first.revision);
+    const next = parseSuccess(runInterface(fixture, fixture.alpha, [
+      'list', `offset=${refreshed.nextOffset}`, `revision=${refreshed.revision}`,
+    ]));
+    assert.equal(next.nextOffset, null);
+    assert.ok(next.commandIds.includes('zz_replacement'));
+  }, 160);
+});
+
 test('describe returns one bounded command definition and stable hash', async () => {
   await withFixture(async (fixture) => {
     const first = parseSuccess(runInterface(fixture, fixture.alpha, ['describe', 'echo']));
@@ -287,6 +363,69 @@ test('describe returns one bounded command definition and stable hash', async ()
     assert.equal(first.command.id, 'echo');
     assert.match(first.definitionHash, /^sha256-[0-9a-f]{64}$/u);
     assert.equal(first.definitionHash, second.definitionHash);
+    assert.match(first.executionHash, /^sha256-[0-9a-f]{64}$/u);
+    assert.equal(first.executionHash, second.executionHash);
+  });
+});
+
+test('describe not-found errors include the selected workspace identity', async () => {
+  await withFixture(async (fixture) => {
+    const absent = parseFailure(runInterface(fixture, fixture.beta, ['describe', 'echo']), 'command_not_registered');
+    assert.equal(absent.workspaceId, 'beta');
+    const found = parseSuccess(runInterface(fixture, fixture.alpha, ['describe', 'echo']));
+    assert.equal(found.workspaceId, 'alpha');
+  });
+});
+
+test('effectful run denies wrong workspace before executing a matching command', async () => {
+  await withManagementFixture(async (fixture) => {
+    const configPath = path.join(fixture.commandRunner, 'workspaces.json');
+    const cfg = JSON.parse(await readFile(configPath, 'utf8'));
+    cfg.workspaces[1].commands.keep = {
+      description: 'Side effect sentinel',
+      run: [process.execPath, '-e', "require('fs').writeFileSync('wrong-workspace.txt','unexpected')"],
+      cwd: '.',
+      arguments: {},
+    };
+    await writeFile(configPath, `${JSON.stringify(cfg, null, 2)}\n`);
+
+    const denied = parseFailure(runInterface(fixture, fixture.beta, [
+      'run', 'keep', '--expected-workspace=alpha',
+    ]), 'workspace_identity_changed');
+    assert.equal(denied.status, 'error');
+    await assert.rejects(readFile(path.join(fixture.beta, 'wrong-workspace.txt')), { code: 'ENOENT' });
+
+    const allowed = parseSuccess(runInterface(fixture, fixture.alpha, [
+      'run', 'keep', '--expected-workspace=alpha',
+    ]));
+    assert.equal(allowed.workspaceId, 'alpha');
+    assert.equal(allowed.commandId, 'keep');
+
+    const raw = spawnSync(
+      process.execPath,
+      [path.join(fixture.commandRunner, 'command-runner-interface.mjs'), 'run', 'keep'],
+      { cwd: fixture.alpha, encoding: 'utf8', env: { ...process.env, COPILOT_HOME: fixture.home } },
+    );
+    parseFailure(raw, 'invalid_argument');
+  });
+});
+
+test('effective execution hash changes with inherited defaults but management CAS hash does not', async () => {
+  await withManagementFixture(async (fixture) => {
+    const before = parseSuccess(runInterface(fixture, fixture.alpha, ['describe', 'keep']));
+    const file = path.join(fixture.commandRunner, 'workspaces.json');
+    const config = JSON.parse(await readFile(file, 'utf8'));
+    config.defaults.timeoutMs += 1;
+    await writeFile(file, `${JSON.stringify(config, null, 2)}\n`);
+    const after = parseSuccess(runInterface(fixture, fixture.alpha, ['describe', 'keep']));
+    assert.equal(after.definitionHash, before.definitionHash);
+    assert.notEqual(after.executionHash, before.executionHash);
+    const stale = runInterface(fixture, fixture.alpha, [
+      'run', 'keep', '--expected-workspace=alpha',
+      `--expected-identity=${before.workspaceIdentity}`,
+      `--expected-definition=${before.executionHash}`,
+    ]);
+    parseFailure(stale, 'stale_definition');
   });
 });
 
@@ -527,9 +666,11 @@ test('workspace management registers current cwd without accepting a root argume
     ), 'workspace_overlap');
 
     const saved = JSON.parse(await readFile(configPath, 'utf8'));
+    assert.match(saved.workspaces[0].registrationId, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u);
     assert.deepEqual(saved.workspaces, [{
       id: 'alpha',
       root: fixture.alpha,
+      registrationId: saved.workspaces[0].registrationId,
       commands: {},
     }]);
   });
@@ -717,7 +858,7 @@ test('hook permits only bounded execution and management interface shapes', asyn
       'node ~/.copilot/command-runner/command-runner-interface.mjs register lint definition=%7B%22description%22%3A%22Lint%22%7D',
       `node ~/.copilot/command-runner/command-runner-interface.mjs update echo expected=sha256-${'0'.repeat(64)} definition=%7B%22description%22%3A%22Echo%22%7D`,
       `node ~/.copilot/command-runner/command-runner-interface.mjs unregister echo expected=sha256-${'0'.repeat(64)}`,
-      'node ~/.copilot/command-runner/command-runner-interface.mjs run echo',
+      'node ~/.copilot/command-runner/command-runner-interface.mjs run echo --expected-workspace=alpha --expected-identity=sha256-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --expected-definition=sha256-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
       'node ~/.copilot/command-runner/command-runner-interface.mjs output 20260829T010203.004Z_00000000-0000-4000-8000-000000000000 stream=stdout',
     ]) {
       const result = runHook(fixture, { command });
@@ -726,6 +867,7 @@ test('hook permits only bounded execution and management interface shapes', asyn
 
     for (const toolInput of [
       { command: 'node ~/.copilot/command-runner/command-runner.mjs list' },
+      { command: 'node ~/.copilot/command-runner/command-runner-interface.mjs run echo' },
       { command: 'npm test' },
       { command: 'node ~/.copilot/command-runner/command-runner-interface.mjs workspace-register alpha root=%2Ftmp%2Falpha' },
       { command: 'node ~/.copilot/command-runner/command-runner-interface.mjs workspace-unregister alpha other=value' },

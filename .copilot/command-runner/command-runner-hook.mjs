@@ -154,7 +154,24 @@ function validateRunnerInvocation(tokens) {
     return;
   }
   if (operation === 'run') {
-    for (const token of tokens.slice(4)) validateEncodedParameter(token);
+    const expected = tokens[4];
+    const prefix = '--expected-workspace=';
+    if (
+      typeof expected !== 'string'
+      || !expected.startsWith(prefix)
+      || !COMMAND_ID_PATTERN.test(expected.slice(prefix.length))
+    ) {
+      throw new Error('run requires --expected-workspace=<id> first');
+    }
+    const identity = tokens[5];
+    const definition = tokens[6];
+    if (
+      typeof identity !== 'string' || !/^--expected-identity=sha256-[0-9a-f]{64}$/u.test(identity)
+      || typeof definition !== 'string' || !/^--expected-definition=sha256-[0-9a-f]{64}$/u.test(definition)
+    ) {
+      throw new Error('run requires expected identity and definition hashes');
+    }
+    for (const token of tokens.slice(7)) validateEncodedParameter(token);
     return;
   }
   throw new Error(`unsupported command-runner operation: ${operation}`);

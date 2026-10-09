@@ -91,6 +91,10 @@ Orchestrator は、固定のWorker能力表、Worker別ルーティング表、W
 
 Worker側へDANDORI固有の実装詳細を持たせる必要はありません。Worker定義は、Task Cardのキー、入力ラッパー、呼び出し元固有のスキーマ、DANDORI固有の出力エンベロープを規定してはいけません。
 
+Workerのdescriptionは委譲できる仕事を示すもので、操作権限を与えるものではありません。通常、Workspaceやサブツリーは論理的な対象を表します。ただし、ユーザーがパス文字列そのものを制限した場合は、その条件も守ります。Workerはツールが承認範囲を守れるなら通常のパスで作業でき、別の表記との同一性が権限や完了判定に関わるときだけ根拠を確認します。Orchestratorは実体と承認範囲を照合し、返却されたパス表記を新しい承認・完了条件にはしません。これはコード調査・編集・レビュー・コマンド実行に共通する規則です。範囲外やリンク先が確認できないパスへのアクセス権限は増えません。
+
+VS Code／Copilotのファイル操作ツールがWorkspace内のファイルを誤って範囲外と判定した場合も、Dandoriの承認範囲を勝手に広げたり、ツール側の許可確認を回避したりはしません。ツール名・VS Code／Copilotのバージョン・該当パスを記録して切り分けます。関連する上流の修正は[microsoft/vscode#331566](https://github.com/microsoft/vscode/issues/331566)と[microsoft/vscode#334409](https://github.com/microsoft/vscode/issues/334409)です。現在の環境に修正が入っているかは別途確認が必要です。
+
 ## 仕組み
 
 ```text

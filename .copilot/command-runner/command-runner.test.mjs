@@ -1,9 +1,12 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { readFileSync, realpathSync } from 'node:fs';
 import {
   mkdtemp,
   mkdir,
   readFile,
+  realpath,
   rm,
   symlink,
   writeFile,
@@ -175,10 +178,41 @@ async function makeFixture(configure = (configuration) => configuration) {
   return { root, home, alpha, beta };
 }
 
+function digest(value) {
+  const canonical = (v) => Array.isArray(v)
+    ? v.map(canonical)
+    : v !== null && typeof v === 'object'
+      ? Object.fromEntries(Object.keys(v).sort().map((key) => [key, canonical(v[key])]))
+      : v;
+  return `sha256-${createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex')}`;
+}
+
+function executionHash(command, defaults = {}) {
+  return digest({
+    ...command,
+    timeoutMs: command.timeoutMs ?? defaults.timeoutMs ?? 300_000,
+    maxOutputBytes: command.maxOutputBytes ?? defaults.maxOutputBytes ?? 1_048_576,
+  });
+}
+
+function guarded(fixture, cwd, args) {
+  if (args[0] !== 'run' || args[3]?.startsWith('--expected-identity=')) return args;
+  const expectedId = args[2]?.startsWith('--expected-workspace=')
+    ? args[2].slice('--expected-workspace='.length) : 'alpha';
+  const config = JSON.parse(readFileSync(path.join(fixture.home, 'command-runner', 'workspaces.json'), 'utf8'));
+  const workspace = config.workspaces.find((w) => w.id === expectedId);
+  const identity = digest([expectedId, realpathSync(workspace.root), workspace.registrationId ?? null]);
+  const definition = executionHash(workspace.commands[args[1]] ?? {}, config.defaults);
+  const remaining = args[2]?.startsWith('--expected-workspace=') ? args.slice(3) : args.slice(2);
+  return [args[0], args[1], `--expected-workspace=${expectedId}`,
+    `--expected-identity=${identity}`, `--expected-definition=${definition}`, ...remaining];
+}
+
 function runRunner(fixture, cwd, args) {
+  const guardedArgs = guarded(fixture, cwd, args);
   return spawnSync(
     process.execPath,
-    [path.join(fixture.home, 'command-runner', 'command-runner.mjs'), ...args],
+    [path.join(fixture.home, 'command-runner', 'command-runner.mjs'), ...guardedArgs],
     {
       cwd,
       encoding: 'utf8',
@@ -188,9 +222,10 @@ function runRunner(fixture, cwd, args) {
 }
 
 function runInterface(fixture, cwd, args) {
+  const guardedArgs = guarded(fixture, cwd, args);
   return spawnSync(
     process.execPath,
-    [path.join(fixture.home, 'command-runner', 'command-runner-interface.mjs'), ...args],
+    [path.join(fixture.home, 'command-runner', 'command-runner-interface.mjs'), ...guardedArgs],
     {
       cwd,
       encoding: 'utf8',
@@ -231,6 +266,13 @@ test('distributed agent is user-level, agent-scoped, and fixed-runner-only', asy
   assert.match(source, /node ~\/\.copilot\/command-runner\/command-runner-interface\.mjs list/u);
   assert.match(source, /node ~\/\.copilot\/command-runner\/command-runner-interface\.mjs output/u);
   assert.match(source, /Do not execute a raw project command\./u);
+  assert.match(source, /description: >-[\s\S]*?Command searches/u);
+  assert.match(source, /are filtered, paginated, and scoped to the active workspace/u);
+  assert.match(source, /Terminal cwd may differ from the editor-opened workspace/u);
+  assert.match(source, /require evidence that it is the same directory before registration/u);
+  assert.match(source, /A filtered or incomplete miss proves no absence/u);
+  assert.match(source, /Before reporting a command missing, confirm the returned `workspaceId`/u);
+  assert.match(source, /Do not claim a command is unregistered solely from a query miss/u);
   assert.match(source, /Do not specify, override, or infer a workspace ID/u);
   assert.match(source, /Never request a terminal working-directory/u);
   assert.doesNotMatch(
@@ -256,6 +298,82 @@ test('list exposes commands only for the current workspace', async () => {
     const betaOutput = JSON.parse(beta.stdout);
     assert.equal(betaOutput.workspaceId, 'beta');
     assert.deepEqual(betaOutput.commands.map(({ id }) => id), ['beta']);
+  });
+});
+
+test('filtered command misses do not imply absence from selected workspace', async () => {
+  await withFixture(async (fixture) => {
+    const filtered = runInterface(fixture, fixture.alpha, ['list', 'query=nonexistent-term']);
+    assert.equal(filtered.status, 0, filtered.stderr);
+    const filteredResult = JSON.parse(filtered.stdout);
+    assert.equal(filteredResult.workspaceId, 'alpha');
+    assert.equal(filteredResult.total, 0);
+    assert.deepEqual(filteredResult.commandIds, []);
+    assert.equal(filteredResult.nextOffset, null);
+
+    const unfiltered = runInterface(fixture, fixture.alpha, ['list']);
+    assert.equal(unfiltered.status, 0, unfiltered.stderr);
+    const unfilteredResult = JSON.parse(unfiltered.stdout);
+    assert.equal(unfilteredResult.workspaceId, 'alpha');
+    assert.ok(unfilteredResult.total > 0);
+    assert.ok(unfilteredResult.commandIds.includes('sample'));
+
+    const exact = runInterface(fixture, fixture.alpha, ['describe', 'sample']);
+    assert.equal(exact.status, 0, exact.stderr);
+    assert.equal(JSON.parse(exact.stdout).command.id, 'sample');
+
+    const wrongWorkspace = runInterface(fixture, fixture.beta, ['describe', 'sample']);
+    assert.equal(wrongWorkspace.status, 2);
+    assert.match(wrongWorkspace.stderr, /command is not registered for workspace beta: sample/u);
+    const inBeta = runInterface(fixture, fixture.beta, ['list', 'query=beta']);
+    assert.equal(inBeta.status, 0, inBeta.stderr);
+    assert.deepEqual(JSON.parse(inBeta.stdout).commandIds, ['beta']);
+  });
+});
+
+test('command beyond first page remains discoverable in the selected workspace', async () => {
+  await withFixture(async (fixture) => {
+    const first = runInterface(fixture, fixture.alpha, ['list']);
+    assert.equal(first.status, 0, first.stderr);
+    const start = JSON.parse(first.stdout);
+    assert.equal(start.workspaceId, 'alpha');
+    assert.equal(start.commandIds.length, 100);
+    assert.ok(start.total > 100);
+    assert.equal(start.commandIds.includes('zz-last-command'), false);
+    assert.ok(Number.isInteger(start.nextOffset));
+
+    const second = runInterface(fixture, fixture.alpha, ['list', `offset=${start.nextOffset}`, `revision=${start.revision}`]);
+    assert.equal(second.status, 0, second.stderr);
+    const last = JSON.parse(second.stdout);
+    assert.equal(last.workspaceId, 'alpha');
+    assert.equal(last.nextOffset, null);
+    assert.ok(last.commandIds.includes('zz-last-command'));
+    assert.equal(start.commandIds.length + last.commandIds.length, start.total);
+
+    const search = runInterface(fixture, fixture.alpha, ['list', 'query=LAST%20COMMAND']);
+    assert.equal(search.status, 0, search.stderr);
+    const matching = JSON.parse(search.stdout);
+    assert.equal(matching.workspaceId, 'alpha');
+    assert.deepEqual(matching.commandIds, ['zz-last-command']);
+    assert.equal(matching.nextOffset, null);
+    assert.equal(matching.total, 1);
+  }, (configuration) => {
+    const commands = configuration.workspaces[0].commands;
+    for (let i = 0; i < 108; i += 1) {
+      commands[`batch-${String(i).padStart(3, '0')}`] = {
+        description: 'Batch command for paginated discovery.',
+        run: [process.execPath, 'echo-args.mjs'],
+        cwd: '.',
+        arguments: {},
+      };
+    }
+    commands['zz-last-command'] = {
+      description: 'Last command for specific search.',
+      run: [process.execPath, 'echo-args.mjs'],
+      cwd: '.',
+      arguments: {},
+    };
+    return configuration;
   });
 });
 
@@ -297,6 +415,109 @@ test('registered workspace may have an empty command map', async () => {
   });
 });
 
+test('symlinked working-directory alias selects the registered real workspace', async (t) => {
+  await withFixture(async (fixture) => {
+    const alias = path.join(fixture.root, 'alpha-alias');
+    try {
+      await symlink(fixture.alpha, alias, 'dir');
+    } catch (error) {
+      if (['EPERM', 'EACCES', 'ENOTSUP'].includes(error?.code)) {
+        t.skip('directory symlink creation unavailable');
+        return;
+      }
+      throw error;
+    }
+
+    const listed = runRunner(fixture, alias, ['list']);
+    assert.equal(listed.status, 0, listed.stderr);
+    assert.equal(JSON.parse(listed.stdout).workspaceId, 'alpha');
+
+    const publicList = runInterface(fixture, alias, ['list']);
+    assert.equal(publicList.status, 0, publicList.stderr);
+    assert.equal(JSON.parse(publicList.stdout).workspaceId, 'alpha');
+
+    const executed = runRunner(fixture, alias, [
+      'run', 'sample', 'file=tests%2Fsample.test.js',
+    ]);
+    assert.equal(executed.status, 0, executed.stderr);
+    assert.equal(JSON.parse(executed.stdout).workspaceId, 'alpha');
+  });
+});
+
+test('configured symlink workspace root is canonicalized, and removing that resolution fails', async (t) => {
+  await withFixture(async (fixture) => {
+    const alias = path.join(fixture.root, 'configured-alpha-alias');
+    try {
+      await symlink(fixture.alpha, alias, 'dir');
+    } catch (error) {
+      if (['EPERM', 'EACCES', 'ENOTSUP'].includes(error?.code)) {
+        t.skip('directory symlink creation unavailable');
+        return;
+      }
+      throw error;
+    }
+
+    const configPath = path.join(fixture.home, 'command-runner', 'workspaces.json');
+    const config = JSON.parse(await readFile(configPath, 'utf8'));
+    config.workspaces[0].root = alias;
+    await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`);
+
+    // The physical cwd cannot match a symlink-spelled root by string comparison.
+    const normal = runRunner(fixture, fixture.alpha, ['list']);
+    assert.equal(normal.status, 0, normal.stderr);
+    assert.equal(JSON.parse(normal.stdout).workspaceId, 'alpha');
+
+    // Mutate only the throwaway fixture, never repository sources. Without root
+    // canonicalization this same case must fail, proving the test detects regressions.
+    const corePath = path.join(fixture.home, 'command-runner', 'command-runner.mjs');
+    const core = await readFile(corePath, 'utf8');
+    const canonicalization = 'canonical = await realpath(value);';
+    assert.equal(core.split(canonicalization).length, 2);
+    await writeFile(corePath, core.replace(canonicalization, 'canonical = path.resolve(value);'));
+
+    const broken = runRunner(fixture, fixture.alpha, ['list']);
+    assert.notEqual(broken.status, 0);
+    assert.match(broken.stderr, /workspace is not registered/u);
+  });
+});
+
+test('workspace registration from symlink alias saves one canonical root', async (t) => {
+  await withFixture(async (fixture) => {
+    const actual = path.join(fixture.root, 'gamma');
+    const alias = path.join(fixture.root, 'gamma-alias');
+    await mkdir(actual);
+    try {
+      await symlink(actual, alias, 'dir');
+    } catch (error) {
+      if (['EPERM', 'EACCES', 'ENOTSUP'].includes(error?.code)) {
+        t.skip('directory symlink creation unavailable');
+        return;
+      }
+      throw error;
+    }
+
+    const registered = runInterface(fixture, alias, ['workspace-register', 'gamma']);
+    assert.equal(registered.status, 0, registered.stderr);
+    const result = JSON.parse(registered.stdout);
+    assert.equal(result.workspaceId, 'gamma');
+    assert.equal(result.root, await realpath(actual));
+
+    const direct = runInterface(fixture, actual, ['list']);
+    assert.equal(direct.status, 0, direct.stderr);
+    assert.equal(JSON.parse(direct.stdout).workspaceId, 'gamma');
+
+    const duplicate = runInterface(fixture, alias, ['workspace-register', 'other_gamma']);
+    assert.equal(duplicate.status, 2);
+    assert.match(duplicate.stderr, /workspace_overlap/u);
+
+    const configured = JSON.parse(await readFile(
+      path.join(fixture.home, 'command-runner', 'workspaces.json'),
+      'utf8',
+    ));
+    assert.equal(configured.workspaces.filter((item) => item.root === result.root).length, 1);
+  });
+});
+
 test('deepest registered root wins for nested workspaces', async () => {
   await withFixture(async (fixture) => {
     const nested = path.join(fixture.alpha, 'nested');
@@ -327,6 +548,68 @@ test('deepest registered root wins for nested workspaces', async () => {
     const result = runRunner(fixture, nested, ['list']);
     assert.equal(result.status, 0, result.stderr);
     assert.equal(JSON.parse(result.stdout).workspaceId, 'nested');
+  });
+});
+
+test('core denies a mismatched expected workspace before command side effects', async () => {
+  await withFixture(async (fixture) => {
+    const actual = runRunner(fixture, fixture.beta, [
+      'run', 'sample', '--expected-workspace=alpha',
+    ]);
+    assert.equal(actual.status, 2);
+    assert.match(actual.stderr, /command is not registered|workspace.*differs/u);
+
+    const configPath = path.join(fixture.home, 'command-runner', 'workspaces.json');
+    const config = JSON.parse(await readFile(configPath, 'utf8'));
+    config.workspaces[1].commands.sample = {
+      description: 'Beta writes a detectable file.',
+      run: [process.execPath, '-e', "require('fs').writeFileSync('wrong-workspace.txt','unexpected')"],
+      cwd: '.',
+      arguments: {},
+    };
+    await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`);
+    const mismatch = runRunner(fixture, fixture.beta, [
+      'run', 'sample', '--expected-workspace=alpha',
+    ]);
+    assert.equal(mismatch.status, 2);
+    assert.match(mismatch.stderr, /workspace_identity_changed/u);
+    await assert.rejects(readFile(path.join(fixture.beta, 'wrong-workspace.txt')), { code: 'ENOENT' });
+  });
+});
+
+test('reused workspace ID and changed command definition are rejected before effects', async () => {
+  await withFixture(async (fixture) => {
+    const configPath = path.join(fixture.home, 'command-runner', 'workspaces.json');
+    const initial = JSON.parse(readFileSync(configPath, 'utf8'));
+    const command = structuredClone(initial.workspaces[0].commands.sample);
+    const originalIdentity = digest(['alpha', realpathSync(fixture.alpha), null]);
+    const expectedDefinition = executionHash(command, initial.defaults);
+    const bound = ['run', 'sample', '--expected-workspace=alpha',
+      `--expected-identity=${originalIdentity}`, `--expected-definition=${expectedDefinition}`];
+    initial.workspaces[0].registrationId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    await writeFile(configPath, `${JSON.stringify(initial, null, 2)}\n`);
+    const reused = runRunner(fixture, fixture.alpha, bound);
+    assert.equal(reused.status, 2);
+    assert.match(reused.stderr, /workspace_identity_changed/u);
+
+    initial.workspaces[0].registrationId = undefined;
+    initial.workspaces[0].commands.sample.description = 'Changed after discovery';
+    await writeFile(configPath, `${JSON.stringify(initial, null, 2)}\n`);
+    const changed = runRunner(fixture, fixture.alpha, bound);
+    assert.equal(changed.status, 2);
+    assert.match(changed.stderr, /stale_definition/u);
+    initial.workspaces[0].commands.sample = command;
+    initial.defaults.timeoutMs = (initial.defaults.timeoutMs ?? 300_000) + 1;
+    await writeFile(configPath, `${JSON.stringify(initial, null, 2)}\n`);
+    const inherited = runRunner(fixture, fixture.alpha, bound);
+    assert.equal(inherited.status, 2);
+    assert.match(inherited.stderr, /stale_definition/u);
+    initial.defaults.timeoutMs -= 1;
+    initial.defaults.maxOutputBytes = (initial.defaults.maxOutputBytes ?? 1_048_576) + 1;
+    await writeFile(configPath, `${JSON.stringify(initial, null, 2)}\n`);
+    const outputDefault = runRunner(fixture, fixture.alpha, bound);
+    assert.equal(outputDefault.status, 2);
+    assert.match(outputDefault.stderr, /stale_definition/u);
   });
 });
 
@@ -550,7 +833,7 @@ test('hook permits canonical bounded-interface calls and denies direct core or c
       cwd: fixture.alpha,
       tool_name: 'execute/runInTerminal',
       tool_input: {
-        command: 'node ~/.copilot/command-runner/command-runner-interface.mjs run sample count=4',
+        command: 'node ~/.copilot/command-runner/command-runner-interface.mjs run sample --expected-workspace=alpha --expected-identity=sha256-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --expected-definition=sha256-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb count=4',
       },
     });
     assert.equal(allowed.status, 0, allowed.stderr);

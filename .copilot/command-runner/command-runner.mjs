@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { constants as fsConstants } from 'node:fs';
 import { access, readFile, realpath, stat } from 'node:fs/promises';
 import os from 'node:os';
@@ -8,6 +9,8 @@ import path from 'node:path';
 import process from 'node:process';
 
 const ID_RE = /^[a-z][a-z0-9_-]{0,63}$/;
+const HASH_RE = /^sha256-[0-9a-f]{64}$/;
+const REGISTRATION_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const NAME_RE = /^[a-z][a-zA-Z0-9_-]{0,63}$/;
 const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
 const DEFAULTS = { timeoutMs: 300_000, maxOutputBytes: 1_048_576 };
@@ -28,6 +31,21 @@ class RunnerError extends Error {
 }
 
 const object = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+function canonicalize(value) {
+  if (Array.isArray(value)) return value.map(canonicalize);
+  if (object(value)) return Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonicalize(value[key])]));
+  return value;
+}
+function identityHash(value) {
+  return `sha256-${createHash('sha256').update(JSON.stringify(canonicalize(value))).digest('hex')}`;
+}
+function executionHash(command, defaults) {
+  return identityHash({
+    ...command,
+    timeoutMs: command.timeoutMs ?? defaults.timeoutMs,
+    maxOutputBytes: command.maxOutputBytes ?? defaults.maxOutputBytes,
+  });
+}
 const safeString = (value) => typeof value === 'string'
   && value.length > 0
   && value.length <= LIMITS.valueLength
@@ -432,7 +450,10 @@ async function validateConfig(raw, { allowMissingRoots = false } = {}) {
   for (const [index, workspace] of raw.workspaces.entries()) {
     const location = `configuration.workspaces[${index}]`;
     requireObject(workspace, location);
-    requireKeys(workspace, ['id', 'root', 'commands'], location);
+    requireKeys(workspace, ['id', 'root', 'commands', 'registrationId'], location);
+    if (workspace.registrationId !== undefined && !REGISTRATION_RE.test(workspace.registrationId)) {
+      throw new RunnerError('invalid_config', `${location}.registrationId must be a UUIDv4`);
+    }
     if (!ID_RE.test(workspace.id ?? '')) {
       throw new RunnerError('invalid_config', `${location}.id is invalid`);
     }
@@ -450,10 +471,13 @@ async function validateConfig(raw, { allowMissingRoots = false } = {}) {
       throw new RunnerError('invalid_config', `duplicate workspace root: ${root}`);
     }
     roots.add(rootKey);
+    const commands = validateCommands(workspace.commands, defaults, `${location}.commands`);
     workspaces.push({
       id: workspace.id,
       root,
-      commands: validateCommands(workspace.commands, defaults, `${location}.commands`),
+      workspaceIdentity: identityHash([workspace.id, root, workspace.registrationId ?? null]),
+      commandHashes: Object.fromEntries(Object.entries(workspace.commands).map(([id, cmd]) => [id, executionHash(cmd, defaults)])),
+      commands,
     });
   }
   return workspaces;
@@ -881,7 +905,7 @@ async function main() {
   if (!['validate-config', 'list', 'describe', 'run'].includes(operation)) {
     throw new RunnerError(
       'usage',
-      'usage: command-runner.mjs validate-config | list | describe <id> | run <id> [name=encoded-value ...]',
+      'usage: command-runner.mjs validate-config | list | describe <id> | run <id> --expected-workspace=<id> --expected-identity=<sha256> --expected-definition=<sha256> [name=encoded-value ...]',
     );
   }
 
@@ -915,6 +939,7 @@ async function main() {
     }
     emit({
       workspaceId: workspace.id,
+      workspaceIdentity: workspace.workspaceIdentity,
       commands: Object.entries(workspace.commands).map(
         ([id, command]) => publicCommand(id, command),
       ),
@@ -944,16 +969,43 @@ async function main() {
     }
     emit({
       workspaceId: workspace.id,
+      workspaceIdentity: workspace.workspaceIdentity,
+      definitionHash: workspace.commandHashes[commandId],
       command: publicCommand(commandId, command),
     });
     return 0;
   }
 
+  // The expected workspace is an execution guard, never a workspace selector.
+  // Compare it in this process, before any command or argument-related effects.
+  const guard = argumentTokens[0];
+  const expectedPrefix = '--expected-workspace=';
+  const expectedWorkspace = typeof guard === 'string' && guard.startsWith(expectedPrefix)
+    ? guard.slice(expectedPrefix.length)
+    : '';
+  if (!ID_RE.test(expectedWorkspace) || guard !== `${expectedPrefix}${expectedWorkspace}`) {
+    throw new RunnerError('invalid_argument', 'run requires --expected-workspace=<id> first');
+  }
+  const identityToken = argumentTokens[1];
+  const definitionToken = argumentTokens[2];
+  const expectedIdentity = identityToken?.startsWith('--expected-identity=')
+    ? identityToken.slice('--expected-identity='.length) : '';
+  const expectedDefinition = definitionToken?.startsWith('--expected-definition=')
+    ? definitionToken.slice('--expected-definition='.length) : '';
+  if (!HASH_RE.test(expectedIdentity) || !HASH_RE.test(expectedDefinition)) {
+    throw new RunnerError('invalid_argument', 'run requires expected identity and definition hashes');
+  }
+  if (workspace.id !== expectedWorkspace || workspace.workspaceIdentity !== expectedIdentity) {
+    throw new RunnerError('workspace_identity_changed', 'workspace registration or root changed since discovery');
+  }
+  if (workspace.commandHashes[commandId] !== expectedDefinition) {
+    throw new RunnerError('stale_definition', 'command definition changed since discovery');
+  }
   emit(await execute(
     workspace,
     commandId,
     command,
-    parseArguments(argumentTokens),
+    parseArguments(argumentTokens.slice(3)),
   ));
   return 0;
 }
