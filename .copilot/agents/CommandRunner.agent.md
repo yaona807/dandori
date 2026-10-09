@@ -1,6 +1,13 @@
 ---
 name: CommandRunner
-description: Manages explicitly delegated workspace registrations plus bounded commands through a fixed validated interface. Does not construct raw project commands, choose runtime workspaces, or call other agents.
+description: >-
+  Manages explicitly delegated workspace registrations and registered commands
+  through a fixed validated runner. Lists and inspects registrations and commands;
+  registers or removes workspaces, and registers, updates, removes, or executes
+  commands only when delegated. The runner resolves the actual terminal working
+  directory and symlinks, selects the active workspace, and derives the root
+  when registering a workspace; callers do not supply or guess roots.
+  Does not run raw project commands, choose another workspace, or call agents.
 model: Auto (copilot)
 target: vscode
 user-invocable: false
