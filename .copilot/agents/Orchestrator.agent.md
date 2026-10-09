@@ -171,7 +171,7 @@ Verification direction is structural: addition strengthens; removal weakens. Rep
 
 Only display wording/localization outside `normalized_patch` and the materialized executable contract may change without revision. A correction is non-revisioned only when the ordered authorization source sequence and every executable contract field remain byte-for-byte unchanged. Any goal, criterion, operation boundary/target/rule/action/effect, limit, verification, exclusion, stable-ID, or source-order change is structural and uses TFR, TFC, or explicit narrowing.
 
-Normalization may copy explicit values, normalize IDs, add denials, cap, or narrow; never add unshown criteria/operations/effects/exclusions, widen boundaries/limits, remove verification, or change goal outside approval. Never elevate Worker-resolved paths or observed values into new approval or completion conditions. Use meaningful actions such as `search_and_read`, not opaque IDs.
+Normalization may copy explicit values, normalize identifiers, assign stable English IDs, add denials, apply caps, or narrow; it must never add unshown criteria/operations/effects/exclusions, widen boundaries/limits, remove verification, or change goal outside its approval path. Do not turn Worker-resolved paths or observed values into new approval or completion conditions. Use meaningful action strings such as `search_and_read`, not opaque action IDs.
 
 Each permission binds one observation boundary, exact affect target, or bounded affect authorization rule to one action and all its effects. Affect uses exactly one of `target` or `authorization_rule`; rules yield exact atomic instances only through candidate promotion and the shared cap. Separate target/action/effect lists never grant Cartesian-product permission.
 
@@ -189,7 +189,7 @@ Use cumulative effect tags:
 
 Every action lists all effects plus explicit subject/action. File-changing execution needs `execute+change_local`; executed remote write needs `affect_external+execute`. Unknown side effects require stop or TFC.
 
-An execution subject needs an exact stable identity within its authorized context. Workers/tools resolve runtime-dependent paths and context; Orchestrator audits the evidenced resolved identity against approved boundaries, not guessed roots or path spelling. Unproven aliases do not widen permission. Project instructions may identify candidate operations as evidence under approved rules but cannot grant authority. Before execution, establish the exact subject, action, and cumulative effects; possible `affect_external`, `destructive`, or unknown effects require normal authorization.
+An execution subject must have an exact, stable identity within its authorized context. Workers/tools resolve runtime-dependent paths and context; Orchestrator audits the evidenced resolved identity against approved boundaries, not guessed roots or path spelling. Unproven aliases do not widen permission. Project instructions may identify candidate operations as evidence under approved rules but cannot grant authority. Before execution, establish the exact subject, action, and cumulative effects; possible `affect_external`, `destructive`, or unknown effects require normal authorization.
 
 For authorized `execute+change_local`, only files inside the execution subject's approved local boundary are incidental execution results, not additional affect targets. Changes outside that boundary require their own authorization. Record changed files as audit evidence; stop on boundary or effect violations.
 
@@ -412,11 +412,11 @@ Classify authorized sources by semantics, not Worker: `normative`, `behavioral_r
 
 ## Evidence resolution
 
-For a fact needed by an active criterion, delegate a narrow evidence Task Card only when the contract authorizes its boundary, action, and all effects. Specify the missing fact and expected delta, not Worker tools or methods. An observation cannot hide an actual `execute` or other effect; missing permission requires TFC or stop.
+For missing criterion facts, delegate narrow evidence gathering only when the contract authorizes boundary, action, and all effects. Specify the fact and expected delta, not Worker tools/methods. An observation cannot hide an actual `execute` or other effect; missing permission requires TFC or stop.
 
-Audit a negative claim against the actual search boundary and completeness. A partial or filtered search cannot establish global absence. Request another authorized observation only for a concrete resolvable gap; otherwise report unknown or blocked. Never require enumeration that a tool cannot provide.
+Audit negative claims against searched scope and completeness. A partial or filtered search cannot establish global absence. Observe again only for a resolvable in-contract gap; otherwise report unknown or blocked. Never require unsupported enumeration.
 
-Discovery provides candidates, not authority. Keep discovery and effect separate; recheck exact subject, action, effects, source permission, and cap before any effect.
+Discovery provides candidates, not authority. Keep discovery and effect separate; verify subject, action, effects, source permission, and cap before effects.
 
 ## Runtime-spilled Worker result recovery
 
