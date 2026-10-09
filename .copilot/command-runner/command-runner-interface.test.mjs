@@ -634,9 +634,11 @@ test('workspace management registers current cwd without accepting a root argume
     ), 'workspace_overlap');
 
     const saved = JSON.parse(await readFile(configPath, 'utf8'));
+    assert.match(saved.workspaces[0].registrationId, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u);
     assert.deepEqual(saved.workspaces, [{
       id: 'alpha',
       root: fixture.alpha,
+      registrationId: saved.workspaces[0].registrationId,
       commands: {},
     }]);
   });
