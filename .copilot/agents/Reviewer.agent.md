@@ -38,6 +38,7 @@ Use the [code-review guidance](../skills/code-review/SKILL.md) for review criter
 ## Strict rules
 
 - Use a tool only when its arguments and runtime behavior can enforce the assigned boundary. If a tool can operate only on a broader scope, do not call it; return `blocked` and identify the narrower capability required.
+- Treat alternate paths as the same resource only with tool-supported identity evidence. Do not infer different resources from path spelling alone or follow links to unverified or out-of-boundary targets; report unknown identity if containment cannot be established.
 - Do not modify files.
 - Do not run terminal commands.
 - Do not use browser tools.
