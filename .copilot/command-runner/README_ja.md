@@ -46,6 +46,8 @@ Runnerは実行時に次の処理を行います。
 
 コマンド管理にも同じ選択規則を使用します。`register` / `update` / `unregister` が変更できるのは、実際のカレントディレクトリから選択されたWorkspaceのcommand mapだけです。Workspace IDやrootを引数で指定することはできません。Workspace管理は別系統で、`workspace-register` は実際のカレントディレクトリだけを登録します。liveなWorkspaceの削除は現在選択されているWorkspaceだけに限定し、rootが消えたstale Workspaceだけはexact IDとworkspace hash CASで削除できます。
 
+カレントディレクトリのシンボリックリンク経由のパスと実体パスは、表記が違っていても同じWorkspaceを指す場合があります。同一性の解決は呼び出し元ではなくRunnerが担当し、Workspace登録には正規化後の実体パスを保存します。ただし、別Workspaceの選択やWorkspace外を指すシンボリックリンクへのアクセスが許可されるわけではありません。
+
 ## 設定
 
 各Workspaceには、固定ID、絶対root、Workspace固有のコマンド定義を登録します。コマンドは固定argv配列と、任意の検証済み名前付き引数で構成します。
