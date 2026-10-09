@@ -177,9 +177,12 @@ async function makeFixture(configure = (configuration) => configuration) {
 }
 
 function runRunner(fixture, cwd, args) {
+  const guardedArgs = args[0] === 'run' && !args[2]?.startsWith('--expected-workspace=')
+    ? [...args.slice(0, 2), '--expected-workspace=alpha', ...args.slice(2)]
+    : args;
   return spawnSync(
     process.execPath,
-    [path.join(fixture.home, 'command-runner', 'command-runner.mjs'), ...args],
+    [path.join(fixture.home, 'command-runner', 'command-runner.mjs'), ...guardedArgs],
     {
       cwd,
       encoding: 'utf8',
@@ -189,9 +192,12 @@ function runRunner(fixture, cwd, args) {
 }
 
 function runInterface(fixture, cwd, args) {
+  const guardedArgs = args[0] === 'run' && !args[2]?.startsWith('--expected-workspace=')
+    ? [...args.slice(0, 2), '--expected-workspace=alpha', ...args.slice(2)]
+    : args;
   return spawnSync(
     process.execPath,
-    [path.join(fixture.home, 'command-runner', 'command-runner-interface.mjs'), ...args],
+    [path.join(fixture.home, 'command-runner', 'command-runner-interface.mjs'), ...guardedArgs],
     {
       cwd,
       encoding: 'utf8',
@@ -517,6 +523,32 @@ test('deepest registered root wins for nested workspaces', async () => {
   });
 });
 
+test('core denies a mismatched expected workspace before command side effects', async () => {
+  await withFixture(async (fixture) => {
+    const actual = runRunner(fixture, fixture.beta, [
+      'run', 'sample', '--expected-workspace=alpha',
+    ]);
+    assert.equal(actual.status, 2);
+    assert.match(actual.stderr, /command is not registered|workspace.*differs/u);
+
+    const configPath = path.join(fixture.home, 'command-runner', 'workspaces.json');
+    const config = JSON.parse(await readFile(configPath, 'utf8'));
+    config.workspaces[1].commands.sample = {
+      description: 'Beta writes a detectable file.',
+      run: [process.execPath, '-e', "require('fs').writeFileSync('wrong-workspace.txt','unexpected')"],
+      cwd: '.',
+      arguments: {},
+    };
+    await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`);
+    const mismatch = runRunner(fixture, fixture.beta, [
+      'run', 'sample', '--expected-workspace=alpha',
+    ]);
+    assert.equal(mismatch.status, 2);
+    assert.match(mismatch.stderr, /workspace_identity_changed/u);
+    await assert.rejects(readFile(path.join(fixture.beta, 'wrong-workspace.txt')), { code: 'ENOENT' });
+  });
+});
+
 test('run builds deterministic argv and reports normalized execution metadata', async () => {
   await withFixture(async (fixture) => {
     const result = runRunner(fixture, fixture.alpha, [
@@ -737,7 +769,7 @@ test('hook permits canonical bounded-interface calls and denies direct core or c
       cwd: fixture.alpha,
       tool_name: 'execute/runInTerminal',
       tool_input: {
-        command: 'node ~/.copilot/command-runner/command-runner-interface.mjs run sample count=4',
+        command: 'node ~/.copilot/command-runner/command-runner-interface.mjs run sample --expected-workspace=alpha count=4',
       },
     });
     assert.equal(allowed.status, 0, allowed.stderr);
