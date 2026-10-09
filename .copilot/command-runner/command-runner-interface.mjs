@@ -388,7 +388,10 @@ async function readStableConfiguration() {
   if (matches.length !== 1) {
     throw new InterfaceError('invalid_config', 'selected workspace is not uniquely present in workspaces.json');
   }
-  return { ...before, workspaceId: selected.workspaceId, workspace: matches[0] };
+  if (!DEFINITION_HASH_RE.test(selected.workspaceIdentity ?? '')) {
+    throw new InterfaceError('runner_protocol_error', 'fixed runner returned an invalid workspace identity');
+  }
+  return { ...before, workspaceId: selected.workspaceId, workspaceIdentity: selected.workspaceIdentity, workspace: matches[0] };
 }
 
 async function validateCandidateConfiguration(configuration, expectedWorkspaceId) {
@@ -502,7 +505,7 @@ async function registerConfiguredWorkspace(id) {
     }
 
     const candidate = JSON.parse(JSON.stringify(snapshot.raw));
-    const workspace = { id, root: current, commands: {} };
+    const workspace = { id, root: current, registrationId: randomUUID(), commands: {} };
     candidate.workspaces.push(workspace);
     await validateCandidateConfiguration(candidate);
     await writeConfigurationAtomically(snapshot.source, candidate);
@@ -625,6 +628,7 @@ async function describeConfiguredCommand(id) {
   }
   return {
     workspaceId: snapshot.workspaceId,
+    workspaceIdentity: snapshot.workspaceIdentity,
     command: publicConfiguredCommand(id, command),
     definitionHash: definitionHash(command),
   };
@@ -943,7 +947,7 @@ async function main() {
   ].includes(operation)) {
     throw new InterfaceError(
       'usage',
-      'usage: command-runner-interface.mjs workspace-list [query=<value>] [offset=<n>] | workspace-describe <id> | workspace-register <id> | workspace-unregister <id> expected=<workspace-hash> | list [query=<value>] [offset=<n>] | describe <id> | register <id> definition=<encoded-json> | update <id> expected=<definition-hash> definition=<encoded-json> | unregister <id> expected=<definition-hash> | run <id> --expected-workspace=<id> [name=encoded-value ...] | output <execution-id> stream=stdout|stderr [offset=<n>]',
+      'usage: command-runner-interface.mjs workspace-list [query=<value>] [offset=<n>] | workspace-describe <id> | workspace-register <id> | workspace-unregister <id> expected=<workspace-hash> | list [query=<value>] [offset=<n>] | describe <id> | register <id> definition=<encoded-json> | update <id> expected=<definition-hash> definition=<encoded-json> | unregister <id> expected=<definition-hash> | run <id> --expected-workspace=<id> --expected-identity=<sha256> --expected-definition=<sha256> [name=encoded-value ...] | output <execution-id> stream=stdout|stderr [offset=<n>]',
     );
   }
 
@@ -1007,27 +1011,39 @@ async function main() {
   if (operation === 'list') {
     const tokens = subject === undefined ? rest : [subject, ...rest];
     const provided = parseArguments(tokens);
-    allowOnly(provided, new Set(['query', 'offset']));
+    allowOnly(provided, new Set(['query', 'offset', 'revision']));
     const query = one(provided, 'query');
     if (query !== undefined && (query.length === 0 || Buffer.byteLength(query) > LIMITS.commandQueryBytes)) {
       throw new InterfaceError('invalid_argument', `query must be non-empty and at most ${LIMITS.commandQueryBytes} bytes`);
     }
     const start = offset(one(provided, 'offset'));
-    const result = await runCore(['list']);
+    const snapshot = await readStableConfiguration();
+    const revision = definitionHash(snapshot.workspace.commands);
+    const expectedRevision = one(provided, 'revision');
+    if (start > 0 && expectedRevision === undefined) {
+      throw new InterfaceError('invalid_argument', 'list pagination requires revision from the first page');
+    }
+    if (expectedRevision !== undefined && !DEFINITION_HASH_RE.test(expectedRevision)) {
+      throw new InterfaceError('invalid_argument', 'revision must be a sha256 token');
+    }
+    if (expectedRevision !== undefined && expectedRevision !== revision) {
+      throw new InterfaceError('stale_listing', 'command registration changed during pagination');
+    }
     const normalizedQuery = query?.toLowerCase();
-    const ids = (Array.isArray(result.commands) ? result.commands : [])
-      .filter((command) => typeof command?.id === 'string' && COMMAND_ID_RE.test(command.id))
-      .filter((command) => normalizedQuery === undefined
-        || command.id.toLowerCase().includes(normalizedQuery)
-        || (typeof command.description === 'string'
-          && command.description.toLowerCase().includes(normalizedQuery)))
-      .map((command) => command.id)
+    const ids = Object.entries(snapshot.workspace.commands)
+      .filter(([id, command]) => COMMAND_ID_RE.test(id)
+        && (normalizedQuery === undefined
+          || id.toLowerCase().includes(normalizedQuery)
+          || command.description?.toLowerCase().includes(normalizedQuery)))
+      .map(([id]) => id)
       .sort();
     if (start > ids.length) throw new InterfaceError('invalid_argument', 'offset exceeds matching command count');
     const page = ids.slice(start, start + LIMITS.listPageSize);
     const nextOffset = start + page.length;
     emit({
-      workspaceId: result.workspaceId,
+      workspaceId: snapshot.workspaceId,
+      workspaceIdentity: snapshot.workspaceIdentity,
+      revision,
       commandIds: page,
       offset: start,
       nextOffset: nextOffset < ids.length ? nextOffset : null,
@@ -1094,16 +1110,25 @@ async function main() {
     if (!COMMAND_ID_RE.test(expectedWorkspace) || guard !== `${prefix}${expectedWorkspace}`) {
       throw new InterfaceError('invalid_argument', 'run requires --expected-workspace=<id> first');
     }
-    parseArguments(rest.slice(1));
+    const identityToken = rest[1];
+    const definitionToken = rest[2];
+    const expectedIdentity = identityToken?.startsWith('--expected-identity=')
+      ? identityToken.slice('--expected-identity='.length) : '';
+    const expectedDefinition = definitionToken?.startsWith('--expected-definition=')
+      ? definitionToken.slice('--expected-definition='.length) : '';
+    if (!DEFINITION_HASH_RE.test(expectedIdentity) || !DEFINITION_HASH_RE.test(expectedDefinition)) {
+      throw new InterfaceError('invalid_argument', 'run requires expected identity and definition hashes');
+    }
+    parseArguments(rest.slice(3));
     // Preflight prevents cache maintenance for an already-mismatched workspace.
     // It is not sufficient for authorization: core rechecks in the same process
     // that starts the command, closing the preflight-to-execution race.
-    const preflightWorkspace = await workspaceId();
-    if (preflightWorkspace !== expectedWorkspace) {
+    const preflight = await runCore(['list']);
+    if (preflight.workspaceId !== expectedWorkspace || preflight.workspaceIdentity !== expectedIdentity) {
       throw new InterfaceError('workspace_identity_changed', 'selected workspace differs from expected workspace');
     }
     await cleanupExecutions(LIMITS.maxExecutionReserveBytes);
-    const result = await runCore(['run', subject, guard, ...rest.slice(1)]);
+    const result = await runCore(['run', subject, guard, identityToken, definitionToken, ...rest.slice(3)]);
     if (result?.workspaceId !== expectedWorkspace || result?.commandId !== subject) {
       throw new InterfaceError('runner_protocol_error', 'unexpected execution identity');
     }
