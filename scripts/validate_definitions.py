@@ -431,6 +431,8 @@ ORCHESTRATOR_REQUIRED_SECTION_MARKERS: dict[str, tuple[str, ...]] = {
         "User-named workspaces/subtrees denote logical resources unless exact path spelling is explicit.",
         "Unverified aliases do not widen permission;",
         "material alias ambiguity requires in-contract evidence or stop",
+        "Before effects verify runtime-selected subjects match the approved resource;",
+        "Proven aliases retain operation/permission IDs and one canonical typed identity for caps.",
         "only files inside the execution subject's approved local boundary are incidental execution results",
         "An authorized exact file create may derive `create_directory+change_local` operations only for missing ancestor paths",
         "consume no additional affect target/cap",
