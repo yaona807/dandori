@@ -44,6 +44,8 @@ Runnerは実行時に次の処理を行います。
 
 実行位置はWorkspace rootでも、その配下のディレクトリでも構いません。AgentからWorkspace IDを指定したり、別のWorkspaceを選択したり、ターミナルのcwd・環境変数・shell・profileを上書きしたり、バックグラウンド実行を要求したりすることはできません。リポジトリ名やGit remoteは認可境界として使用しません。
 
+Runnerが参照するのは**ターミナルのカレントディレクトリ**であり、VS Codeで開いているフォルダとは異なる場合があります。依頼対象が「エディタで開いているWorkspace」の場合は、登録前に許可された情報から両者の同一性を確認します。Runnerがエディタ側のフォルダを選び直したり、ターミナルのcwdを上書きしたりはできません。登録結果にrootが返ってきたというだけでは、依頼したフォルダが登録されたことにはなりません。
+
 コマンド管理にも同じ選択規則を使用します。`register` / `update` / `unregister` が変更できるのは、実際のカレントディレクトリから選択されたWorkspaceのcommand mapだけです。Workspace IDやrootを引数で指定することはできません。Workspace管理は別系統で、`workspace-register` は実際のカレントディレクトリだけを登録します。liveなWorkspaceの削除は現在選択されているWorkspaceだけに限定し、rootが消えたstale Workspaceだけはexact IDとworkspace hash CASで削除できます。
 
 カレントディレクトリのシンボリックリンク経由のパスと実体パスは、表記が違っていても同じWorkspaceを指す場合があります。同一性の解決は呼び出し元ではなくRunnerが担当し、Workspace登録には正規化後の実体パスを保存します。ただし、別Workspaceの選択やWorkspace外を指すシンボリックリンクへのアクセスが許可されるわけではありません。
