@@ -329,6 +329,43 @@ test('symlinked working-directory alias selects the registered real workspace', 
   });
 });
 
+test('configured symlink workspace root is canonicalized, and removing that resolution fails', async (t) => {
+  await withFixture(async (fixture) => {
+    const alias = path.join(fixture.root, 'configured-alpha-alias');
+    try {
+      await symlink(fixture.alpha, alias, 'dir');
+    } catch (error) {
+      if (['EPERM', 'EACCES', 'ENOTSUP'].includes(error?.code)) {
+        t.skip('directory symlink creation unavailable');
+        return;
+      }
+      throw error;
+    }
+
+    const configPath = path.join(fixture.home, 'command-runner', 'workspaces.json');
+    const config = JSON.parse(await readFile(configPath, 'utf8'));
+    config.workspaces[0].root = alias;
+    await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`);
+
+    // The physical cwd cannot match a symlink-spelled root by string comparison.
+    const normal = runRunner(fixture, fixture.alpha, ['list']);
+    assert.equal(normal.status, 0, normal.stderr);
+    assert.equal(JSON.parse(normal.stdout).workspaceId, 'alpha');
+
+    // Mutate only the throwaway fixture, never repository sources. Without root
+    // canonicalization this same case must fail, proving the test detects regressions.
+    const corePath = path.join(fixture.home, 'command-runner', 'command-runner.mjs');
+    const core = await readFile(corePath, 'utf8');
+    const canonicalization = 'canonical = await realpath(value);';
+    assert.equal(core.split(canonicalization).length, 2);
+    await writeFile(corePath, core.replace(canonicalization, 'canonical = path.resolve(value);'));
+
+    const broken = runRunner(fixture, fixture.alpha, ['list']);
+    assert.notEqual(broken.status, 0);
+    assert.match(broken.stderr, /workspace is not registered/u);
+  });
+});
+
 test('workspace registration from symlink alias saves one canonical root', async (t) => {
   await withFixture(async (fixture) => {
     const actual = path.join(fixture.root, 'gamma');
