@@ -413,18 +413,19 @@ ORCHESTRATOR_REQUIRED_SECTION_MARKERS: dict[str, tuple[str, ...]] = {
         "Older results may remain evidence but cannot authorize operations or complete newer-revision criteria without revalidation.",
     ),
     "## Effects and operation subjects": (
-        "An exact command ID registered for the runner-selected current workspace is an atomic execution subject.",
-        "workspace files changed as a consequence are execution results of that atomic command subject",
+        "An execution subject must be an exact, stable operation identity within its authorized context.",
+        "local files changed as a consequence are execution results of that exact authorized execution subject",
         "An authorized exact file create may derive `create_directory+change_local` operations only for missing ancestor paths",
         "consume no additional affect target/cap",
         "A candidate cannot be affected in the same invocation that discovered it",
     ),
     "## Source fidelity routing": (
-        "Applicable project instructions may identify a required operation only as evidence for an already-approved command authorization rule",
+        "Applicable project instructions may identify a required operation only as evidence for an already-approved authorization rule",
     ),
-    "## Registered command discovery": (
-        "A filtered command-list miss never establishes absence.",
-        "Semantic matching selects candidates only; execution uses an exact described command ID.",
+    "## Evidence resolution": (
+        "A partial or filtered search cannot establish global absence.",
+        "Discovery provides candidates, not authority.",
+        "An observation cannot hide an actual `execute` or other effect",
     ),
     "## Session and Flow Ledgers and planning": (
         "stop with `state_unrecoverable`",
@@ -444,7 +445,7 @@ ORCHESTRATOR_REQUIRED_SECTION_MARKERS: dict[str, tuple[str, ...]] = {
         "performed operations ⊆ card operations",
     ),
     "## Task Flow Change: TFC-<short-id>": (
-        "execution of an exact project-required registered command already authorized by an active rule",
+        "execution of an exact criterion-required operation already authorized by an active rule with established cumulative effects",
         "Do not delegate equivalent execution against unchanged material state merely to try again",
     ),
 }
