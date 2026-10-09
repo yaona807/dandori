@@ -46,9 +46,10 @@ const LIMITS = {
 };
 
 class InterfaceError extends Error {
-  constructor(code, message) {
+  constructor(code, message, workspaceId = null) {
     super(message);
     this.code = code;
+    this.workspaceId = workspaceId;
   }
 }
 
@@ -94,7 +95,11 @@ function fail(error) {
   const normalized = error instanceof InterfaceError
     ? error
     : new InterfaceError('internal_error', error instanceof Error ? error.message : String(error));
-  const source = serialize({ status: 'error', error: { code: normalized.code, message: normalized.message } });
+  const source = serialize({
+    status: 'error',
+    ...(COMMAND_ID_RE.test(normalized.workspaceId ?? '') ? { workspaceId: normalized.workspaceId } : {}),
+    error: { code: normalized.code, message: normalized.message },
+  });
   process.stderr.write(
     Buffer.byteLength(source) <= LIMITS.responseBytes
       ? source
@@ -615,6 +620,7 @@ async function describeConfiguredCommand(id) {
     throw new InterfaceError(
       'command_not_registered',
       `command is not registered for workspace ${snapshot.workspaceId}: ${id}`,
+      snapshot.workspaceId,
     );
   }
   return {
@@ -937,7 +943,7 @@ async function main() {
   ].includes(operation)) {
     throw new InterfaceError(
       'usage',
-      'usage: command-runner-interface.mjs workspace-list [query=<value>] [offset=<n>] | workspace-describe <id> | workspace-register <id> | workspace-unregister <id> expected=<workspace-hash> | list [query=<value>] [offset=<n>] | describe <id> | register <id> definition=<encoded-json> | update <id> expected=<definition-hash> definition=<encoded-json> | unregister <id> expected=<definition-hash> | run <id> [name=encoded-value ...] | output <execution-id> stream=stdout|stderr [offset=<n>]',
+      'usage: command-runner-interface.mjs workspace-list [query=<value>] [offset=<n>] | workspace-describe <id> | workspace-register <id> | workspace-unregister <id> expected=<workspace-hash> | list [query=<value>] [offset=<n>] | describe <id> | register <id> definition=<encoded-json> | update <id> expected=<definition-hash> definition=<encoded-json> | unregister <id> expected=<definition-hash> | run <id> --expected-workspace=<id> [name=encoded-value ...] | output <execution-id> stream=stdout|stderr [offset=<n>]',
     );
   }
 
@@ -1080,17 +1086,23 @@ async function main() {
     if (!COMMAND_ID_RE.test(subject ?? '')) {
       throw new InterfaceError('usage', 'run requires a safe command ID');
     }
-    parseArguments(rest);
-    const workspace = await workspaceId();
-    await cleanupExecutions(LIMITS.maxExecutionReserveBytes);
-    const result = await runCore(['run', subject, ...rest]);
-    if (result?.workspaceId !== workspace || result?.commandId !== subject) {
-      throw new InterfaceError(
-        'runner_protocol_error',
-        'fixed runner identity changed during execution',
-      );
+    const guard = rest[0];
+    const prefix = '--expected-workspace=';
+    const expectedWorkspace = typeof guard === 'string' && guard.startsWith(prefix)
+      ? guard.slice(prefix.length)
+      : '';
+    if (!COMMAND_ID_RE.test(expectedWorkspace) || guard !== `${prefix}${expectedWorkspace}`) {
+      throw new InterfaceError('invalid_argument', 'run requires --expected-workspace=<id> first');
     }
-    emit(await storeExecution(workspace, result));
+    parseArguments(rest.slice(1));
+    // A single core invocation selects the workspace and verifies the guard
+    // before launching the command; a separate preflight lookup can race.
+    const result = await runCore(['run', subject, guard, ...rest.slice(1)]);
+    if (result?.workspaceId !== expectedWorkspace || result?.commandId !== subject) {
+      throw new InterfaceError('runner_protocol_error', 'unexpected execution identity');
+    }
+    await cleanupExecutions(LIMITS.maxExecutionReserveBytes);
+    emit(await storeExecution(expectedWorkspace, result));
     return 0;
   }
 
