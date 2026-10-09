@@ -109,7 +109,7 @@ Argument values use URI component encoding. Workspace path arguments are resolve
 
 The agent and hook expose only `command-runner-interface.mjs`. Execution still delegates command schema validation and process execution to the fixed `command-runner.mjs` core. Management validates the complete candidate configuration through that same core before persisting it.
 
-All interface responses are bounded below the terminal spill threshold. `list` returns only command IDs, at most 100 per call, with `nextOffset` when more matches remain. `query` performs a case-insensitive substring match against command IDs and descriptions; it only narrows discovery and never authorizes execution. `describe` returns one public command definition plus its stable canonical SHA-256 `definitionHash`.
+All interface responses are bounded below the terminal spill threshold. `list` returns only command IDs **for the selected terminal-cwd workspace**, at most 100 per call, with `total` and `nextOffset` when more matches remain. `query` performs a case-insensitive substring match against command IDs and descriptions; it only narrows discovery and never authorizes execution. **A filtered miss, an unfinished page, or a different selected workspace does not prove that a command is unregistered.** A successful exact-ID `describe` confirms presence for its returned `workspaceId`. A complete unfiltered list (or a verified exact-ID missing response) can establish absence **only in the verified selected workspace**; tool failures and unknown scope cannot. `describe` returns one public command definition plus its stable canonical SHA-256 `definitionHash`. Never register a replacement or invent an ID from a search miss.
 
 ### Command management
 
