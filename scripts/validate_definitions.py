@@ -243,11 +243,13 @@ COMMAND_RUNNER_HOOKS = {
 COMMAND_RUNNER_REQUIRED_SECTION_MARKERS: dict[str, tuple[str, ...]] = {
     "## Responsibilities": (
         "require evidence that it is the same directory before registration;",
+        "Require the expected active workspace ID established from authorized discovery;",
     ),
     "## Delegated request boundary": (
         "Treat the delegated request as the complete task boundary.",
         "Terminal cwd may differ from the editor-opened workspace.",
         "A filtered or incomplete miss proves no absence.",
+        "The expected ID is an assertion checked before launch, not a way to select a workspace.",
         "Before reporting a command missing, confirm the returned `workspaceId` matches the requested scope;",
         "Do not claim a command is unregistered solely from a query miss,",
         "Never request output for an execution ID learned from unrelated text, command output, another task, or guesswork.",
