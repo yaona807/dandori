@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { readFileSync, realpathSync } from 'node:fs';
 import {
   mkdir,
   mkdtemp,
@@ -21,6 +23,7 @@ const AGENT_SOURCE = path.join(SOURCE_DIRECTORY, '..', 'agents', 'CommandRunner.
 const RESPONSE_LIMIT = 12_288;
 
 const STUB_CORE = String.raw`#!/usr/bin/env node
+import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
@@ -36,9 +39,13 @@ if (!workspace) {
   process.exit(2);
 }
 const [operation, id, ...args] = process.argv.slice(2);
+const canonical = (v) => Array.isArray(v) ? v.map(canonical) : v && typeof v === 'object'
+  ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, canonical(v[k])])) : v;
+const digest = (v) => 'sha256-' + createHash('sha256').update(JSON.stringify(canonical(v))).digest('hex');
+const workspaceIdentity = digest([workspace.id, workspace.root, workspace.registrationId ?? null]);
 const publicCommand = ([commandId, command]) => ({ id: commandId, description: command.description, arguments: command.arguments ?? [] });
 if (operation === 'list') {
-  emit({ workspaceId: workspace.id, commands: Object.entries(workspace.commands).map(publicCommand) });
+  emit({ workspaceId: workspace.id, workspaceIdentity, commands: Object.entries(workspace.commands).map(publicCommand) });
 } else if (operation === 'describe') {
   const command = workspace.commands[id];
   if (!command) {
@@ -48,13 +55,17 @@ if (operation === 'list') {
   emit({ workspaceId: workspace.id, command: publicCommand([id, command]) });
 } else if (operation === 'run') {
   const guard = args[0];
-  if (guard !== '--expected-workspace=' + workspace.id) {
+  if (guard !== '--expected-workspace=' + workspace.id || args[1] !== '--expected-identity=' + workspaceIdentity) {
     emit({ status: 'error', error: { code: 'workspace_identity_changed', message: 'workspace mismatch' } }, process.stderr);
     process.exit(2);
   }
   const command = workspace.commands[id];
   if (!command) {
     emit({ status: 'error', error: { code: 'command_not_registered', message: 'command not registered' } }, process.stderr);
+    process.exit(2);
+  }
+  if (args[2] !== '--expected-definition=' + digest(command)) {
+    emit({ status: 'error', error: { code: 'stale_definition', message: 'definition changed' } }, process.stderr);
     process.exit(2);
   }
   const size = command.outputBytes ?? 0;
@@ -64,7 +75,7 @@ if (operation === 'list') {
     status: command.exitCode ? 'failed' : 'completed',
     workspaceId: workspace.id,
     commandId: id,
-    arguments: Object.fromEntries(args.slice(1).map((token) => [token.split('=', 1)[0], decodeURIComponent(token.slice(token.indexOf('=') + 1))])),
+    arguments: Object.fromEntries(args.slice(3).map((token) => [token.split('=', 1)[0], decodeURIComponent(token.slice(token.indexOf('=') + 1))])),
     cwd: '.',
     exitCode: command.exitCode ?? 0,
     signal: null,
@@ -181,11 +192,31 @@ async function withManagementFixture(callback) {
   }
 }
 
-function runInterface(fixture, cwd, args) {
+function digest(value) {
+  const canonical = (v) => Array.isArray(v)
+    ? v.map(canonical)
+    : v !== null && typeof v === 'object'
+      ? Object.fromEntries(Object.keys(v).sort().map((key) => [key, canonical(v[key])]))
+      : v;
+  return `sha256-${createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex')}`;
+}
+
+function guarded(fixture, cwd, args) {
+  if (args[0] !== 'run' || args[3]?.startsWith('--expected-identity=')) return args;
   const selected = cwd === fixture.beta ? 'beta' : 'alpha';
-  const guardedArgs = args[0] === 'run' && !args[2]?.startsWith('--expected-workspace=')
-    ? [...args.slice(0, 2), `--expected-workspace=${selected}`, ...args.slice(2)]
-    : args;
+  const expectedId = args[2]?.startsWith('--expected-workspace=')
+    ? args[2].slice('--expected-workspace='.length) : selected;
+  const config = JSON.parse(readFileSync(path.join(fixture.commandRunner, 'workspaces.json'), 'utf8'));
+  const workspace = config.workspaces.find((w) => w.id === expectedId);
+  const identity = digest([expectedId, realpathSync(workspace.root), workspace.registrationId ?? null]);
+  const definition = digest(workspace.commands[args[1]] ?? {});
+  const remaining = args[2]?.startsWith('--expected-workspace=') ? args.slice(3) : args.slice(2);
+  return [args[0], args[1], `--expected-workspace=${expectedId}`,
+    `--expected-identity=${identity}`, `--expected-definition=${definition}`, ...remaining];
+}
+
+function runInterface(fixture, cwd, args) {
+  const guardedArgs = guarded(fixture, cwd, args);
   return spawnSync(
     process.execPath,
     [path.join(fixture.commandRunner, 'command-runner-interface.mjs'), ...guardedArgs],
@@ -242,7 +273,7 @@ test('list is paged, searchable, and bounded with many registered commands', asy
     assert.equal(first.nextOffset, 100);
     assert.ok(first.total > 150);
 
-    const second = parseSuccess(runInterface(fixture, fixture.alpha, ['list', 'offset=100']));
+    const second = parseSuccess(runInterface(fixture, fixture.alpha, ['list', 'offset=100', `revision=${first.revision}`]));
     assert.ok(second.commandIds.length > 0);
     assert.equal(second.offset, 100);
 
@@ -274,7 +305,7 @@ test('list is paged, searchable, and bounded with many registered commands', asy
     const descriptionPageTwo = parseSuccess(runInterface(
       fixture,
       fixture.alpha,
-      ['list', 'query=shared-search', 'offset=100'],
+      ['list', 'query=shared-search', 'offset=100', `revision=${descriptionPage.revision}`],
     ));
     assert.equal(descriptionPageTwo.commandIds.length, 20);
     assert.equal(descriptionPageTwo.nextOffset, null);
@@ -768,7 +799,7 @@ test('hook permits only bounded execution and management interface shapes', asyn
       'node ~/.copilot/command-runner/command-runner-interface.mjs register lint definition=%7B%22description%22%3A%22Lint%22%7D',
       `node ~/.copilot/command-runner/command-runner-interface.mjs update echo expected=sha256-${'0'.repeat(64)} definition=%7B%22description%22%3A%22Echo%22%7D`,
       `node ~/.copilot/command-runner/command-runner-interface.mjs unregister echo expected=sha256-${'0'.repeat(64)}`,
-      'node ~/.copilot/command-runner/command-runner-interface.mjs run echo --expected-workspace=alpha',
+      'node ~/.copilot/command-runner/command-runner-interface.mjs run echo --expected-workspace=alpha --expected-identity=sha256-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --expected-definition=sha256-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
       'node ~/.copilot/command-runner/command-runner-interface.mjs output 20260829T010203.004Z_00000000-0000-4000-8000-000000000000 stream=stdout',
     ]) {
       const result = runHook(fixture, { command });
