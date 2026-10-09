@@ -337,6 +337,13 @@ function definitionHash(definition) {
     .update(JSON.stringify(canonicalize(definition)))
     .digest('hex')}`;
 }
+function executionHash(command, defaults = {}) {
+  return definitionHash({
+    ...command,
+    timeoutMs: command.timeoutMs ?? defaults.timeoutMs ?? 300_000,
+    maxOutputBytes: command.maxOutputBytes ?? defaults.maxOutputBytes ?? 1_048_576,
+  });
+}
 
 function publicConfiguredCommand(id, command) {
   const argumentsDefinition = command.arguments ?? {};
@@ -631,6 +638,7 @@ async function describeConfiguredCommand(id) {
     workspaceIdentity: snapshot.workspaceIdentity,
     command: publicConfiguredCommand(id, command),
     definitionHash: definitionHash(command),
+    executionHash: executionHash(command, snapshot.raw.defaults),
   };
 }
 
