@@ -101,13 +101,15 @@ node ~/.copilot/command-runner/command-runner-interface.mjs describe test
 node ~/.copilot/command-runner/command-runner-interface.mjs register lint definition=<encoded-json>
 node ~/.copilot/command-runner/command-runner-interface.mjs update lint expected=<definition-hash> definition=<encoded-json>
 node ~/.copilot/command-runner/command-runner-interface.mjs unregister lint expected=<definition-hash>
-node ~/.copilot/command-runner/command-runner-interface.mjs run test runInBand=true
+node ~/.copilot/command-runner/command-runner-interface.mjs run test --expected-workspace=example runInBand=true
 node ~/.copilot/command-runner/command-runner-interface.mjs output <execution-id> stream=stdout|stderr [offset=<n>]
 ```
 
 引数値にはURI component encodingを使用します。Workspace path型の引数は、選択されたroot配下へ解決できない場合に拒否されます。`register`と`update`はURI component encodingしたJSONコマンド定義を1個だけ受け取り、decode後の定義は16 KiB以内に制限します。`update`には現在の `definitionHash` も必要です。
 
 AgentとHookが直接呼べるのは `command-runner-interface.mjs` だけです。実行時のcommand schema検証とprocess起動は、従来どおり固定 `command-runner.mjs` coreへ委譲します。管理操作でも、保存前に候補となる設定全体を同じcoreで検証します。
+
+登録済みのコマンドを実行する場合は、承認された対象を事前の照会で特定し、そのWorkspace IDを`--expected-workspace=<id>`として渡します。これはWorkspaceを選択する指定ではなく、Runnerがコマンド起動前に実際のWorkspaceと照合するための条件です。不一致・省略時は実行しません。`describe`でコマンドが未登録だった場合は、エラーにも照会対象の`workspaceId`を返します。
 
 Runnerがターミナルに返すレスポンスにはサイズ上限があります。`list`は**実際のカレントディレクトリから選ばれたWorkspace内**のcommand IDを1回最大100件返し、`total`と、続きがある場合の`nextOffset`を返します。`query`はIDとdescriptionの大文字小文字を区別しない部分一致検索であり、候補を絞るだけです。**検索結果が0件でも、フィルタ付き・未取得ページあり・別Workspaceの結果なら「未登録」とは断定できません。** 完全に取得したフィルタなしの一覧か、実行Workspaceを確認したうえでの正確なIDの照会結果だけが、そのWorkspace内の存在・不在の根拠になります。ツールの失敗や対象Workspaceの不明は「未確認」として扱います。`describe`は公開定義とSHA-256の`definitionHash`を返します。検索ミスを根拠にIDを推測したり、代替コマンドを新規登録したりしてはいけません。
 
