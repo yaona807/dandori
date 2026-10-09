@@ -4,6 +4,7 @@ import {
   mkdtemp,
   mkdir,
   readFile,
+  realpath,
   rm,
   symlink,
   writeFile,
@@ -231,6 +232,8 @@ test('distributed agent is user-level, agent-scoped, and fixed-runner-only', asy
   assert.match(source, /node ~\/\.copilot\/command-runner\/command-runner-interface\.mjs list/u);
   assert.match(source, /node ~\/\.copilot\/command-runner\/command-runner-interface\.mjs output/u);
   assert.match(source, /Do not execute a raw project command\./u);
+  assert.match(source, /description: >-[\s\S]*?The runner resolves the actual terminal working/u);
+  assert.match(source, /directory and symlinks, selects the active workspace/u);
   assert.match(source, /Do not specify, override, or infer a workspace ID/u);
   assert.match(source, /Never request a terminal working-directory/u);
   assert.doesNotMatch(
@@ -294,6 +297,72 @@ test('registered workspace may have an empty command map', async () => {
   }, (configuration) => {
     configuration.workspaces[0].commands = {};
     return configuration;
+  });
+});
+
+test('symlinked working-directory alias selects the registered real workspace', async (t) => {
+  await withFixture(async (fixture) => {
+    const alias = path.join(fixture.root, 'alpha-alias');
+    try {
+      await symlink(fixture.alpha, alias, 'dir');
+    } catch (error) {
+      if (['EPERM', 'EACCES', 'ENOTSUP'].includes(error?.code)) {
+        t.skip('directory symlink creation unavailable');
+        return;
+      }
+      throw error;
+    }
+
+    const listed = runRunner(fixture, alias, ['list']);
+    assert.equal(listed.status, 0, listed.stderr);
+    assert.equal(JSON.parse(listed.stdout).workspaceId, 'alpha');
+
+    const publicList = runInterface(fixture, alias, ['list']);
+    assert.equal(publicList.status, 0, publicList.stderr);
+    assert.equal(JSON.parse(publicList.stdout).workspaceId, 'alpha');
+
+    const executed = runRunner(fixture, alias, [
+      'run', 'sample', 'file=tests%2Fsample.test.js',
+    ]);
+    assert.equal(executed.status, 0, executed.stderr);
+    assert.equal(JSON.parse(executed.stdout).workspaceId, 'alpha');
+  });
+});
+
+test('workspace registration from symlink alias saves one canonical root', async (t) => {
+  await withFixture(async (fixture) => {
+    const actual = path.join(fixture.root, 'gamma');
+    const alias = path.join(fixture.root, 'gamma-alias');
+    await mkdir(actual);
+    try {
+      await symlink(actual, alias, 'dir');
+    } catch (error) {
+      if (['EPERM', 'EACCES', 'ENOTSUP'].includes(error?.code)) {
+        t.skip('directory symlink creation unavailable');
+        return;
+      }
+      throw error;
+    }
+
+    const registered = runInterface(fixture, alias, ['workspace-register', 'gamma']);
+    assert.equal(registered.status, 0, registered.stderr);
+    const result = JSON.parse(registered.stdout);
+    assert.equal(result.workspaceId, 'gamma');
+    assert.equal(result.root, await realpath(actual));
+
+    const direct = runInterface(fixture, actual, ['list']);
+    assert.equal(direct.status, 0, direct.stderr);
+    assert.equal(JSON.parse(direct.stdout).workspaceId, 'gamma');
+
+    const duplicate = runInterface(fixture, alias, ['workspace-register', 'other_gamma']);
+    assert.equal(duplicate.status, 2);
+    assert.match(duplicate.stderr, /workspace_overlap/u);
+
+    const configured = JSON.parse(await readFile(
+      path.join(fixture.home, 'command-runner', 'workspaces.json'),
+      'utf8',
+    ));
+    assert.equal(configured.workspaces.filter((item) => item.root === result.root).length, 1);
   });
 });
 
