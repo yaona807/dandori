@@ -1608,6 +1608,12 @@ def validate_repository(root: Path) -> ValidationResult:
         if marker in orchestrator.body:
             result.errors.append(f"{relative(orchestrator.path, root)}: forbidden legacy marker {marker!r}")
 
+    for worker_name in BUNDLED_WORKER_NAMES:
+        if re.search(rf"\\b{re.escape(worker_name)}\\b", orchestrator.body):
+            result.errors.append(
+                f"{relative(orchestrator.path, root)}: worker-specific agent name in Orchestrator body: {worker_name}"
+            )
+
     allowed_agents = orchestrator.meta.get("agents")
     if not isinstance(allowed_agents, list) or not allowed_agents:
         result.errors.append(f"{relative(orchestrator.path, root)}: agents allowlist must be a non-empty list")
