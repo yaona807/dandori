@@ -334,7 +334,7 @@ test('command beyond first page remains discoverable in the selected workspace',
     assert.equal(start.commandIds.includes('zz-last-command'), false);
     assert.ok(Number.isInteger(start.nextOffset));
 
-    const second = runInterface(fixture, fixture.alpha, ['list', `offset=${start.nextOffset}`]);
+    const second = runInterface(fixture, fixture.alpha, ['list', `offset=${start.nextOffset}`, `revision=${start.revision}`]);
     assert.equal(second.status, 0, second.stderr);
     const last = JSON.parse(second.stdout);
     assert.equal(last.workspaceId, 'alpha');
