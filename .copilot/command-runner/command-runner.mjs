@@ -464,12 +464,13 @@ async function validateConfig(raw, { allowMissingRoots = false } = {}) {
       throw new RunnerError('invalid_config', `duplicate workspace root: ${root}`);
     }
     roots.add(rootKey);
+    const commands = validateCommands(workspace.commands, defaults, `${location}.commands`);
     workspaces.push({
       id: workspace.id,
       root,
       workspaceIdentity: identityHash([workspace.id, root, workspace.registrationId ?? null]),
       commandHashes: Object.fromEntries(Object.entries(workspace.commands).map(([id, cmd]) => [id, identityHash(cmd)])),
-      commands: validateCommands(workspace.commands, defaults, `${location}.commands`),
+      commands,
     });
   }
   return workspaces;
