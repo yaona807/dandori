@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { readFileSync, realpathSync } from 'node:fs';
 import {
   mkdtemp,
   mkdir,
@@ -176,10 +178,30 @@ async function makeFixture(configure = (configuration) => configuration) {
   return { root, home, alpha, beta };
 }
 
+function digest(value) {
+  const canonical = (v) => Array.isArray(v)
+    ? v.map(canonical)
+    : v !== null && typeof v === 'object'
+      ? Object.fromEntries(Object.keys(v).sort().map((key) => [key, canonical(v[key])]))
+      : v;
+  return `sha256-${createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex')}`;
+}
+
+function guarded(fixture, cwd, args) {
+  if (args[0] !== 'run' || args[3]?.startsWith('--expected-identity=')) return args;
+  const expectedId = args[2]?.startsWith('--expected-workspace=')
+    ? args[2].slice('--expected-workspace='.length) : 'alpha';
+  const config = JSON.parse(readFileSync(path.join(fixture.home, 'command-runner', 'workspaces.json'), 'utf8'));
+  const workspace = config.workspaces.find((w) => w.id === expectedId);
+  const identity = digest([expectedId, realpathSync(workspace.root), workspace.registrationId ?? null]);
+  const definition = digest(workspace.commands[args[1]] ?? {});
+  const remaining = args[2]?.startsWith('--expected-workspace=') ? args.slice(3) : args.slice(2);
+  return [args[0], args[1], `--expected-workspace=${expectedId}`,
+    `--expected-identity=${identity}`, `--expected-definition=${definition}`, ...remaining];
+}
+
 function runRunner(fixture, cwd, args) {
-  const guardedArgs = args[0] === 'run' && !args[2]?.startsWith('--expected-workspace=')
-    ? [...args.slice(0, 2), '--expected-workspace=alpha', ...args.slice(2)]
-    : args;
+  const guardedArgs = guarded(fixture, cwd, args);
   return spawnSync(
     process.execPath,
     [path.join(fixture.home, 'command-runner', 'command-runner.mjs'), ...guardedArgs],
@@ -192,9 +214,7 @@ function runRunner(fixture, cwd, args) {
 }
 
 function runInterface(fixture, cwd, args) {
-  const guardedArgs = args[0] === 'run' && !args[2]?.startsWith('--expected-workspace=')
-    ? [...args.slice(0, 2), '--expected-workspace=alpha', ...args.slice(2)]
-    : args;
+  const guardedArgs = guarded(fixture, cwd, args);
   return spawnSync(
     process.execPath,
     [path.join(fixture.home, 'command-runner', 'command-runner-interface.mjs'), ...guardedArgs],
@@ -549,6 +569,30 @@ test('core denies a mismatched expected workspace before command side effects', 
   });
 });
 
+test('reused workspace ID and changed command definition are rejected before effects', async () => {
+  await withFixture(async (fixture) => {
+    const configPath = path.join(fixture.home, 'command-runner', 'workspaces.json');
+    const initial = JSON.parse(readFileSync(configPath, 'utf8'));
+    const command = initial.workspaces[0].commands.sample;
+    const originalIdentity = digest(['alpha', realpathSync(fixture.alpha), null]);
+    const expectedDefinition = digest(command);
+    const bound = ['run', 'sample', '--expected-workspace=alpha',
+      `--expected-identity=${originalIdentity}`, `--expected-definition=${expectedDefinition}`];
+    initial.workspaces[0].registrationId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    await writeFile(configPath, `${JSON.stringify(initial, null, 2)}\n`);
+    const reused = runRunner(fixture, fixture.alpha, bound);
+    assert.equal(reused.status, 2);
+    assert.match(reused.stderr, /workspace_identity_changed/u);
+
+    initial.workspaces[0].registrationId = undefined;
+    initial.workspaces[0].commands.sample.description = 'Changed after discovery';
+    await writeFile(configPath, `${JSON.stringify(initial, null, 2)}\n`);
+    const changed = runRunner(fixture, fixture.alpha, bound);
+    assert.equal(changed.status, 2);
+    assert.match(changed.stderr, /stale_definition/u);
+  });
+});
+
 test('run builds deterministic argv and reports normalized execution metadata', async () => {
   await withFixture(async (fixture) => {
     const result = runRunner(fixture, fixture.alpha, [
@@ -769,7 +813,7 @@ test('hook permits canonical bounded-interface calls and denies direct core or c
       cwd: fixture.alpha,
       tool_name: 'execute/runInTerminal',
       tool_input: {
-        command: 'node ~/.copilot/command-runner/command-runner-interface.mjs run sample --expected-workspace=alpha count=4',
+        command: 'node ~/.copilot/command-runner/command-runner-interface.mjs run sample --expected-workspace=alpha --expected-identity=sha256-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --expected-definition=sha256-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb count=4',
       },
     });
     assert.equal(allowed.status, 0, allowed.stderr);
