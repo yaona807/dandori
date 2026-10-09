@@ -91,6 +91,8 @@ This allows you to:
 
 DANDORI does not require workers to contain DANDORI-specific implementation details. Worker definitions must not prescribe Task Card keys, input wrappers, caller-specific schemas, or DANDORI-specific output envelopes.
 
+A worker description explains delegable capabilities; it does not grant permission. Runtime-dependent paths and resource identities are resolved by the selected worker/tool and audited against the approved boundary. The Orchestrator does not turn incidental path spellings or returned identifiers into new approval or completion conditions, and unverified aliases cannot extend authorization.
+
 ## How it works
 
 ```text
