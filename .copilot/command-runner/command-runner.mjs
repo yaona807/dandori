@@ -39,6 +39,13 @@ function canonicalize(value) {
 function identityHash(value) {
   return `sha256-${createHash('sha256').update(JSON.stringify(canonicalize(value))).digest('hex')}`;
 }
+function executionHash(command, defaults) {
+  return identityHash({
+    ...command,
+    timeoutMs: command.timeoutMs ?? defaults.timeoutMs,
+    maxOutputBytes: command.maxOutputBytes ?? defaults.maxOutputBytes,
+  });
+}
 const safeString = (value) => typeof value === 'string'
   && value.length > 0
   && value.length <= LIMITS.valueLength
@@ -469,7 +476,7 @@ async function validateConfig(raw, { allowMissingRoots = false } = {}) {
       id: workspace.id,
       root,
       workspaceIdentity: identityHash([workspace.id, root, workspace.registrationId ?? null]),
-      commandHashes: Object.fromEntries(Object.entries(workspace.commands).map(([id, cmd]) => [id, identityHash(cmd)])),
+      commandHashes: Object.fromEntries(Object.entries(workspace.commands).map(([id, cmd]) => [id, executionHash(cmd, defaults)])),
       commands,
     });
   }
