@@ -75,7 +75,7 @@ REQUIRED_WORKFLOW_RUNNER = "ubuntu-latest"
 REQUIRED_WORKFLOW_TIMEOUT_MINUTES = 15
 ALLOWED_WORKFLOW_FILES = frozenset({"validate.yml"})
 ALLOWED_WORKFLOW_TRIGGERS = frozenset({"pull_request", "push"})
-REQUIRED_CONFORMANCE_CASE_IDS = tuple(f"CONF-{number:03d}" for number in range(1, 14))
+REQUIRED_CONFORMANCE_CASE_IDS = tuple(f"CONF-{number:03d}" for number in range(1, 18))
 REQUIRED_GITIGNORE_MARKERS = frozenset(
     {
         "__pycache__/",
@@ -414,7 +414,7 @@ ORCHESTRATOR_REQUIRED_SECTION_MARKERS: dict[str, tuple[str, ...]] = {
     ),
     "## Effects and operation subjects": (
         "An execution subject must be an exact, stable operation identity within its authorized context.",
-        "local files changed as a consequence are execution results of that exact authorized execution subject",
+        "only files inside the execution subject's approved local boundary are incidental execution results",
         "An authorized exact file create may derive `create_directory+change_local` operations only for missing ancestor paths",
         "consume no additional affect target/cap",
         "A candidate cannot be affected in the same invocation that discovered it",
