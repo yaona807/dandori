@@ -581,7 +581,7 @@ test('reused workspace ID and changed command definition are rejected before eff
   await withFixture(async (fixture) => {
     const configPath = path.join(fixture.home, 'command-runner', 'workspaces.json');
     const initial = JSON.parse(readFileSync(configPath, 'utf8'));
-    const command = initial.workspaces[0].commands.sample;
+    const command = structuredClone(initial.workspaces[0].commands.sample);
     const originalIdentity = digest(['alpha', realpathSync(fixture.alpha), null]);
     const expectedDefinition = executionHash(command, initial.defaults);
     const bound = ['run', 'sample', '--expected-workspace=alpha',
@@ -604,6 +604,12 @@ test('reused workspace ID and changed command definition are rejected before eff
     const inherited = runRunner(fixture, fixture.alpha, bound);
     assert.equal(inherited.status, 2);
     assert.match(inherited.stderr, /stale_definition/u);
+    initial.defaults.timeoutMs -= 1;
+    initial.defaults.maxOutputBytes = (initial.defaults.maxOutputBytes ?? 1_048_576) + 1;
+    await writeFile(configPath, `${JSON.stringify(initial, null, 2)}\n`);
+    const outputDefault = runRunner(fixture, fixture.alpha, bound);
+    assert.equal(outputDefault.status, 2);
+    assert.match(outputDefault.stderr, /stale_definition/u);
   });
 });
 
