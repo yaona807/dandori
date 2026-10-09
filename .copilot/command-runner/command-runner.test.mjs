@@ -234,6 +234,8 @@ test('distributed agent is user-level, agent-scoped, and fixed-runner-only', asy
   assert.match(source, /Do not execute a raw project command\./u);
   assert.match(source, /description: >-[\s\S]*?The runner resolves the actual terminal working/u);
   assert.match(source, /directory and symlinks, selects the active workspace/u);
+  assert.match(source, /Terminal cwd can differ from the editor-opened workspace/u);
+  assert.match(source, /require evidence that it is the same directory before registration/u);
   assert.match(source, /Do not specify, override, or infer a workspace ID/u);
   assert.match(source, /Never request a terminal working-directory/u);
   assert.doesNotMatch(
