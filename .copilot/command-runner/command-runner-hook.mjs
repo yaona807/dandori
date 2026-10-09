@@ -163,7 +163,15 @@ function validateRunnerInvocation(tokens) {
     ) {
       throw new Error('run requires --expected-workspace=<id> first');
     }
-    for (const token of tokens.slice(5)) validateEncodedParameter(token);
+    const identity = tokens[5];
+    const definition = tokens[6];
+    if (
+      typeof identity !== 'string' || !/^--expected-identity=sha256-[0-9a-f]{64}$/u.test(identity)
+      || typeof definition !== 'string' || !/^--expected-definition=sha256-[0-9a-f]{64}$/u.test(definition)
+    ) {
+      throw new Error('run requires expected identity and definition hashes');
+    }
+    for (const token of tokens.slice(7)) validateEncodedParameter(token);
     return;
   }
   throw new Error(`unsupported command-runner operation: ${operation}`);
