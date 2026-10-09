@@ -411,10 +411,10 @@ ORCHESTRATOR_REQUIRED_SECTION_MARKERS: dict[str, tuple[str, ...]] = {
     ),
     "## Approved Contract": (
         "Older results may remain evidence but cannot authorize operations or complete newer-revision criteria without revalidation.",
-        "Never elevate Worker-resolved paths or observed values into new approval or completion conditions.",
+        "Do not turn Worker-resolved paths or observed values into new approval or completion conditions.",
     ),
     "## Effects and operation subjects": (
-        "An execution subject needs an exact stable identity within its authorized context.",
+        "An execution subject must have an exact, stable identity within its authorized context.",
         "Workers/tools resolve runtime-dependent paths and context;",
         "Unproven aliases do not widen permission.",
         "only files inside the execution subject's approved local boundary are incidental execution results",
