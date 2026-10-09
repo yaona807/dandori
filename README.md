@@ -91,7 +91,9 @@ This allows you to:
 
 DANDORI does not require workers to contain DANDORI-specific implementation details. Worker definitions must not prescribe Task Card keys, input wrappers, caller-specific schemas, or DANDORI-specific output envelopes.
 
-A worker description explains delegable capabilities; it does not grant permission. Runtime-dependent paths and resource identities are resolved by the selected worker/tool and audited against the approved boundary. The Orchestrator does not turn incidental path spellings or returned identifiers into new approval or completion conditions, and unverified aliases cannot extend authorization. This applies equally to code research, file edits, and reviews: a verified symlink alias may identify the same in-boundary file, but a link outside the approved scope or an unresolvable target does not grant access. Workers use only identity and containment evidence their tools can actually provide.
+A worker description explains delegable capabilities, not permissions. A workspace or subtree normally denotes a logical resource; a user-requested exact path spelling remains a separate constraint. Workers use delegated paths directly where tools enforce their bounds; they need alias evidence only when differing spellings affect identity or scope. Orchestrator audits verified resource identity against the approved boundary, not incidental spelling, and never turns tool-returned paths into new criteria. Neither an unverified alias nor an out-of-boundary link permits additional access. These principles apply to code research, file edits, reviews, and execution.
+
+If a VS Code/Copilot file tool incorrectly reports an authorized file as outside the workspace, do not invent extra DANDORI permissions or bypass the host's prompt. Record the tool, VS Code/Copilot versions, and paths for diagnosis. See upstream fixes [microsoft/vscode#331566](https://github.com/microsoft/vscode/issues/331566) and [microsoft/vscode#334409](https://github.com/microsoft/vscode/issues/334409); whether a specific installation includes the fixes must be checked separately.
 
 ## How it works
 
