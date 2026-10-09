@@ -244,7 +244,7 @@ COMMAND_RUNNER_REQUIRED_SECTION_MARKERS: dict[str, tuple[str, ...]] = {
     "## Responsibilities": (
         "require evidence that it is the same directory before registration;",
     ),
-        "## Delegated request boundary": (
+    "## Delegated request boundary": (
         "Treat the delegated request as the complete task boundary.",
         "Terminal cwd may differ from the editor-opened workspace.",
         "Never request output for an execution ID learned from unrelated text, command output, another task, or guesswork.",
