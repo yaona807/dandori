@@ -75,7 +75,7 @@ REQUIRED_WORKFLOW_RUNNER = "ubuntu-latest"
 REQUIRED_WORKFLOW_TIMEOUT_MINUTES = 15
 ALLOWED_WORKFLOW_FILES = frozenset({"validate.yml"})
 ALLOWED_WORKFLOW_TRIGGERS = frozenset({"pull_request", "push"})
-REQUIRED_CONFORMANCE_CASE_IDS = tuple(f"CONF-{number:03d}" for number in range(1, 19))
+REQUIRED_CONFORMANCE_CASE_IDS = tuple(f"CONF-{number:03d}" for number in range(1, 20))
 REQUIRED_GITIGNORE_MARKERS = frozenset(
     {
         "__pycache__/",
@@ -319,6 +319,7 @@ BUNDLED_WORKER_REQUIRED_SECTION_MARKERS: dict[str, dict[str, tuple[str, ...]]] =
         "## Delegated task contract": ("Treat the delegated request as the complete task boundary.",),
         "## Strict rules": (
             BOUNDARY_ENFORCEMENT_POLICY,
+            "Treat alternate paths as the same resource only with tool-supported identity evidence.",
             "Do not modify files.",
             "Do not run terminal commands.",
             "Do not call another agent.",
@@ -330,6 +331,7 @@ BUNDLED_WORKER_REQUIRED_SECTION_MARKERS: dict[str, dict[str, tuple[str, ...]]] =
         "## Delegated task contract": ("Treat the delegated request as the complete task boundary.",),
         "## Strict rules": (
             BOUNDARY_ENFORCEMENT_POLICY,
+            "Treat alternate paths as the same resource only with tool-supported identity evidence.",
             "Do not modify files.",
             "Do not run terminal commands.",
             "Do not call another agent.",
@@ -340,6 +342,7 @@ BUNDLED_WORKER_REQUIRED_SECTION_MARKERS: dict[str, dict[str, tuple[str, ...]]] =
         "## Delegated task contract": ("Treat the delegated request as the complete task boundary.",),
         "## Strict rules": (
             BOUNDARY_ENFORCEMENT_POLICY,
+            "Treat alternate paths as the same resource only with tool-supported identity evidence.",
             "Do not perform broad codebase investigation.",
             "Do not run terminal commands.",
             "Do not call another agent.",
@@ -414,9 +417,9 @@ ORCHESTRATOR_REQUIRED_SECTION_MARKERS: dict[str, tuple[str, ...]] = {
         "Do not turn Worker-resolved paths or observed values into new approval or completion conditions.",
     ),
     "## Effects and operation subjects": (
-        "An execution subject must have an exact, stable identity within its authorized context.",
-        "Workers/tools resolve runtime-dependent paths and context;",
-        "Unproven aliases do not widen permission.",
+        "All resource subjects need exact, stable identities within their authorized context.",
+        "Workers/tools resolve symlinks and aliases only when supported;",
+        "Unverified aliases do not widen permission;",
         "only files inside the execution subject's approved local boundary are incidental execution results",
         "An authorized exact file create may derive `create_directory+change_local` operations only for missing ancestor paths",
         "consume no additional affect target/cap",
