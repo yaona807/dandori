@@ -1095,13 +1095,18 @@ async function main() {
       throw new InterfaceError('invalid_argument', 'run requires --expected-workspace=<id> first');
     }
     parseArguments(rest.slice(1));
-    // A single core invocation selects the workspace and verifies the guard
-    // before launching the command; a separate preflight lookup can race.
+    // Preflight prevents cache maintenance for an already-mismatched workspace.
+    // It is not sufficient for authorization: core rechecks in the same process
+    // that starts the command, closing the preflight-to-execution race.
+    const preflightWorkspace = await workspaceId();
+    if (preflightWorkspace !== expectedWorkspace) {
+      throw new InterfaceError('workspace_identity_changed', 'selected workspace differs from expected workspace');
+    }
+    await cleanupExecutions(LIMITS.maxExecutionReserveBytes);
     const result = await runCore(['run', subject, guard, ...rest.slice(1)]);
     if (result?.workspaceId !== expectedWorkspace || result?.commandId !== subject) {
       throw new InterfaceError('runner_protocol_error', 'unexpected execution identity');
     }
-    await cleanupExecutions(LIMITS.maxExecutionReserveBytes);
     emit(await storeExecution(expectedWorkspace, result));
     return 0;
   }
