@@ -1609,7 +1609,7 @@ def validate_repository(root: Path) -> ValidationResult:
             result.errors.append(f"{relative(orchestrator.path, root)}: forbidden legacy marker {marker!r}")
 
     for worker_name in BUNDLED_WORKER_NAMES:
-        if re.search(rf"\\b{re.escape(worker_name)}\\b", orchestrator.body):
+        if re.search(rf"\b{re.escape(worker_name)}\b", orchestrator.body):
             result.errors.append(
                 f"{relative(orchestrator.path, root)}: worker-specific agent name in Orchestrator body: {worker_name}"
             )
