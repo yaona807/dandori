@@ -881,7 +881,7 @@ async function main() {
   if (!['validate-config', 'list', 'describe', 'run'].includes(operation)) {
     throw new RunnerError(
       'usage',
-      'usage: command-runner.mjs validate-config | list | describe <id> | run <id> [name=encoded-value ...]',
+      'usage: command-runner.mjs validate-config | list | describe <id> | run <id> --expected-workspace=<id> [name=encoded-value ...]',
     );
   }
 
@@ -949,11 +949,27 @@ async function main() {
     return 0;
   }
 
+  // The expected workspace is an execution guard, never a workspace selector.
+  // Compare it in this process, before any command or argument-related effects.
+  const guard = argumentTokens[0];
+  const expectedPrefix = '--expected-workspace=';
+  const expectedWorkspace = typeof guard === 'string' && guard.startsWith(expectedPrefix)
+    ? guard.slice(expectedPrefix.length)
+    : '';
+  if (!ID_RE.test(expectedWorkspace) || guard !== `${expectedPrefix}${expectedWorkspace}`) {
+    throw new RunnerError('invalid_argument', 'run requires --expected-workspace=<id> first');
+  }
+  if (workspace.id !== expectedWorkspace) {
+    throw new RunnerError(
+      'workspace_identity_changed',
+      `selected workspace ${workspace.id} differs from expected workspace ${expectedWorkspace}`,
+    );
+  }
   emit(await execute(
     workspace,
     commandId,
     command,
-    parseArguments(argumentTokens),
+    parseArguments(argumentTokens.slice(1)),
   ));
   return 0;
 }
