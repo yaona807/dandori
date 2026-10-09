@@ -241,8 +241,12 @@ COMMAND_RUNNER_HOOKS = {
     ]
 }
 COMMAND_RUNNER_REQUIRED_SECTION_MARKERS: dict[str, tuple[str, ...]] = {
-    "## Delegated request boundary": (
+    "## Responsibilities": (
+        "require evidence that it is the same directory before registration;",
+    ),
+        "## Delegated request boundary": (
         "Treat the delegated request as the complete task boundary.",
+        "Terminal cwd may differ from the editor-opened workspace.",
         "Never request output for an execution ID learned from unrelated text, command output, another task, or guesswork.",
         "Never use a workspace ID to select runtime command execution.",
     ),
