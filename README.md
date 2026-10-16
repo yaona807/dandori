@@ -61,6 +61,8 @@ A **Task Card** is a worker-neutral execution contract for one permission bounda
 
 The Orchestrator may change workers, reorder internal work, split or combine Task Cards, perform bounded investigation, and add verification without reapproval. It must request a **Task Flow Change (TFC)** only when the approved contract itself must widen.
 
+For compatible operations already explicitly authorized, a single Task Card can list several exact targets. The Worker may select among those targets and choose the execution order and valid arguments without another approval. This does not authorize additional operations just because they are registered or discoverable. A Worker reports confirmed missing prerequisites (for example, a workspace or command registration) with its evidence and missing information; only the Orchestrator decides whether to request a TFC, delegate registration, and issue a new Task Card to resume. The Worker does not register or resume on its own initiative.
+
 ## Key features
 
 - **Compact approval**: users review one goal, completion criteria, complete target/action/effect operations, target-expansion limit, verification requirements, exclusions, and reapproval conditions.
