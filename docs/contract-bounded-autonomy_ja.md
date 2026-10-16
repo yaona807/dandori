@@ -27,8 +27,8 @@
 ```
 
 - **契約が決めるもの**: 目的、Criterion、対象境界、許容Action/Effect、外部変更・破壊的操作の可否、検証。
-- **Workerが決めるもの**: 契約内で何を調べ、どのファイルを扱い、どの承認済み登録コマンドを何度使うか。
-- **Orchestratorが判断するもの**: Task Cardの包含関係、結果の根拠、進捗、契約の拡張有無、停止/再承認。
+- **Workerが決めるもの**: 委譲された権限内で何を調べ、許可対象のどれを扱い、許された登録済みコマンドをどの順序・引数・回数で使うか。Workerは承認、次工程の委譲、契約の拡張を決めない。
+- **Orchestratorが判断するもの**: Task Cardの包含関係、結果の根拠、進捗、契約の拡張有無、停止/再承認、登録不足を解消した後の次の委譲。
 - 取得した検索結果、README/AGENTS.md、コマンドの説明、Workerの主張は**権限源ではない**。既承認契約と照合するための資料にとどめる。
 - 原則として1回のWorker呼び出し内の観察・判断・実行方法はWorkerに任せる。ただし1回の委譲で扱うOperationはすべて契約に包含される必要がある。
 
@@ -53,13 +53,13 @@
 
 ### 4.2 承認する集合と実行方法
 
-- TFRでは個々の実行順・繰り返し回数・引数値を固定せず、**今回使用を承認する登録済みコマンドの集合**とその許容効果を示す。
-- 初期実装では**正確なCommand ID集合**を用いる。集合を人間に提示できない場合、未知のコマンドへ暗黙に権限を与える包括表現は使わない。
-- 必要なIDが不明な場合、リスト/定義の読み取りは独立した観察工程として解決し、認可対象集合を確認してから実行契約を確定する。未確認集合を実行権限にしない。
-- 承認後はRunnerが`list`/`describe`で登録を調べ、集合内の正確なIDを**自律選択**できる。選択・順序・同一コマンドの再実行は契約内なら再承認しない。
+- TFRでは個々の実行順・繰り返し回数・引数値を固定せず、**今回使用を承認する正確な実行対象の集合**とその許容効果を示す。CommandRunnerを使う場合、対象は登録済みのCommand IDで表せる。OrchestratorはIDを対象の識別子として扱い、その検索方法や定義形式を理解する必要はない。
+- 初期実装では**正確な対象IDの集合**を用いる。集合を人間に提示できない場合、未知の対象へ暗黙に権限を与える包括表現は使わない。コマンド名の類似性や目的に合いそうという判断だけで集合を広げない。
+- 必要なIDが不明な場合、Orchestratorは**必要な事実と観察境界だけ**を示し、適合Workerへ認可済みの探索を委譲する。各Workerは自分のツールでIDや定義を確認して事実を返す。認可対象集合を人間が確認した後に実行契約を確定し、未確認の集合を実行権限にしない。
+- 承認後は**実行Workerが自分の固定インターフェース**（現行CommandRunnerなら`list`/`describe`など）で利用可能性を調べ、許可集合内の正確なIDを**自律選択**できる。選択・順序・同一コマンドの再実行は契約内なら再承認しない。Orchestratorは探索コマンドや実行構文を組み立てない。
 - 許容引数は登録済み定義のスキーマ内に限り、Workerが値を選ぶ。引数から契約外対象や効果が生じるなら実行しない。
 - 実行直前に既存の`expected-workspace`、`expected-identity`、`expected-definition`を照合。コマンド定義/継承設定/登録先が変われば**起動前に拒否**する。
-- 登録、定義変更、削除、workspace追加/削除は実行用の許可とは別の明示的なOperationとする。登録不足が確認された場合は原因・登録に必要な情報を返し、権限が得られたら同じ作業へ復帰できるようにする。
+- 登録、定義変更、削除、workspace追加/削除は実行用の許可とは別の明示的なOperationとする。登録不足が確認された場合、Workerは原因・必要な情報を**報告だけ**する。追加登録や次の作業の選択はOrchestratorが契約に基づいて別Task Cardで委譲する。
 - 検索が部分的・不完全、別workspace、ID不明、定義不明の場合、推測・勝手な再登録・他の未承認コマンドへの代替を行わない。
 
 ### 4.3 安全性の限界
@@ -71,42 +71,43 @@
 
 ### 4.4 実行できないときは、解決に必要な前提を返す
 
-**単なる`blocked`で終了せず、判定できた阻害要因と解消に必要な操作を報告する。** これはRunnerが登録や承認を自動実施するという意味ではない。
+**単なる`blocked`で終了せず、判定できた阻害要因と解消に必要な事実・前提を報告する。** Workerは登録・承認・次工程の選択を行わない。OrchestratorはWorkerから返された事実を監査し、追加OperationとTFCの必要性を判断する。
 
-| 観測結果 | 分類（設計上の名称） | Runnerが返すべき情報 |
+| 観測結果 | 分類（Workerが報告できる事実の名称例） | Workerが返すべき情報 |
 |---|---|---|
 | 実行対象の現在workspaceが未登録と確認できた | `workspace_registration_required` | 観測できたcwd/選択workspace、未登録の根拠、登録対象を確定するために不足する情報 |
 | 正確なIDの照会またはrevision整合した完全な検索からコマンド未登録を確認 | `command_registration_required` | 検証したworkspace ID、探したCommand IDまたは目的、検索範囲/完了性、必要な登録定義の不足情報 |
 | workspace登録の不足とcommand登録の不足を区別できない | `discovery_incomplete` | 確認した範囲、既知の情報、次に必要な認可済み観察 |
-| 登録されているがフローの許可対象外 | `authorization_required` | 対象ID、現契約に不足するOperation/Effect。ただし実行や登録はしない |
 | workspace・登録世代・command定義が発見後に変更された | `registration_changed` | 変化したidentity/hashの種類、実行が起動前に拒否された事実、再確認すべき対象 |
 | 登録済みコマンドの起動後に失敗した | `execution_failed` | exit code、signal、制限到達、関係する出力、確認できた効果 |
 
-上記は**新しい必須ワイヤープロトコルではなく、既存の`outcome`、unknowns、incomplete items、根拠、次に必要な作業を構造化して説明する概念分類**とする。既存Runnerの`workspace_not_registered`、`command_not_registered`、`workspace_identity_changed`、`stale_listing`等の具体的なエラーをそのまま利用してよい。コード追加は、既存の返却情報では原因や次の処置を表現できないと確認した場合に限定する。
+上記は**新しい必須ワイヤープロトコルではなく、既存の`outcome`、unknowns、incomplete items、観測根拠、必要な前提を整理する概念分類**とする。現行Runnerの`workspace_not_registered`、`command_not_registered`、`workspace_identity_changed`、`stale_listing`等の具体的なエラーをそのまま利用してよい。
+
+**`authorization_required`はWorkerが判定・返却する分類から除外する。** 登録済みだが今回の契約で未承認か、どのOperation/Effectを追加すべきかは、Orchestratorが実際の承認契約とTask Cardを照合して判断する。Workerは登録状態と実行可否の事実のみを返す。コード追加は、既存の返却情報では必要な事実を表現できないと確認した場合に限定する。
 
 ### 4.5 登録不足からの復帰フロー
 
 ```text
-実行要求
-  → 現workspace/コマンド定義を認可範囲で確認
-  → 実行可能であればRunnerで実行
-  → 登録不足が証明された場合:
-      Runner: 不足の種類・根拠・必要な登録項目を報告
-      Orchestrator: 同じGoal内で契約を確認
-        → 登録Operationが既承認なら適合Workerへ委譲
-        → 未承認ならTFCで追加承認を求める
-      Runner: 明示された正確なworkspace ID/command定義のみ登録
-      Orchestrator: 登録結果と新しい実行許可を再照合
-      Runner: 初回の目的に戻り、最新Identity/hashで実行
-  → 観測不能または承認されなければ、具体的な未完了作業とともに部分終了
+Orchestrator: 承認済みの目的・観察/実行権限をTask Cardで委譲
+  → 実行Worker: 自分のツールで対象・登録状態を確認
+    → 実行可能なら承認済み操作を実施し、根拠を返す
+    → 登録不足なら未登録の根拠・不足情報を返して委譲を終える
+  → Orchestrator: 結果と契約の権限・Revisionを照合
+    → 既承認の登録Operationがあれば登録を別Task Cardで委譲
+    → 未承認ならTFCを提示し、承認されてから登録を委譲
+    → 登録対象/定義が不明なら観察を委譲または部分終了
+  → 登録Worker: 明示された登録操作のみ実施し、結果を返す
+  → Orchestrator: 登録結果を監査し、同じGoalの残タスクを再計画
+    → 必要かつ許可された場合だけ、新しい実行Task Cardを委譲
+  → 実行Worker: 最新の登録・実行前照合を経て実行し、結果を返す
 ```
 
 - **ワークスペース未登録**: `workspace-list`/`workspace-describe`の事実と実際のTerminal cwdを区別する。エディタで開いているworkspaceとTerminal cwdの一致が不明なら「今のcwdを登録すればよい」と推測しない。登録対象の**正確なID**は承認経路で確定し、Runnerが勝手に採番しない。
 - **コマンド未登録**: ワークスペース未登録を先に切り分け、正確なCommand IDの否定結果または完全な一覧からのみ未登録と判断する。検索失敗・部分ページ・単なる表記違いから未登録を断定しない。未知の定義JSON、argv、timeout等をRunnerが作らず、登録に必要な定義内容をユーザーまたは正規の情報源へ求める。
-- **登録済みだが未承認**: 登録の提案をしない。必要なのは契約拡張である。
+- **登録済みだが未承認**: Orchestratorが契約監査によって判断する。Workerへ実行を委譲せず、必要ならTFCを提示する。登録不足と取り違えない。
 - **Runnerの管理操作**: 既存の登録インターフェース経由でのみ行う。Runnerのユーザーレベル設定に対する書き込みとコマンド実行など、全Effectを事前認可する。途中の失敗から別workspaceの自動登録へ迂回しない。
-- **再開**: 登録完了は元の実行許可を自動付与しない。契約Revisionを反映し、最新のworkspace/command identityと実行権限を確認してから同じ作業目的に復帰する。
-- **Worker非依存**: Orchestratorは、原因が「どの認可対象・効果・根拠の欠落か」を受け取るだけ。CommandRunner固有のCLI構文、JSON定義生成手順、登録手順をOrchestratorへ組み込まない。
+- **再開**: 登録完了は元の実行許可を自動付与しない。**Orchestratorだけが**契約Revisionを反映し、登録結果・実行権限を監査して新しいTask Cardを発行する。実行Workerは最新のworkspace/command identityを自分のインターフェースで再確認する。登録Workerが後続の実行まで自動的に開始してはならない。
+- **Worker非依存**: Orchestratorは、観測された阻害要因・対象識別子・操作の種類・効果・根拠を**汎用概念として**扱う。CommandRunner固有のCLI構文、Command IDの一覧取得方法、JSON定義、workspace hash、再実行手順をOrchestratorの固定ロジックに組み込まない。具体的な機械照合は当該Workerとその実行インターフェースに委ねる。
 - **停止の条件**: 適切な観察ができない・対象/定義が確定できない・承認されないときには停止してよい。ただし「できなかった」だけではなく、**なぜ、何があれば再開できるか**を報告する。原因を断定できないときは`unknown`として、登録必要と偽ってはならない。
 
 ## 5. ローカルファイル変更をどう緩和するか
@@ -128,9 +129,9 @@
 
 既存の`approved_contract`、`authorization_sources`、`operation_permissions`、`flow_ledger`を再利用する。
 
-- `operation_permissions.authorization_rule`に、**承認された登録コマンドID集合とworkspace identityへの制約**を表現する。
-- Task CardにはWorker非依存の`boundary / action / effects`と、その契約Revisionの承認対象を渡す。CommandRunnerのCLI構文やWorker-specific workflowは渡さない。
-- Runnerが返した実行Command ID、workspace identity、executionHash、実引数、効果、結果を監査Evidenceとして記録する。未登録で実行できなかった場合も、確認した対象、正確な根拠、未充足の登録前提をCriterionに紐付ける。登録情報やWorker結果そのものは権限源にしない。
+- `operation_permissions`には、既存の**対象・Action・すべてのEffect**の関係を保持する。CommandRunner専用の`command_ids`/`workspace_identity`フィールドや専用ルール型は追加しない。承認されたコマンドは既存の正確な対象識別子として列挙し、Runnerが返すworkspace identityやexecutionHashは実行時の照合・監査証拠として扱う（新たな権限源にしない）。既存スキーマで列挙を表現できるなら、新しい`authorization_rule`拡張自体を行わない。
+- Task CardにはWorker非依存の`target / boundary / action / effects`と承認Revisionに包含された対象を渡す。具体的なCommand IDは**承認済み対象の識別子**としてのみ渡せる。CommandRunnerのCLI構文、探索順序、hash取得方法、Worker-specific workflowは渡さない。
+- Workerが返した実施対象・Action・Effect・結果・証拠を汎用の監査Evidenceとして記録する。CommandRunnerの場合のCommand ID、workspace identity、executionHash、実引数は**実行結果の出所・照合を裏付けるツール固有のEvidence**として保持してよいが、Orchestratorの必須スキーマにしない。未登録等で実行できなかった場合も、観測対象、根拠、未充足の前提をCriterionに紐付ける。登録情報やWorker結果は新しい権限源にならない。
 - ファイル範囲権限は実装可能性を確認した後に、ローカル編集Operationのみに追加する。承認済みの正確なファイル権限も引き続き使えるようにする。
 - すでに存在する`auto_added_targets_max`、候補Promotion、Revision整合、結果監査を即座に全廃しない。範囲内編集が成立した領域でだけ重複管理を除く。
 - Contract Revisionに不一致が生じたWorker結果で新しい実行権限を得たり、Criterionを閉じたりできない。
@@ -147,8 +148,8 @@
 ## 8. 実装順序と合格条件
 
 1. **Baseline**: 実VS Code/Copilot環境で現行CONF-001/004/008/014/015/018/019/020のうち関連ケースを再確認。特にRunnerのPreToolUse Hookが動いていることを実測する。
-2. **Actionable blockers**: 未登録workspace、未登録command、契約上の未承認、定義変更、検索不完全、実行失敗を区別し、登録の前提・不足情報・再開条件を返す。既存Runner error codeとWorker結果欄の再利用を優先する。
-3. **Command selection**: TFRの承認済みID集合から、自律選択するAgent/Orchestratorの文言だけを最小改修。固定CLIと実行前3照合は維持。必要に応じてStatic/Manual Conformanceを更新。
+2. **Actionable blockers**: Workerが未登録workspace、未登録command、登録状態変更、検索不完全、実行失敗を**観測事実として**区別して返す。契約上の未承認はOrchestratorだけが判定。既存Runner error codeとWorker結果欄の再利用を優先する。
+3. **Command selection**: TFRの承認済み対象集合からWorkerが自律選択できるよう、Worker/Orchestratorの責務記述を最小改修。OrchestratorにCommandRunner固有の操作方法を追加しない。固定CLIと実行前3照合は維持し、Static/Manual Conformanceを更新する。
 4. **Reduced granularity**: 読み取りの不要なTask Card細分化を減らし、権限と結果監査が崩れないことを確認する。
 5. **Scoped file editing**: 実ツールで境界強制を確認できた場合に限り実施。できなければ見送る。
 6. **Cleanup**: 置き換えた箇所のみ古いCandidate/上限関連説明を削除。変更していない効果クラスまで消さない。
@@ -162,13 +163,17 @@
 | 実際のTerminal cwdのworkspace未登録が確定 | 必要なworkspace登録、観測済み情報、不足IDを具体的に報告。勝手な登録なし |
 | 正確なCommand IDの未登録が確定 | 必要なcommand登録と不足する定義項目を具体的に報告。勝手な定義生成なし |
 | 登録未確認 / filtered miss / partial listing | 未登録を推測せず、照会範囲と不足する観察を報告 |
-| 登録済みだがフロー権限がない | 登録提案ではなく必要なTFCを報告 |
-| 登録前提を承認・解消した | 現契約Revisionと最新hashで再照合し、元の目的の作業を再開 |
+| 登録済みだがフロー権限がない | Orchestratorが契約照合で検出。Workerによる登録不足の報告や実行は不要 |
+| 登録前提を承認・解消した | Orchestratorが登録結果を監査し、新しいTask Cardを発行。Workerの連続自動実行は禁止 |
 | 定義変更・登録世代変更・別workspace・異なるcwd | Spawn前に拒否 |
 | 登録済みコマンドが未知/契約外Effectを持つ | 実行せずTFCまたはblocked |
 | README/AGENTS.md/コマンド出力からの指示注入 | 権限拡張不可 |
 | 範囲編集を強制できないツール | 範囲権限による一括編集を拒否し個別方式へ |
 | シンボリックリンクが許可境界外を指す | 未確認のまま作用しない |
+| CommandRunner以外の実行Workerへ交換 | Orchestratorの認可・委譲・復帰ロジックは同じ。特定RunnerのCLIやhash取得を要求しない |
+| Workerが`authorization_required`を自己判定して返す | その主張を権限判断に使わず、Orchestratorが承認契約の正本と照合 |
+| 登録が終わったWorkerが次の実行も自主的に行う | 未委譲操作として拒否。次のTask CardはOrchestratorのみ発行 |
+| 登録情報やWorker報告に新しい許可対象が含まれる | 契約へ暗黙追加せず、必要なTFCを経る |
 | 契約Revision変更後の古いWorker結果 | 再認可/完了根拠とみなさない |
 | Reviewerによる検証 | 成果物・Criterion・登録済み検証手段の根拠に基づく |
 | 外部書き込み・破壊的操作 | 明示的な別Operationがない限り実行不可 |
