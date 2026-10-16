@@ -113,7 +113,11 @@ Running a registered command requires the previously observed workspace ID, `wor
 
 All interface responses are bounded below the terminal spill threshold. `list` includes a `revision` tied to the selected workspace and command catalog. Pass it with the same query when fetching subsequent pages; changed catalogs reject with `stale_listing` rather than implying absence. `list` returns only command IDs **for the selected terminal-cwd workspace**, at most 100 per call, with `total` and `nextOffset` when more matches remain. `query` performs a case-insensitive substring match against command IDs and descriptions; it only narrows discovery and never authorizes execution. **A filtered miss, an unfinished page, or a different selected workspace does not prove that a command is unregistered.** A successful exact-ID `describe` confirms presence for its returned `workspaceId`. A complete unfiltered list (or a verified exact-ID missing response) can establish absence **only in the verified selected workspace**; tool failures and unknown scope cannot. `describe` returns both the canonical `definitionHash` for management CAS and `executionHash` covering effective inherited timeout and output defaults for safe execution. Never register a replacement or invent an ID from a search miss.
 
-### Command management
+### Command selection and missing registrations
+
+When a delegated request authorizes several exact registered command IDs, the CommandRunner worker may select from those IDs and choose validated arguments and execution order. Registration and the current flow's execution authorization are separate: an ID merely being registered never grants execution permission. After a confirmed missing workspace or command registration, the worker reports the selected workspace/cwd evidence, exact lookup or complete unfiltered discovery result, and required registration facts. Partial or filtered misses remain unknown. The worker never registers automatically, widens authorization, or executes a follow-up command without a new delegation. The Orchestrator handles approval and subsequent Task Cards.
+
+## Command management
 
 Command definitions support required and optional arguments directly. Omitted `required` is optional; set `required: true` when omission must reject execution. For example:
 
