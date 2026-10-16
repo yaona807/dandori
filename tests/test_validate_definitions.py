@@ -59,6 +59,46 @@ class ValidatorMutationTests(unittest.TestCase):
             path.write_text(text)
             self.assert_invalid(repo, "worker must not include the agent tool")
 
+    def test_runner_cannot_lose_delegated_command_selection(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".copilot/agents/CommandRunner.agent.md"
+            text = path.read_text()
+            marker = "A delegated list of exact authorized command operations permits selection among those listed IDs,"
+            self.assertIn(marker, text)
+            path.write_text(text.replace(marker, "Choose any registered command as needed.", 1))
+            self.assert_invalid(repo, marker)
+
+    def test_runner_must_report_actionable_registration_prerequisites(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".copilot/agents/CommandRunner.agent.md"
+            text = path.read_text()
+            marker = "If a workspace or command is demonstrably unregistered,"
+            self.assertIn(marker, text)
+            path.write_text(text.replace(marker, "If command execution fails,", 1))
+            self.assert_invalid(repo, marker)
+
+    def test_orchestrator_must_redelegate_after_prerequisite_resolution(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".copilot/agents/Orchestrator.agent.md"
+            text = path.read_text()
+            marker = "When a Worker reports a missing prerequisite,"
+            self.assertIn(marker, text)
+            path.write_text(text.replace(marker, "When a Worker reports that it cannot continue,", 1))
+            self.assert_invalid(repo, marker)
+
+    def test_orchestrator_supports_exact_operation_choice(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".copilot/agents/Orchestrator.agent.md"
+            text = path.read_text()
+            marker = "A Task Card may list multiple exact permitted operations"
+            self.assertIn(marker, text)
+            path.write_text(text.replace(marker, "A Task Card is limited to one operation", 1))
+            self.assert_invalid(repo, marker)
+
     def test_missing_description_is_rejected(self) -> None:
         temp, repo = self.make_repo()
         with temp:
