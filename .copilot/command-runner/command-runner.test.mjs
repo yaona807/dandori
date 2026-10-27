@@ -967,6 +967,25 @@ test('hook validates actual Local and Copilot terminal aliases instead of reject
       });
       assert.equal(JSON.parse(overridden.stdout).permissionDecision, 'deny');
     }
+
+    const vscodeSync = runHook(fixture, {
+      tool_name: 'run_in_terminal',
+      tool_input: { command: accepted, mode: 'sync', explanation: 'Inspect registered commands', goal: 'Read command list' },
+    });
+    assert.equal(JSON.parse(vscodeSync.stdout).permissionDecision, 'allow');
+
+    for (const options of [
+      { mode: 'async' },
+      { timeout: 5_000 },
+      { requestUnsandboxedExecution: true },
+      { requestAllowNetwork: true },
+    ]) {
+      const denied = runHook(fixture, {
+        tool_name: 'run_in_terminal',
+        tool_input: { command: accepted, ...options },
+      });
+      assert.equal(JSON.parse(denied.stdout).permissionDecision, 'deny');
+    }
   });
 });
 
