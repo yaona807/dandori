@@ -222,7 +222,21 @@ function runRunner(fixture, cwd, args) {
 }
 
 function runInterface(fixture, cwd, args) {
-  const guardedArgs = guarded(fixture, cwd, args);
+  const scoped = new Set(['list', 'describe', 'register', 'update', 'unregister', 'output']);
+  let scopedArgs = args;
+  if (scoped.has(args[0])) {
+    const index = args[0] === 'list' ? 1 : 2;
+    if (!args[index]?.startsWith('--expected-workspace=')) {
+      const configuration = JSON.parse(readFileSync(path.join(fixture.home, 'command-runner', 'workspaces.json'), 'utf8'));
+      const selectedCwd = realpathSync(cwd);
+      const selected = configuration.workspaces.find((workspace) => {
+        const root = realpathSync(workspace.root);
+        return selectedCwd === root || selectedCwd.startsWith(`${root}${path.sep}`);
+      });
+      scopedArgs = [...args.slice(0, index), `--expected-workspace=${selected?.id ?? 'alpha'}`, ...args.slice(index)];
+    }
+  }
+  const guardedArgs = guarded(fixture, cwd, scopedArgs);
   return spawnSync(
     process.execPath,
     [path.join(fixture.home, 'command-runner', 'command-runner-interface.mjs'), ...guardedArgs],
@@ -267,13 +281,13 @@ test('distributed agent is user-level, agent-scoped, and fixed-runner-only', asy
   assert.match(source, /node ~\/\.copilot\/command-runner\/command-runner-interface\.mjs output/u);
   assert.match(source, /Do not execute a raw project command\./u);
   assert.match(source, /description: >-[\s\S]*?Command searches/u);
-  assert.match(source, /are filtered, paginated, and scoped to the active workspace/u);
-  assert.match(source, /Terminal cwd may differ from the editor-opened workspace/u);
+  assert.match(source, /are filtered, paginated, and scoped to the delegated workspace ID/u);
+  assert.match(source, /The fixed runner rejects a workspace mismatch before disclosing command data/u);
   assert.match(source, /require evidence that it is the same directory before registration/u);
   assert.match(source, /A filtered or incomplete miss proves no absence/u);
-  assert.match(source, /Before reporting a command missing, confirm the returned `workspaceId`/u);
+  assert.match(source, /Pass the delegated workspace ID as a mandatory runtime assertion/u);
   assert.match(source, /Do not claim a command is unregistered solely from a query miss/u);
-  assert.match(source, /Do not specify, override, or infer a workspace ID/u);
+  assert.match(source, /Never use the expected workspace ID to select or override/u);
   assert.match(source, /Never request a terminal working-directory/u);
   assert.doesNotMatch(
     source,
@@ -328,6 +342,33 @@ test('filtered command misses do not imply absence from selected workspace', asy
     const inBeta = runInterface(fixture, fixture.beta, ['list', 'query=beta']);
     assert.equal(inBeta.status, 0, inBeta.stderr);
     assert.deepEqual(JSON.parse(inBeta.stdout).commandIds, ['beta']);
+  });
+});
+
+test('delegated workspace assertion gates command discovery without requiring cwd inspection by the worker', async () => {
+  await withFixture(async (fixture) => {
+    const accepted = runInterface(fixture, fixture.alpha, ['list', '--expected-workspace=alpha']);
+    assert.equal(accepted.status, 0, accepted.stderr);
+    assert.equal(JSON.parse(accepted.stdout).workspaceId, 'alpha');
+
+    for (const args of [
+      ['list', '--expected-workspace=alpha'],
+      ['describe', 'beta', '--expected-workspace=alpha'],
+      ['output', '20260829T010203.004Z_00000000-0000-4000-8000-000000000000', '--expected-workspace=alpha', 'stream=stdout'],
+    ]) {
+      const result = runInterface(fixture, fixture.beta, args);
+      assert.equal(result.status, 2, result.stderr);
+      assert.equal(result.stdout, '');
+      assert.equal(JSON.parse(result.stderr).error.code, 'workspace_scope_mismatch');
+      assert.doesNotMatch(result.stderr, /commandIds|arguments|definitionHash|beta/u);
+    }
+
+    const withoutScope = spawnSync(process.execPath, [
+      path.join(fixture.home, 'command-runner', 'command-runner-interface.mjs'), 'list',
+    ], { cwd: fixture.alpha, encoding: 'utf8', env: { ...process.env, COPILOT_HOME: fixture.home } });
+    assert.equal(withoutScope.status, 2);
+    assert.equal(JSON.parse(withoutScope.stderr).error.code, 'invalid_argument');
+    assert.equal(withoutScope.stdout, '');
   });
 });
 
@@ -882,7 +923,7 @@ test('hook permits canonical bounded-interface calls and denies direct core or c
 
 test('hook applies the same fixed-interface policy to the Copilot harness tool envelope', async () => {
   await withFixture(async (fixture) => {
-    const accepted = 'node ~/.copilot/command-runner/command-runner-interface.mjs list';
+    const accepted = 'node ~/.copilot/command-runner/command-runner-interface.mjs list --expected-workspace=alpha';
     for (const [toolName, args] of [
       ['Bash', { command: accepted }],
       ['bash', { command: accepted }],
@@ -923,7 +964,7 @@ test('hook applies the same fixed-interface policy to the Copilot harness tool e
 
 test('hook validates actual Local and Copilot terminal aliases instead of rejecting the fixed runner', async () => {
   await withFixture(async (fixture) => {
-    const accepted = 'node ~/.copilot/command-runner/command-runner-interface.mjs list';
+    const accepted = 'node ~/.copilot/command-runner/command-runner-interface.mjs list --expected-workspace=alpha';
     const localEnvelopes = [
       (command) => ({
         hook_event_name: 'PreToolUse',
@@ -993,15 +1034,15 @@ test('hook denies terminal execution overrides and background execution', async 
   await withFixture(async (fixture) => {
     for (const toolInput of [
       {
-        command: 'node ~/.copilot/command-runner/command-runner-interface.mjs list',
+        command: 'node ~/.copilot/command-runner/command-runner-interface.mjs list --expected-workspace=alpha',
         cwd: fixture.beta,
       },
       {
-        command: 'node ~/.copilot/command-runner/command-runner-interface.mjs list',
+        command: 'node ~/.copilot/command-runner/command-runner-interface.mjs list --expected-workspace=alpha',
         env: { TEST: '1' },
       },
       {
-        command: 'node ~/.copilot/command-runner/command-runner-interface.mjs list',
+        command: 'node ~/.copilot/command-runner/command-runner-interface.mjs list --expected-workspace=alpha',
         isBackground: true,
       },
     ]) {
@@ -1060,7 +1101,7 @@ test('hook permits only explicit read-only non-terminal tools', async () => {
 
 test('hook fails closed for unknown terminal names in both harness envelopes', async () => {
   await withFixture(async (fixture) => {
-    const accepted = 'node ~/.copilot/command-runner/command-runner-interface.mjs list';
+    const accepted = 'node ~/.copilot/command-runner/command-runner-interface.mjs list --expected-workspace=alpha';
     for (const input of [
       {
         hook_event_name: 'PreToolUse',

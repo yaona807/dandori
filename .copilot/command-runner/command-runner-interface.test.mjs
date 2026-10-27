@@ -227,7 +227,16 @@ function guarded(fixture, cwd, args) {
 }
 
 function runInterface(fixture, cwd, args) {
-  const guardedArgs = guarded(fixture, cwd, args);
+  const scoped = new Set(['list', 'describe', 'register', 'update', 'unregister', 'output']);
+  let scopedArgs = args;
+  if (scoped.has(args[0])) {
+    const index = args[0] === 'list' ? 1 : 2;
+    if (!args[index]?.startsWith('--expected-workspace=')) {
+      const selected = cwd === fixture.beta ? 'beta' : 'alpha';
+      scopedArgs = [...args.slice(0, index), `--expected-workspace=${selected}`, ...args.slice(index)];
+    }
+  }
+  const guardedArgs = guarded(fixture, cwd, scopedArgs);
   return spawnSync(
     process.execPath,
     [path.join(fixture.commandRunner, 'command-runner-interface.mjs'), ...guardedArgs],
@@ -365,6 +374,32 @@ test('describe returns one bounded command definition and stable hash', async ()
     assert.equal(first.definitionHash, second.definitionHash);
     assert.match(first.executionHash, /^sha256-[0-9a-f]{64}$/u);
     assert.equal(first.executionHash, second.executionHash);
+  });
+});
+
+test('workspace scope mismatch blocks listing, describing, and all command-map mutations before disclosure or writes', async () => {
+  await withManagementFixture(async (fixture) => {
+    const configuration = path.join(fixture.commandRunner, 'workspaces.json');
+    const before = await readFile(configuration, 'utf8');
+    const definition = encodeURIComponent(JSON.stringify({
+      description: 'Unexpected.', run: [process.execPath, 'echo-args.mjs'], cwd: '.', arguments: {},
+    }));
+    const hash = `sha256-${'0'.repeat(64)}`;
+    for (const args of [
+      ['list', '--expected-workspace=alpha'],
+      ['describe', 'beta', '--expected-workspace=alpha'],
+      ['register', 'surprise', '--expected-workspace=alpha', `definition=${definition}`],
+      ['update', 'beta', '--expected-workspace=alpha', `expected=${hash}`, `definition=${definition}`],
+      ['unregister', 'beta', '--expected-workspace=alpha', `expected=${hash}`],
+    ]) {
+      const result = runInterface(fixture, fixture.beta, args);
+      const failure = parseFailure(result, 'workspace_scope_mismatch');
+      assert.equal(result.stdout, '');
+      assert.equal('workspaceId' in failure, false);
+      assert.equal(await readFile(configuration, 'utf8'), before);
+    }
+    const allowed = parseSuccess(runInterface(fixture, fixture.beta, ['list', '--expected-workspace=beta']));
+    assert.deepEqual(allowed.commandIds, ['beta']);
   });
 });
 
@@ -853,13 +888,13 @@ test('hook permits only bounded execution and management interface shapes', asyn
       'node ~/.copilot/command-runner/command-runner-interface.mjs workspace-describe alpha',
       'node ~/.copilot/command-runner/command-runner-interface.mjs workspace-register alpha',
       `node ~/.copilot/command-runner/command-runner-interface.mjs workspace-unregister alpha expected=sha256-${'0'.repeat(64)}`,
-      'node ~/.copilot/command-runner/command-runner-interface.mjs list query=test',
-      'node ~/.copilot/command-runner/command-runner-interface.mjs describe echo',
-      'node ~/.copilot/command-runner/command-runner-interface.mjs register lint definition=%7B%22description%22%3A%22Lint%22%7D',
-      `node ~/.copilot/command-runner/command-runner-interface.mjs update echo expected=sha256-${'0'.repeat(64)} definition=%7B%22description%22%3A%22Echo%22%7D`,
-      `node ~/.copilot/command-runner/command-runner-interface.mjs unregister echo expected=sha256-${'0'.repeat(64)}`,
+      'node ~/.copilot/command-runner/command-runner-interface.mjs list --expected-workspace=alpha query=test',
+      'node ~/.copilot/command-runner/command-runner-interface.mjs describe echo --expected-workspace=alpha',
+      'node ~/.copilot/command-runner/command-runner-interface.mjs register lint --expected-workspace=alpha definition=%7B%22description%22%3A%22Lint%22%7D',
+      `node ~/.copilot/command-runner/command-runner-interface.mjs update echo --expected-workspace=alpha expected=sha256-${'0'.repeat(64)} definition=%7B%22description%22%3A%22Echo%22%7D`,
+      `node ~/.copilot/command-runner/command-runner-interface.mjs unregister echo --expected-workspace=alpha expected=sha256-${'0'.repeat(64)}`,
       'node ~/.copilot/command-runner/command-runner-interface.mjs run echo --expected-workspace=alpha --expected-identity=sha256-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --expected-definition=sha256-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
-      'node ~/.copilot/command-runner/command-runner-interface.mjs output 20260829T010203.004Z_00000000-0000-4000-8000-000000000000 stream=stdout',
+      'node ~/.copilot/command-runner/command-runner-interface.mjs output 20260829T010203.004Z_00000000-0000-4000-8000-000000000000 --expected-workspace=alpha stream=stdout',
     ]) {
       const result = runHook(fixture, { command });
       assert.equal(JSON.parse(result.stdout).hookSpecificOutput.permissionDecision, 'allow');
@@ -868,6 +903,9 @@ test('hook permits only bounded execution and management interface shapes', asyn
     for (const toolInput of [
       { command: 'node ~/.copilot/command-runner/command-runner.mjs list' },
       { command: 'node ~/.copilot/command-runner/command-runner-interface.mjs run echo' },
+      { command: 'node ~/.copilot/command-runner/command-runner-interface.mjs list query=test' },
+      { command: 'node ~/.copilot/command-runner/command-runner-interface.mjs describe echo' },
+      { command: 'node ~/.copilot/command-runner/command-runner-interface.mjs list --expected-workspace=OTHER' },
       { command: 'npm test' },
       { command: 'node ~/.copilot/command-runner/command-runner-interface.mjs workspace-register alpha root=%2Ftmp%2Falpha' },
       { command: 'node ~/.copilot/command-runner/command-runner-interface.mjs workspace-unregister alpha other=value' },
