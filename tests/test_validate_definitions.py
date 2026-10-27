@@ -161,11 +161,11 @@ class ValidatorMutationTests(unittest.TestCase):
             path.write_text(path.read_text().replace("criterion_refs:\n", "", 1))
             self.assert_invalid(repo, "missing required Orchestrator marker")
 
-    def test_pr1_tfr_requires_flow_wide_cap_marker(self) -> None:
+    def test_pr1_tfr_requires_capability_envelope_marker(self) -> None:
         temp, repo = self.make_repo()
         with temp:
             path = repo / ".copilot/agents/Orchestrator.agent.md"
-            path.write_text(path.read_text().replace("**Automatic target addition**", "**Per-rule limits**", 1))
+            path.write_text(path.read_text().replace("**Authorized capabilities**", "**Loose scope**", 1))
             self.assert_invalid(repo, "missing required Orchestrator marker")
 
     def test_pr1_session_review_id_state_is_required(self) -> None:
@@ -267,8 +267,8 @@ class ValidatorMutationTests(unittest.TestCase):
             path = repo / ".copilot/agents/Orchestrator.agent.md"
             path.write_text(
                 path.read_text().replace(
-                    "explicitly authorized non-mutating execute operations",
-                    "observation operations only",
+                    "authorized verification executions with bounded incidental local effects",
+                    "unrestricted verification executions",
                 )
             )
             self.assert_invalid(repo, "missing required Orchestrator marker")
@@ -285,6 +285,58 @@ class ValidatorMutationTests(unittest.TestCase):
                 )
             )
             self.assert_invalid(repo, "missing required Orchestrator marker")
+
+    def test_goal_contract_requires_capability_boundary(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".copilot/agents/Orchestrator.agent.md"
+            path.write_text(
+                path.read_text().replace(
+                    "Each capability permission binds one resource boundary",
+                    "A permission grants any needed operation",
+                    1,
+                )
+            )
+            self.assert_invalid(repo, "missing required Orchestrator invariant")
+
+    def test_exact_in_boundary_targets_do_not_require_tfc(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".copilot/agents/Orchestrator.agent.md"
+            path.write_text(
+                path.read_text().replace(
+                    "Exact target selection within the same approved capability is not a contract patch.",
+                    "Every discovered target requires a new human approval.",
+                    1,
+                )
+            )
+            self.assert_invalid(repo, "missing required Orchestrator invariant")
+
+    def test_diagnostic_progress_needs_new_supported_evidence(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".copilot/agents/Orchestrator.agent.md"
+            path.write_text(
+                path.read_text().replace(
+                    "Diagnostic progress is different:",
+                    "Any revised hypothesis counts as progress:",
+                    1,
+                )
+            )
+            self.assert_invalid(repo, "missing required Orchestrator invariant")
+
+    def test_no_progress_triggers_replan_not_fixed_stop(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".copilot/agents/Orchestrator.agent.md"
+            path.write_text(
+                path.read_text().replace(
+                    "Two no-progress cycles require an explicit strategy change",
+                    "Two no-progress cycles stop all work",
+                    1,
+                )
+            )
+            self.assert_invalid(repo, "missing required Orchestrator invariant")
 
     def test_progress_loop_rejects_unchanged_state_retries(self) -> None:
         temp, repo = self.make_repo()
@@ -357,7 +409,7 @@ class ValidatorMutationTests(unittest.TestCase):
             path = repo / ".copilot/agents/Orchestrator.agent.md"
             path.write_text(
                 path.read_text().replace(
-                    "Target uniqueness and cap consumption use the canonical typed identity",
+                    "Target uniqueness uses the canonical typed identity",
                     "Target uniqueness uses the displayed identifier",
                     1,
                 )
@@ -369,7 +421,7 @@ class ValidatorMutationTests(unittest.TestCase):
         with temp:
             path = repo / ".copilot/agents/Orchestrator.agent.md"
             text = path.read_text()
-            text = text.replace("**Authorized operations**", "**Work boundaries**")
+            text = text.replace("**Authorized capabilities**", "**Work boundaries**")
             text = text.replace("normalized_patch:\n", "")
             text = text.replace("criterion_refs:\n", "acceptance:\n")
             path.write_text(text)
@@ -392,7 +444,7 @@ class ValidatorMutationTests(unittest.TestCase):
         temp, repo = self.make_repo()
         with temp:
             path = repo / ".copilot/agents/Orchestrator.agent.md"
-            text = path.read_text().replace("set_auto_added_targets_max:", "set_limits:", 1)
+            text = path.read_text().replace("set_max_distinct_targets:", "set_limits:", 1)
             path.write_text(text)
             self.assert_invalid(repo, "forbidden legacy marker 'set_limits:'")
 
