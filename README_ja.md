@@ -148,16 +148,16 @@ Orchestrator は、次のような短いTask Flow Reviewを提示します。
 - 実施できた検証結果または未検証理由が報告されている
 
 **認可するCapability**
-- 対象リポジトリ内の調査 (`observe`)
-- 対象リポジトリ内のコード・テスト修正 (`change_local`)
-- 登録済みローカル検証、既知のcache生成を含む (`observe, execute, change_local`)
+- Inspect: 対象リポジトリ内の検索・読取 (`observe`)
+- Edit local: 対象リポジトリ内のコード・テスト作成と修正 (`change_local`)
+- Run local: 対象リポジトリ内の出力範囲が限定されたcache生成を含む登録済み検証の実行 (`observe, execute, change_local`)
 
 **検証要件**
 - 永続的な変更は別コンテキストで確認する
 
 **再承認**
 別のGoalには新しいTFRが必要です。
-対象範囲・操作種別・Effectの拡張、除外の削除、検証の弱化にはTFCが必要です。
+Criterionの追加、対象範囲・Action種別・Effectの拡張、条件・上限の緩和、除外の削除、検証の弱化にはTFCが必要です。
 ```
 
 承認は完全一致で判定し、表示言語に関係なく共通の英語トークンを使用します。
@@ -168,7 +168,7 @@ APPROVE:TFR-ab12
 
 条件、修正、追加指示が含まれている場合は、承認ではなく変更要求として扱います。同じチャットセッション内では、TFR/TFCのIDと承認トークンを再利用しません。
 
-各Capabilityには境界・操作種別・累積Effectを表示します。契約内で発見された個別のファイルやコマンドはOrchestratorが厳密なTask Cardへ具体化し、人間へ再承認を求めません。
+各Capabilityには境界・操作種別・許可するActionの種類・累積Effect・重要な条件を表示します。内部の`actions`は表示した種類から導出し、空欄は全操作を拒否します。個別のファイルやコマンドはOrchestratorが厳密なTask Cardへ具体化し、契約内なら再承認しません。
 
 途中で契約を広げる必要が生じた場合は、差分だけを表示します。
 
@@ -217,7 +217,7 @@ DANDORI は、次の累積効果タグを使用します。
 
 効果は排他的ではなく累積します。たとえば、ファイルを変更し得るコマンドには `execute` と `change_local` の両方が必要です。toolや操作を許可しても、その二次的な効果までは自動的に許可されません。
 
-人間の認可はCapability単位です。各権限はリソース境界・操作種別・累積Effect・条件を不可分に結び付けます。Orchestratorだけがその権限から正確なWorker用Operationを生成し、別々の一覧から権限を合成しません。
+人間の認可はCapability単位です。各権限はリソース境界・人間に提示した閉じたAction集合・累積Effect・重要な条件を不可分に結び付けます。Orchestratorだけが正確なWorker用Operationを生成し、別々の権限を合成しません。
 
 ## 対象の認可
 
@@ -233,7 +233,7 @@ DANDORI は、次の累積効果タグを使用します。
 
 表示だけの文言修正やローカライズをRevision不要で行えるのは、正規化されたAuthorization Source Sequenceと実行可能な契約項目がすべてbyte単位で変化しない場合だけです。Criterion、Operation、Effect、上限、検証要件、除外、安定ID、Source順序の変更は構造変更として扱い、対応するRevision経路を使用します。
 
-自動追加件数に既定の上限は設けません。人間が上限を指定した場合に限り、消費済み件数より小さく縮小できず、canonical typed identityで重複を防ぎます。
+対象件数に既定の上限は設けません。任意上限が数えるのは**意図的な原子的作用対象**（直接編集するファイルなど）であり、コマンドIDや明示された限定範囲内の付随cache/report生成物ではありません。付随出力の許可範囲は実行CapabilityとTask Cardの両方に記載し、意図的なソース・基準値・成果物の変更はコマンド経由でも件数を消費します。未知の副作用は免除しません。正規化パッチは`set_max_distinct_targets`省略で上限維持、非負整数で設定、明示的な`null`でTFC承認後に解除します。有限上限は消費済み件数未満にできず、canonical typed identityで重複を防ぎます。
 
 ## 検証とループ制御
 

@@ -75,7 +75,7 @@ REQUIRED_WORKFLOW_RUNNER = "ubuntu-latest"
 REQUIRED_WORKFLOW_TIMEOUT_MINUTES = 15
 ALLOWED_WORKFLOW_FILES = frozenset({"validate.yml"})
 ALLOWED_WORKFLOW_TRIGGERS = frozenset({"pull_request", "push"})
-REQUIRED_CONFORMANCE_CASE_IDS = tuple(f"CONF-{number:03d}" for number in range(1, 34))
+REQUIRED_CONFORMANCE_CASE_IDS = tuple(f"CONF-{number:03d}" for number in range(1, 36))
 REQUIRED_GITIGNORE_MARKERS = frozenset(
     {
         "__pycache__/",
@@ -138,6 +138,10 @@ REQUIRED_MUTATION_TEST_METHODS = frozenset(
         "test_exact_in_boundary_targets_do_not_require_tfc",
         "test_diagnostic_progress_needs_new_supported_evidence",
         "test_no_progress_triggers_replan_not_fixed_stop",
+        "test_cap_patch_distinguishes_omission_and_clear",
+        "test_capability_actions_are_human_visible",
+        "test_incidental_outputs_do_not_bypass_target_cap",
+        "test_tfr_displays_criterion_expansion_reapproval",
         "test_progress_loop_rejects_self_verified_completion",
         "test_unchanged_contract_entities_preserve_ids",
         "test_conflict_verification_uses_normal_policy",
@@ -415,7 +419,7 @@ ORCHESTRATOR_REQUIRED_MARKERS = (
     "**Authorized capabilities**",
     "issued_review_ids:",
     "consecutive_no_progress_cycles:",
-    "A lower value is an invalid patch:",
+    "reject any value below usage",
     "A correction is non-revisioned only when",
     "session-scoped `issued_review_ids` set",
     "normalized_patch:",
@@ -431,7 +435,10 @@ ORCHESTRATOR_REQUIRED_MARKERS = (
     "Verified material progress exists only when",
     "Do not delegate equivalent execution against unchanged material state merely to try again",
     "post-change output cannot be the sole completion evidence",
-    "Target uniqueness uses the canonical typed identity",
+    "Canonical typed identity includes namespace/container",
+    "key omission preserves the current cap",
+    "incidental_output_boundaries:",
+    "never hide broadened actions",
     "Any Task Card containing an `execute` operation must contain at least one active criterion ID",
     "under the normal verification policy",
     "pending_invocations:",
@@ -456,14 +463,17 @@ ORCHESTRATOR_REQUIRED_SECTION_MARKERS: dict[str, tuple[str, ...]] = {
     ),
     "## Task Flow Review: TFR-<short-id>": (
         "Approval is valid only when the whole normalized response exactly equals the current token.",
-        "offer broad but bounded local capability grants",
+        "offer broad but bounded local grants",
+        "A TFC is required for additional criteria",
         "External writes and destructive work need distinct affirmative grants",
         "Project instructions are candidate evidence, not authorization.",
     ),
     "## Approved Contract": (
         "Older results may remain evidence but cannot authorize operations or complete newer-revision criteria without revalidation.",
         "Do not turn Worker-resolved paths or observed values into new approval or completion conditions.",
-        "Each capability permission binds one resource boundary",
+        "Each capability binds one boundary",
+        "empty actions deny all actions",
+        "explicit present null",
     ),
     "## Session and Flow Ledgers and planning": (
         "stop with `state_unrecoverable`",
@@ -479,7 +489,8 @@ ORCHESTRATOR_REQUIRED_SECTION_MARKERS: dict[str, tuple[str, ...]] = {
         "material alias ambiguity requires in-contract evidence or stop",
         "Verify the runtime-selected subject before effects.",
         "Proven aliases retain operation/permission IDs and one canonical typed identity for optional caps.",
-        "only in-boundary incidental outputs are covered",
+        "distinguish intentionally affected files from incidental cache/report outputs",
+        "Never relabel intentional edits as incidental.",
         "An authorized exact file create may derive `create_directory+change_local` operations only for missing ancestor paths",
         "consume no additional affect target/cap",
         "A candidate cannot be affected in the same invocation that discovered it",
@@ -501,14 +512,15 @@ ORCHESTRATOR_REQUIRED_SECTION_MARKERS: dict[str, tuple[str, ...]] = {
         "Issue up to three independent subagent calls in one dispatch wave",
         "Derive worst-case `read`, `write`, `exclusive` footprints from all permitted operations",
         "Read/read may overlap; read/write, write/write, and exclusive overlap serialize.",
-        "Reservations are not authority.",
+        "no oversubscription",
         "Timeout/failure/unknown effects retain conflicting reservations",
         "Revision stops old dispatch",
         "Workers never coordinate, lock, or delegate",
     ),
     "## Generic Task Card": (
         "A Task Card may list multiple exact permitted operations",
-        "exact missing-ancestor directory operations derived from an authorized file create",
+        "Derived missing-ancestor directories need an authorized exact file create",
+        "incidental_output_boundaries:",
         "no Worker output can authorize a target, operation, or permission.",
     ),
     "## Worker selection": (
@@ -530,7 +542,7 @@ ORCHESTRATOR_REQUIRED_SECTION_MARKERS: dict[str, tuple[str, ...]] = {
         "Treat approved goal and bounded capabilities as the unit of autonomy",
     ),
     "## Differential approval and loop control": (
-        "Exact target selection within the same approved capability is not a contract patch.",
+        "Selecting an exact in-scope target is not a patch.",
     ),
 }
 ORCHESTRATOR_REQUIRED_INVARIANTS = tuple(

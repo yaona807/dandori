@@ -232,7 +232,7 @@ class ValidatorMutationTests(unittest.TestCase):
         temp, repo = self.make_repo()
         with temp:
             path = repo / ".copilot/agents/Orchestrator.agent.md"
-            path.write_text(path.read_text().replace("A lower value is an invalid patch:", "A lower value is accepted:", 1))
+            path.write_text(path.read_text().replace("reject any value below usage", "accept lower values than usage", 1))
             self.assert_invalid(repo, "missing required Orchestrator marker")
 
     def test_pr1_non_revision_wording_rule_is_required(self) -> None:
@@ -292,7 +292,7 @@ class ValidatorMutationTests(unittest.TestCase):
             path = repo / ".copilot/agents/Orchestrator.agent.md"
             path.write_text(
                 path.read_text().replace(
-                    "Each capability permission binds one resource boundary",
+                    "Each capability binds one boundary",
                     "A permission grants any needed operation",
                     1,
                 )
@@ -305,7 +305,7 @@ class ValidatorMutationTests(unittest.TestCase):
             path = repo / ".copilot/agents/Orchestrator.agent.md"
             path.write_text(
                 path.read_text().replace(
-                    "Exact target selection within the same approved capability is not a contract patch.",
+                    "Selecting an exact in-scope target is not a patch.",
                     "Every discovered target requires a new human approval.",
                     1,
                 )
@@ -333,6 +333,58 @@ class ValidatorMutationTests(unittest.TestCase):
                 path.read_text().replace(
                     "Two no-progress cycles require an explicit strategy change",
                     "Two no-progress cycles stop all work",
+                    1,
+                )
+            )
+            self.assert_invalid(repo, "missing required Orchestrator invariant")
+
+    def test_cap_patch_distinguishes_omission_and_clear(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".copilot/agents/Orchestrator.agent.md"
+            path.write_text(
+                path.read_text().replace(
+                    "key omission preserves the current cap",
+                    "null always means no update",
+                    1,
+                )
+            )
+            self.assert_invalid(repo, "missing required Orchestrator marker")
+
+    def test_capability_actions_are_human_visible(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".copilot/agents/Orchestrator.agent.md"
+            path.write_text(
+                path.read_text().replace(
+                    "empty actions deny all actions",
+                    "empty actions allow all actions",
+                    1,
+                )
+            )
+            self.assert_invalid(repo, "missing required Orchestrator invariant")
+
+    def test_incidental_outputs_do_not_bypass_target_cap(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".copilot/agents/Orchestrator.agent.md"
+            path.write_text(
+                path.read_text().replace(
+                    "Never relabel intentional edits as incidental.",
+                    "Intended source edits may be counted as caches.",
+                    1,
+                )
+            )
+            self.assert_invalid(repo, "missing required Orchestrator invariant")
+
+    def test_tfr_displays_criterion_expansion_reapproval(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".copilot/agents/Orchestrator.agent.md"
+            path.write_text(
+                path.read_text().replace(
+                    "A TFC is required for additional criteria",
+                    "New criteria never require review",
                     1,
                 )
             )
@@ -409,8 +461,8 @@ class ValidatorMutationTests(unittest.TestCase):
             path = repo / ".copilot/agents/Orchestrator.agent.md"
             path.write_text(
                 path.read_text().replace(
-                    "Target uniqueness uses the canonical typed identity",
-                    "Target uniqueness uses the displayed identifier",
+                    "Canonical typed identity includes namespace/container",
+                    "Display identity determines uniqueness",
                     1,
                 )
             )

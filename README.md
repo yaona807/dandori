@@ -148,16 +148,16 @@ Fix the specified defect.
 - Available verification results or the reason verification was unavailable are reported.
 
 **Authorized capabilities**
-- Investigate the target repository (`observe`)
-- Edit code and tests inside the target repository (`change_local`)
-- Execute registered local checks, including bounded cache writes (`observe, execute, change_local`)
+- Inspect: search/read within the target repository (`observe`)
+- Edit local: create/modify code and tests within the target repository (`change_local`)
+- Run local: execute registered checks with bounded cache output scopes inside the repository (`observe, execute, change_local`)
 
 **Verification requirements**
 - Persistent changes are checked in a separate context.
 
 **Reapproval**
 A new TFR is required for a different goal.
-A TFC is required for a broader boundary, action family, effects, removed exclusions, or reduced verification.
+A TFC is required for additional criteria, broader boundaries/action classes/effects, relaxed conditions or caps, removed exclusions, or reduced verification.
 ```
 
 Approval is exact-token based and language-neutral:
@@ -168,7 +168,7 @@ APPROVE:TFR-ab12
 
 Extra conditions, corrections, or additional instructions are treated as a change request, not approval. TFR/TFC IDs and approval tokens are never reused within the same chat session.
 
-Every capability displays its boundary, operation family, and cumulative effects. New exact in-scope file or command subjects require no human reapproval, but the Orchestrator creates a narrow Task Card for each Worker invocation.
+Every capability displays its boundary, family, approved action classes, cumulative effects, and material conditions. The internal `actions` set must come from those approved classes; an empty set denies all actions. New exact in-scope files or commands need no reapproval, but each Worker gets a narrow Task Card.
 
 If the contract must widen later, the Orchestrator displays only the difference:
 
@@ -217,7 +217,7 @@ DANDORI uses cumulative effect tags:
 
 Effects are cumulative, not exclusive. For example, a command that can modify files requires both `execute` and `change_local`. Allowing a tool or action never implicitly authorizes its secondary effects.
 
-Human authorization is capability-based: each indivisible grant binds one resource boundary, action family, complete effects, and conditions. Orchestrator translates a matching grant into exact Worker operations; separate lists never multiply authority.
+Human authorization is capability-based: each indivisible grant binds a resource boundary, a closed set of displayed action classes, complete effects, and material conditions. Orchestrator translates a matching grant into exact Worker operations; separate grants never multiply authority.
 
 ## Target authorization
 
@@ -240,7 +240,7 @@ The active contract is a materialized view reconstructed by folding an append-on
 
 Display-only wording or localization can avoid a revision only when the normalized authorization source sequence and every executable contract field remain byte-for-byte unchanged. A change to a criterion, operation, effect, limit, verification requirement, exclusion, stable ID, or source order is structural and follows the applicable revision path.
 
-No automatic target-count cap is imposed by default. If the human sets one, it cannot be lowered below already affected unique subjects; canonical typed identities avoid alias double-counting.
+No target-count cap is imposed by default. An optional cap counts **intentional atomic effect targets** (e.g. directly edited files), not command identities or declared disposable cache/report outputs. Such incidental outputs require separately bounded scopes inside the approved local-execution grant and exact Task Card; intentional source/baseline/artifact changes always count, even when caused by commands. Unknown side effects are not exempt. Identical canonical typed targets count once. Contract patches omit `set_max_distinct_targets` to preserve the cap, use a nonnegative integer to set it, and use an explicit present `null` to clear it with approved TFC; a finite cap cannot drop below consumed usage.
 
 ## Verification and limits
 
