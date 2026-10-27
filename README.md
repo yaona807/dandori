@@ -63,6 +63,8 @@ The Orchestrator may change workers, reorder internal work, split or combine Tas
 
 For compatible operations already explicitly authorized, a single Task Card can list several exact targets. The Worker may select among those targets and choose the execution order and valid arguments without another approval. This does not authorize additional operations just because they are registered or discoverable. A Worker reports confirmed missing prerequisites (for example, a workspace or command registration) with its evidence and missing information; only the Orchestrator decides whether to request a TFC, delegate registration, and issue a new Task Card to resume. The Worker does not register or resume on its own initiative.
 
+When applicable `AGENTS.md` instructions require local build, lint, format, or test commands, the Orchestrator should offer a bounded rule for those **already-registered** workspace commands in the *initial* TFR. After approval, an exact matching registered command can be discovered, checked against its current definition and effects, and promoted under the approved rule without a second approval for its ID. Instructions and registration alone never confer permission; missing registrations, changed command definitions, unknown effects, or commands outside the rule do not inherit it. Within the approved goal, the Orchestrator continues implementation, corrective edits, and reruns without asking again unless authority must widen or a genuine user decision is needed. Host-level Copilot/terminal approval remains separate and must not be bypassed.
+
 ## Key features
 
 - **Compact approval**: users review one goal, completion criteria, complete target/action/effect operations, target-expansion limit, verification requirements, exclusions, and reapproval conditions.
@@ -291,6 +293,7 @@ assets/
 ## Compatibility and prerequisites
 
 - DANDORI agents explicitly target VS Code.
+- Bundled agents declare both VS Code Local and Copilot harness tool aliases where supported (`agent`/`task` for delegation and `execute/runInTerminal`/`execute` for CommandRunner). These declarations are compatibility candidates, not proof of runtime availability. Verify the active harness and loaded tools using the [conformance cases](./tests/conformance.md), especially `CONF-024`.
 - Subagent restriction uses the `agents` allowlist, which is currently an experimental VS Code feature.
 - `GitHubResearcher` requires the GitHub Pull Requests extension and its exposed tools.
 - `BrowserQA` requires the configured browser tool set.

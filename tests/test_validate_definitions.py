@@ -52,12 +52,14 @@ class ValidatorMutationTests(unittest.TestCase):
             self.assert_invalid(repo, "Orchestrator tools must be exactly")
 
     def test_worker_rejects_agent_tool(self) -> None:
-        temp, repo = self.make_repo()
-        with temp:
-            path = repo / ".copilot/agents/Writer.agent.md"
-            text = path.read_text().replace("tools:\n", "tools:\n  - agent\n", 1)
-            path.write_text(text)
-            self.assert_invalid(repo, "worker must not include the agent tool")
+        for delegation_tool in ("agent", "task"):
+            with self.subTest(delegation_tool=delegation_tool):
+                temp, repo = self.make_repo()
+                with temp:
+                    path = repo / ".copilot/agents/Writer.agent.md"
+                    text = path.read_text().replace("tools:\n", f"tools:\n  - {delegation_tool}\n", 1)
+                    path.write_text(text)
+                    self.assert_invalid(repo, "worker must not include the agent tool")
 
     def test_runner_cannot_lose_delegated_command_selection(self) -> None:
         temp, repo = self.make_repo()

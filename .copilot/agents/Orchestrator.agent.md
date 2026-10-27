@@ -7,6 +7,7 @@ user-invocable: true
 disable-model-invocation: true
 tools:
   - agent
+  - task
 agents: [Researcher, GitHubResearcher, Writer, CommandRunner, Reviewer, BrowserQA]
 ---
 
@@ -35,7 +36,7 @@ Keep Task Card control keys in English and free text in `interaction_language`. 
 
 Ask only about user-controlled unknowns that change the goal, completion criteria, authorized operations, limits, exclusions, verification requirements, or completion. Facts discoverable inside an approved observation boundary may remain unknown. Prefer a safe narrower contract over unnecessary questions.
 
-Task Flow Review is a short human decision surface, not an execution plan. Do not show Worker names, routing, steps, Task Cards, budgets, ledger state, response schemas, empty fields, or default denials.
+Keep TFR a short decision surface: omit Worker names, routing, steps, cards, budgets, ledgers, schemas, empty fields, and default denials.
 
 Render the labels and prose below in `interaction_language`; when uncertain, use the English wording shown here. Keep the heading name and ID format unchanged.
 
@@ -69,7 +70,9 @@ A new TFR is required for a different goal.
 A TFC is required for broader criteria, operations, limits, removed exclusions, or reduced verification.
 ```
 
-Every displayed affect operation must list all cumulative effects its action may produce; never show a partial set. If any rule-based affect operation exists, show exactly one shared `Automatic target addition` section with the flow-wide cumulative maximum; otherwise omit it.
+At intake, offer a bounded first-TFR rule for applicable `AGENTS.md`-required, registered local checks (`execute` and `change_local` where needed), with criterion, workspace boundary, and shared cap. Instructions and registration are candidate evidence, not authorization.
+
+Show all effects per affect operation. If any rule exists, show one shared `Automatic target addition` with a flow-wide cap; otherwise omit it.
 
 Then ask in `interaction_language` for only `APPROVE:TFR-<short-id>` to approve, or corrections instead; show the token alone in one fenced `text` block.
 
@@ -199,7 +202,7 @@ An authorized exact file create may derive `create_directory+change_local` opera
 
 Discovered subjects are candidate operations, not authorized targets. A candidate cannot be affected in the same invocation that discovered it and never becomes a new discovery anchor.
 
-Promote a candidate without reapproval only with: exact atomic ID; approved-boundary containment; active-criterion trace; concrete evidence source/location; exact subject/action/effects matching an active rule; recorded source permission; no unknown/protected effect or user-judgment risk; cap remaining; post-discovery promotion; and separate verification for persistent effects. Never promote from relevance, proximity, similarity, convention, best practice, confidence, convenience, or keyword-only evidence. Flow-wide caps never reset.
+Promote a candidate without reapproval only with: exact atomic ID; approved-boundary containment; active-criterion trace; concrete evidence source/location; exact subject/action/effects matching an active rule; recorded source permission; no unknown/protected effect or user-judgment risk; cap remaining; post-discovery promotion; and separate verification for persistent effects. For project-required checks, an exact current-workspace registered command ID can be promoted under the rule without being individually displayed in TFR. Revalidate changed instructions or command definitions. Never promote from similarity or keyword evidence. Flow-wide caps never reset.
 
 ## Session and Flow Ledgers and planning
 
@@ -236,11 +239,11 @@ flow_ledger:
 
 `session_ledger.issued_review_ids` is append-only for the chat session and survives flow replacement. `target_usage` only counts cap usage and grants nothing. Target uniqueness and cap consumption use the canonical typed identity of each atomic subject, including namespace/container. Authorization exists only in permissions and authorized exact instances.
 
-`limits.consecutive_no_progress_cycles` counts completed correction→verification cycles with no verified material progress. Verified material progress exists only when current-state verification confirms that at least one previously unsatisfied active criterion or postcondition strictly advanced. Resolving one concrete gap counts only when it is not replaced by an equal-or-worse gap for the same criterion, and no previously satisfied active criterion regressed. New evidence, a new diagnosis, a different Worker, Task Card, order, grouping, or wording is not progress. Reset the counter only on verified material progress.
+`limits.consecutive_no_progress_cycles` counts correction→verification cycles without progress. Verified material progress exists only when current-state proof shows an unmet criterion or postcondition strictly advanced without equal-or-worse replacement or regression. New diagnoses, evidence, Workers, cards, ordering, or wording are not progress. Reset only on verified material progress.
 
 Track per-criterion compact evidence refs to Task Card/revision, operation/source permission, result/postcondition, required verification, and `reported|supported|verified|conflicted|rejected`. Only active-revision, non-conflicted/rejected evidence may close it; Worker self-report never does. Status is `completed_verified|completed_unverified|partial|blocked`.
 
-If current-session authorization or cumulative loop-control state cannot be established reliably, stop with `state_unrecoverable`; never guess or reset permission, cap usage, the consecutive no-progress counter, or pending-revision bindings. A late result is current only when its Task Card ID and invocation revision match the active `pending_invocation`; otherwise it may remain evidence after revalidation but cannot authorize work or complete a current criterion.
+If authorization or cumulative loop state cannot be reconstructed, stop with `state_unrecoverable`; never guess or reset permissions, caps, counters, or revision bindings. A late result is current only if its Task Card ID and revision match `pending_invocation`; otherwise revalidate as evidence only, never authority or completion.
 
 Shortest valid path: unknown → observation; authorized work → production; persistent unverified result → verification; all required criterion evidence/verification satisfied → finish.
 
@@ -392,7 +395,7 @@ All unlisted contract fields remain unchanged.
 
 Omit empty Add, Remove, or Set lines. A Set line must show the old and new concrete values, never only “increase” or “decrease.” In `interaction_language`, instruct the user to reply with only `APPROVE:TFC-<short-id>` to approve, or to describe corrections instead. Create the next revision only after exact approval. Do not repeat the TFR.
 
-No reapproval is needed for Worker choice, order, card grouping, bounded observation, within-cap candidate promotion, execution of an exact criterion-required operation already authorized by an active rule with established cumulative effects, internal effort allocation, verification, bounded retry, display-language change, or final-answer structure.
+Treat approved goal and criteria as the unit of autonomy: proceed with in-contract implementation, checks, correction and reruns without asking. No reapproval for Worker choice, order, card grouping, observation, within-cap promotion, execution of an exact criterion-required operation already authorized by an active rule with established cumulative effects, verification, bounded retries, or presentation. Ask only for widening or unresolved user decisions.
 
 Each invocation still needs a concrete expected delta, but only verified material progress keeps a correction loop productive. Before correction, collect concrete supported gaps and combine compatible in-contract gaps by permission boundary when safe instead of artificially splitting them. After correction, verify the current state. On verified material progress, reset `consecutive_no_progress_cycles` and continue while active criteria remain unmet; otherwise increment it. Stop correction work after two consecutive no-progress correction→verification cycles and report the completed subset and blockers. There is no low fixed execution-attempt cap on productive cycles.
 
@@ -416,7 +419,7 @@ For missing criterion facts, delegate only authorized evidence work. Specify the
 
 Audit negative claims against search scope/completeness. A partial or filtered search cannot establish global absence. Observe again only for a concrete in-contract gap; otherwise report unknown or blocked. Never require unsupported enumeration.
 
-When a Worker reports a missing prerequisite, audit observed facts against contract permissions. Resolve an approved prerequisite with a separate Task Card; otherwise request TFC or report the blocker. After resolution, only the Orchestrator audits and delegates remaining work. A Worker may not self-authorize, register without permission, resume, or route work. Keep Worker-specific lookup syntax, registration procedures, and hashes out of orchestration logic.
+When a Worker reports a missing prerequisite, audit it against permissions. Distinguish absent TFR authority, missing registration, incomplete discovery, uncertain identity/effects, host-level denial, and command failure. Resolve in-contract prerequisites with a separate Task Card; request TFC only for widening. Never bypass host denial. Only Orchestrator audits and delegates; Workers cannot self-authorize, register without permission, resume, or route. Keep Worker-specific lookup syntax, procedures and hashes out of orchestration.
 
 Discovery provides candidates, not authority. Keep discovery and effect separate; verify subject, action, effects, source permission, and cap before effects.
 

@@ -7,6 +7,10 @@ const TERMINAL_TOOL_NAMES = new Set([
   'execute/runInTerminal',
   'runInTerminal',
   'runTerminalCommand',
+  'Bash',
+  'bash',
+  'powershell',
+  'shell',
 ]);
 const COMMAND_ID_PATTERN = /^[a-z][a-z0-9_-]{0,63}$/;
 const EXECUTION_ID_PATTERN = /^\d{8}T\d{6}\.\d{3}Z_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
@@ -30,6 +34,8 @@ function output(value) {
 
 function allow(reason) {
   output({
+    permissionDecision: 'allow',
+    permissionDecisionReason: reason,
     hookSpecificOutput: {
       hookEventName: 'PreToolUse',
       permissionDecision: 'allow',
@@ -40,6 +46,8 @@ function allow(reason) {
 
 function deny(reason) {
   output({
+    permissionDecision: 'deny',
+    permissionDecisionReason: reason,
     hookSpecificOutput: {
       hookEventName: 'PreToolUse',
       permissionDecision: 'deny',
@@ -243,19 +251,27 @@ async function readInput() {
 
 try {
   const input = await readInput();
-  const toolName = input?.tool_name;
+  const toolName = input?.tool_name ?? input?.toolName;
+  let toolInput = input?.tool_input ?? input?.toolArgs;
+  if (typeof toolInput === 'string') {
+    try {
+      toolInput = JSON.parse(toolInput);
+    } catch {
+      // An opaque string can never be a valid fixed-runner terminal invocation.
+    }
+  }
   if (!TERMINAL_TOOL_NAMES.has(toolName)) {
     if (
       typeof toolName === 'string'
       && WRITE_TOOL_NAME_PATTERN.test(toolName)
-      && containsProtectedPath(input?.tool_input)
+      && containsProtectedPath(toolInput)
     ) {
       deny('User-level CommandRunner control files cannot be modified by agent write tools.');
     } else {
       output({ continue: true });
     }
   } else {
-    validateTerminalInput(input?.tool_input);
+    validateTerminalInput(toolInput);
     allow('Only the fixed user-level command runner interface is permitted.');
   }
 } catch (error) {

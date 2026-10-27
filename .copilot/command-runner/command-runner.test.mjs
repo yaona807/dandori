@@ -260,7 +260,7 @@ test('distributed agent is user-level, agent-scoped, and fixed-runner-only', asy
   assert.match(source, /^name: CommandRunner$/mu);
   assert.match(source, /^user-invocable: false$/mu);
   assert.match(source, /^disable-model-invocation: true$/mu);
-  assert.match(source, /tools:\n  - execute\/runInTerminal\nagents: \[\]\nhooks:/u);
+  assert.match(source, /tools:\n  - execute\/runInTerminal\n  - execute\nagents: \[\]\nhooks:/u);
   assert.match(source, /command: node ~\/\.copilot\/command-runner\/command-runner-hook\.mjs/u);
   assert.match(source, /timeout: 30/u);
   assert.match(source, /node ~\/\.copilot\/command-runner\/command-runner-interface\.mjs list/u);
@@ -877,6 +877,47 @@ test('hook permits canonical bounded-interface calls and denies direct core or c
       JSON.parse(compound.stdout).hookSpecificOutput.permissionDecision,
       'deny',
     );
+  });
+});
+
+test('hook applies the same fixed-interface policy to the Copilot harness tool envelope', async () => {
+  await withFixture(async (fixture) => {
+    const accepted = 'node ~/.copilot/command-runner/command-runner-interface.mjs list';
+    for (const [toolName, args] of [
+      ['Bash', { command: accepted }],
+      ['bash', { command: accepted }],
+      ['powershell', { command: accepted }],
+    ]) {
+      const result = runHook(fixture, {
+        hook_event_name: 'PreToolUse',
+        cwd: fixture.alpha,
+        tool_name: toolName,
+        tool_input: args,
+      });
+      assert.equal(result.status, 0, result.stderr);
+      assert.equal(JSON.parse(result.stdout).permissionDecision, 'allow');
+    }
+
+    const unsafe = runHook(fixture, {
+      sessionId: 'copilot-session',
+      toolName: 'bash',
+      toolArgs: JSON.stringify({ command: `${accepted} && npm publish` }),
+    });
+    assert.equal(unsafe.status, 0, unsafe.stderr);
+    assert.equal(JSON.parse(unsafe.stdout).permissionDecision, 'deny');
+
+    const raw = runHook(fixture, {
+      hook_event_name: 'PreToolUse',
+      tool_name: 'Bash',
+      tool_input: { command: 'npm test' },
+    });
+    assert.equal(JSON.parse(raw.stdout).permissionDecision, 'deny');
+
+    const protectedWrite = runHook(fixture, {
+      toolName: 'Edit',
+      toolArgs: { path: '~/.copilot/command-runner/workspaces.json', content: '{}' },
+    });
+    assert.equal(JSON.parse(protectedWrite.stdout).permissionDecision, 'deny');
   });
 });
 

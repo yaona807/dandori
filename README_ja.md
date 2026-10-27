@@ -63,6 +63,8 @@ Orchestrator は、契約内であればWorkerの変更、実行順の変更、T
 
 同じ契約で許可した正確な操作対象が複数ある場合は、1枚のTask Cardでまとめて委譲できます。Workerはその集合から必要な操作を選び、順番や登録定義内の引数を判断できます。ただし、登録済みという理由だけで未承認コマンドは実行できません。Workspaceやコマンドの未登録が確認された場合、Workerは根拠と不足情報を報告します。登録の追加承認・委譲・その後の作業再開はOrchestratorが行い、Workerは独断で登録や再実行をしません。
 
+適用対象の`AGENTS.md`にビルド・Lint・整形・テストなどの実行指示がある場合、Orchestratorは**そのWorkspaceに登録済みの必須コマンド**を初回TFRの境界付き認可ルールへ含める提案をします。承認後は、現在の登録定義、効果、指示の適用範囲を確かめてから、ルールに一致する正確なコマンドIDを追加承認なしで採用できます。`AGENTS.md`や登録の存在そのものは権限ではなく、未登録・定義変更・不明な副作用・ルール外の操作は自動許可されません。契約内の実装・修正・再検証は自律的に継続し、拡張やユーザーの判断が必要な場合だけ確認します。Copilot／terminal本体の権限確認は別の仕組みであり、回避しません。
+
 ## 主な特徴
 
 - **短い承認画面**: ユーザーが確認するのは、Goal、Completion Criterion、完全な対象・Action・Effect Operation、自動追加上限、検証要件、除外、再承認条件だけ
@@ -294,6 +296,7 @@ assets/
 ## 互換性と前提条件
 
 - DANDORI Agentは明示的にVS Codeを対象とします。
+- 対応するAgentは、VS Code Local／Copilot harness双方のToolエイリアス（委譲の`agent`／`task`、CommandRunnerの`execute/runInTerminal`／`execute`など）を宣言します。これは実行可能性の保証ではありません。使用中のharnessでToolが動作するか、[conformanceケース](./tests/conformance.md)（特に`CONF-024`）で確認してください。
 - Subagent制限には、現在Experimentalである`agents` allowlistを使用します。
 - `GitHubResearcher`にはGitHub Pull Requests拡張機能と、その拡張機能が公開するToolが必要です。
 - `BrowserQA`には設定済みのbrowser Tool群が必要です。

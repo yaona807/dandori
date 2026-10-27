@@ -6,6 +6,9 @@ target: vscode
 user-invocable: false
 disable-model-invocation: true
 tools:
+  - read
+  - search
+  - web
   - search/codebase
   - search/usages
   - search/fileSearch

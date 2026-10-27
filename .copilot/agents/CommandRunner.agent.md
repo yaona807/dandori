@@ -19,6 +19,7 @@ user-invocable: false
 disable-model-invocation: true
 tools:
   - execute/runInTerminal
+  - execute
 agents: []
 hooks:
   PreToolUse:

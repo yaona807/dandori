@@ -253,6 +253,7 @@ The cache is temporary observation data, not an audit log. Before a new run, the
 - Commands are started with `spawn(..., shell: false)`.
 - On timeout or output-limit termination, the runner stops the command's POSIX process group, escalating from `SIGTERM` to `SIGKILL` after a fixed grace period so ordinary descendants do not outlive the bounded run. Deliberately detached descendants are outside this guarantee.
 - The agent-scoped hook permits only the fixed runner interface and protects the user-level control files.
+- The hook recognizes both legacy `execute/runInTerminal` and Copilot harness terminal tool names such as `Bash`, and emits permission decisions in both hook envelope formats. Static tests do not establish that a particular VS Code/Copilot installation invokes or enforces the hook; verify with `CONF-024` in [`tests/conformance.md`](../../tests/conformance.md).
 - `output` accepts only a valid execution ID and only resolves output under the current workspace's execution directory; arbitrary paths are not accepted.
 - Execution output is untrusted data and does not grant authority for follow-up commands.
 
