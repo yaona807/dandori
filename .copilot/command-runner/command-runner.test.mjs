@@ -921,6 +921,43 @@ test('hook applies the same fixed-interface policy to the Copilot harness tool e
   });
 });
 
+test('hook validates Local execution aliases instead of rejecting the fixed runner', async () => {
+  await withFixture(async (fixture) => {
+    const accepted = 'node ~/.copilot/command-runner/command-runner-interface.mjs list';
+    const localEnvelopes = [
+      (command) => ({
+        hook_event_name: 'PreToolUse',
+        tool_name: 'execute',
+        tool_input: { command },
+      }),
+      (command) => ({
+        sessionId: 'local-session',
+        toolName: 'terminal/execute',
+        toolArgs: JSON.stringify({ command }),
+      }),
+    ];
+
+    for (const envelope of localEnvelopes) {
+      const allowed = runHook(fixture, envelope(accepted));
+      assert.equal(allowed.status, 0, allowed.stderr);
+      assert.equal(JSON.parse(allowed.stdout).permissionDecision, 'allow');
+      assert.equal(JSON.parse(allowed.stdout).hookSpecificOutput.permissionDecision, 'allow');
+
+      for (const command of ['npm test', `${accepted} && npm publish`]) {
+        const denied = runHook(fixture, envelope(command));
+        assert.equal(denied.status, 0, denied.stderr);
+        assert.equal(JSON.parse(denied.stdout).permissionDecision, 'deny');
+      }
+    }
+
+    const overridden = runHook(fixture, {
+      tool_name: 'execute',
+      tool_input: { command: accepted, cwd: fixture.beta },
+    });
+    assert.equal(JSON.parse(overridden.stdout).permissionDecision, 'deny');
+  });
+});
+
 test('hook denies terminal execution overrides and background execution', async () => {
   await withFixture(async (fixture) => {
     for (const toolInput of [
@@ -992,18 +1029,17 @@ test('hook permits only explicit read-only non-terminal tools', async () => {
 
 test('hook fails closed for unknown terminal names in both harness envelopes', async () => {
   await withFixture(async (fixture) => {
+    const accepted = 'node ~/.copilot/command-runner/command-runner-interface.mjs list';
     for (const input of [
       {
         hook_event_name: 'PreToolUse',
-        tool_name: 'execute',
-        tool_input: { command: 'npm publish' },
+        tool_name: 'execute/unrecognizedTerminal',
+        tool_input: { command: accepted },
       },
       {
         sessionId: 'copilot-session',
-        toolName: 'terminal/execute',
-        toolArgs: JSON.stringify({
-          command: 'node ~/.copilot/command-runner/command-runner-interface.mjs list',
-        }),
+        toolName: 'terminal/unrecognizedExecute',
+        toolArgs: JSON.stringify({ command: accepted }),
       },
       {
         hook_event_name: 'PreToolUse',

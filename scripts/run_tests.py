@@ -108,7 +108,9 @@ REQUIRED_TEST_METHODS = {
         "test_validation_workflow_requires_validator_command",
         "test_verification_execute_policy_is_required",
         "test_worker_rejects_agent_tool",
+        "test_worker_selection_requires_positive_execution_capability",
         "test_workflow_actions_require_full_commit_sha",
+        "test_writer_description_declares_no_terminal_execution",
     ),
     "ReleaseArchiveValidationTests": (
         "test_release_archive_is_valid",

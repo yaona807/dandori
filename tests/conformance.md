@@ -49,6 +49,7 @@ cases:
   CONF-028: pass|fail|blocked|not_run
   CONF-029: pass|fail|blocked|not_run
   CONF-030: pass|fail|blocked|not_run
+  CONF-031: pass|fail|blocked|not_run
 notes: ""
 ```
 
@@ -431,14 +432,14 @@ Use a disposable current workspace with applicable root and nested `AGENTS.md` f
 
 **Input**
 
-Install the bundled user-level agents and fixed runner in a disposable VS Code/Copilot environment. Select the current Copilot harness, inspect the actual discovered Worker tool lists and the native `task` delegation capability, and invoke CommandRunner's fixed-interface `list` and `describe` through the Copilot terminal tool. Attempt an unrelated raw project command and a compound shell command inside the CommandRunner context. Exercise the equivalent legacy Local harness when available. Capture effective hook input and output shapes without recording secrets.
+Install the bundled user-level agents and fixed runner in a disposable VS Code environment. First select the Local harness and inspect the actual terminal tool names, arguments, discovered Worker tool lists, and `PreToolUse` envelopes. Invoke CommandRunner's fixed-interface `list` and `describe` through the available Local execution tool. Repeat through the Copilot terminal tool and native `task` delegation when available. Attempt an unrelated raw project command, a compound shell command, and a terminal cwd/environment override in each available harness. Capture effective hook input and output shapes without recording secrets.
 
 **Expected**
 
 - The Orchestrator delegates only to its permitted workers through a real available subagent tool. Worker lists include the needed compatible read/edit/execute capabilities without accidentally granting delegation, general terminal use, or file editing to the wrong worker.
 - The active Copilot harness resolves the Orchestrator to GPT-6.1 Sol and the six bundled Workers to GPT-6 Luna, all with medium reasoning effort; inspect the effective model rather than inferring it from frontmatter alone. Report unavailable models or ignored effort fields as runtime incompatibilities.
-- The agent-scoped `PreToolUse` hook is discovered and fires on the actual Copilot terminal tool. It allows canonical fixed-interface invocations and denies raw or compound commands, with a decision shape the active host recognizes; a mere valid local JSON response is not treated as runtime proof.
-- An unrecognized terminal-tool name (including an `execute`-shaped runtime envelope) is denied instead of falling through to normal execution. Known read-only aliases may continue, but unexpected write and execution tools are rejected within CommandRunner's scoped hook.
+- The agent-scoped `PreToolUse` hook is discovered and fires on the actual Local terminal tool and on the Copilot tool when supported. It permits canonical fixed-interface invocations through the Local `execute` / `terminal/execute` aliases and known Copilot aliases, denying raw, compound, or overridden execution with a decision shape the active host recognizes. A passing isolated hook test is not runtime proof.
+- Known Local execution aliases receive the same strict command validation as Copilot terminal aliases. Other unknown tool names remain denied; explicitly read-only aliases may continue, but unexpected write tools are rejected within CommandRunner's scoped hook.
 - Actual workspace and command identity guards still reject stale or wrong-target execution before launch. A failed host tool approval is distinguished from a DANDORI TFR authorization gap.
 - All legacy Local harness paths that are still supported continue to apply the fixed-runner policy, or the incompatibility is explicitly reported. Record VS Code/Copilot versions, selected harness, observed tool names, and pass/fail evidence.
 
@@ -514,3 +515,17 @@ Launch two independent read-only subagents with oversized results. Have the runt
 - Each recovery card observes only its own runtime-supplied exact artifact using `runtime_result_transport`, and the recovered content is audited against the originating invocation, not whichever result was most recent.
 - Worker-authored paths cannot authorize recovery. Missing origin binding, nested spills or failed recovery stop with `worker_response_contract_failure` without leaking other card contents or widening the contract.
 - Recovery does not grant authority/completion, and neither the workers nor their definitions acquire flow-ledger or parallel-control responsibilities.
+
+### CONF-031 — Select Workers by their supported operation modality before delegation
+
+**Input**
+
+In Local and Copilot harnesses when available, request an implementation followed by an authorized local test. Provide runtime-visible descriptions for an edit-only implementation Worker, a registered-command execution Worker, and a vaguely described general implementation Worker. Separately provide a custom Worker whose description explicitly supports both editing and command execution. Include an `execute+change_local` command operation and a test-required result that depends on an earlier file edit. Repeat with no positively command-capable Worker available.
+
+**Expected**
+
+- Orchestrator checks each Task Card's required operation modality against positive runtime-visible capability evidence before delegating; implementing or verifying an outcome alone does not imply terminal access. It never sends an `execute` operation to the edit-only or ambiguous Worker, even for a task whose overall goal is implementation.
+- Editing and subsequent command execution are assigned to compatible Workers with separate Task Cards and a dependency/verification barrier. `execute+change_local` is treated as a command operation with cumulative local side effects, not as a requirement for the command Worker to have an editor tool.
+- A Worker described as supporting both modalities may perform independently authorized compatible work without role-name-based restrictions, while production and verification remain separate invocations when required by the contract.
+- When no positively eligible command-capable Worker remains, Orchestrator returns `no_suitable_worker` without probing an incompatible Worker, inventing execution capability, or changing permissions. Unexpected runtime incompatibilities still use the existing bounded `blocked` fallback.
+- Worker selection uses only runtime-visible names/descriptions, never reads Worker definitions or introduces static per-Worker routing tables. Parallel scheduling, authorization, and Task Card audit are unchanged.

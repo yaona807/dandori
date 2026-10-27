@@ -85,7 +85,7 @@ When applicable project instructions (such as `AGENTS.md`) require local build, 
 
 The Orchestrator does not contain a static worker capability manifest, worker-specific routing table, or duplicated worker instructions.
 
-At execution time it selects a plausible worker from the runtime-visible allowed agent names and descriptions, then sends one self-contained bounded Task Card. It does not read or depend on a Worker definition file and does not adopt worker-specific input keys, wrappers, schemas, or input-language requirements. A blocked candidate is excluded; another semantically plausible untried candidate may be tried without expanding authorization. Recovery stops when one is suitable or no plausible untried candidates remain.
+At execution time it selects a plausible worker from the runtime-visible allowed agent names and descriptions, then sends one self-contained bounded Task Card. Before delegation, the description must positively support each required operation modality: file editing does not imply terminal execution, and an `execute+change_local` command is still an execution operation. Mixed work is split into dependency-ordered cards when no worker supports all required modalities. The Orchestrator does not read or depend on a Worker definition file and does not adopt worker-specific input keys, wrappers, schemas, or input-language requirements. A blocked compatible candidate is excluded; another eligible untried candidate may be tried without expanding authorization. Recovery stops when one is suitable or no compatible candidate remains.
 
 This allows you to:
 

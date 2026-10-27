@@ -75,7 +75,7 @@ REQUIRED_WORKFLOW_RUNNER = "ubuntu-latest"
 REQUIRED_WORKFLOW_TIMEOUT_MINUTES = 15
 ALLOWED_WORKFLOW_FILES = frozenset({"validate.yml"})
 ALLOWED_WORKFLOW_TRIGGERS = frozenset({"pull_request", "push"})
-REQUIRED_CONFORMANCE_CASE_IDS = tuple(f"CONF-{number:03d}" for number in range(1, 31))
+REQUIRED_CONFORMANCE_CASE_IDS = tuple(f"CONF-{number:03d}" for number in range(1, 32))
 REQUIRED_GITIGNORE_MARKERS = frozenset(
     {
         "__pycache__/",
@@ -120,6 +120,8 @@ REQUIRED_MUTATION_TEST_METHODS = frozenset(
         "test_execution_bypass_frontmatter_keys_are_rejected",
         "test_dandori_coupling_format_variants_are_rejected",
         "test_orchestrator_invariant_must_remain_in_its_required_section",
+        "test_worker_selection_requires_positive_execution_capability",
+        "test_writer_description_declares_no_terminal_execution",
         "test_bundled_worker_policy_must_remain_in_strict_rules",
         "test_workflow_actions_require_full_commit_sha",
         "test_inline_workflow_action_requires_full_commit_sha",
@@ -501,6 +503,9 @@ ORCHESTRATOR_REQUIRED_SECTION_MARKERS: dict[str, tuple[str, ...]] = {
     ),
     "## Worker selection": (
         "Use frontmatter-listed agents only.",
+        "Before delegation, match every planned operation's required tool modality",
+        "Never assign an `execute` operation to a candidate",
+        "Split mixed-modality work into separate dependency-ordered Task Cards",
         "Never retry an unchanged blocked candidate",
         "never widen the contract for Worker compatibility.",
     ),
@@ -1748,6 +1753,10 @@ def validate_repository(root: Path) -> ValidationResult:
             result.errors.append(
                 f"{relative(definition.path, root)}: {label} tools changed; "
                 f"expected={sorted(expected_tools)}, actual={sorted(worker_tools)}"
+            )
+        if name == "Writer" and "Cannot execute terminal commands" not in str(meta.get("description", "")):
+            result.errors.append(
+                f"{relative(definition.path, root)}: Writer description must disclose its lack of terminal execution capability"
             )
         if name in BUNDLED_WORKER_TOOLS:
             for marker in BUNDLED_WORKER_REQUIRED_MARKERS[name]:

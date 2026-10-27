@@ -12,7 +12,8 @@ description: >-
   real terminal cwd; a filtered miss is not proof of global absence. The runner
   resolves cwd symlinks and derives workspace roots; callers do not guess roots.
   Terminal cwd may differ from the editor-opened workspace; equivalence cannot
-  be inferred. Does not run raw commands, switch workspaces, or call agents.
+  be inferred. Does not run raw commands, directly edit files, switch workspaces,
+  or call agents.
 model: GPT-6 Luna (copilot)
 reasoning-effort: medium
 target: vscode

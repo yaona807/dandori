@@ -105,12 +105,10 @@ class ValidatorMutationTests(unittest.TestCase):
         temp, repo = self.make_repo()
         with temp:
             path = repo / ".copilot/agents/Researcher.agent.md"
-            text = path.read_text().replace(
-                "description: Investigate the codebase and return compact implementation-relevant facts. Does not edit, plan globally, or call other agents.\n",
-                "",
-                1,
-            )
-            path.write_text(text)
+            text = path.read_text()
+            description_line = next((line for line in text.splitlines(keepends=True) if line.startswith("description: ")), None)
+            self.assertIsNotNone(description_line)
+            path.write_text(text.replace(description_line, "", 1))
             self.assert_invalid(repo, "missing non-empty description")
 
     def test_duplicate_tool_is_rejected(self) -> None:
@@ -559,6 +557,25 @@ class ValidatorMutationTests(unittest.TestCase):
             text = path.read_text()
             path.write_text(text.replace(invariant, "", 1) + f"\n{invariant}\n")
             self.assert_invalid(repo, "missing required Orchestrator section marker")
+
+    def test_worker_selection_requires_positive_execution_capability(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".copilot/agents/Orchestrator.agent.md"
+            marker = "Never assign an `execute` operation to a candidate"
+            text = path.read_text()
+            self.assertIn(marker, text)
+            path.write_text(text.replace(marker, "An implementation Worker may run commands", 1))
+            self.assert_invalid(repo, "missing required Orchestrator section marker")
+
+    def test_writer_description_declares_no_terminal_execution(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".copilot/agents/Writer.agent.md"
+            text = path.read_text()
+            self.assertIn("Cannot execute terminal commands", text)
+            path.write_text(text.replace("Cannot execute terminal commands", "Can execute terminal commands", 1))
+            self.assert_invalid(repo, "Writer description must disclose its lack of terminal execution capability")
 
     def test_bundled_worker_policy_must_remain_in_strict_rules(self) -> None:
         temp, repo = self.make_repo()

@@ -1,6 +1,6 @@
 ---
 name: Reviewer
-description: Review delegated code changes using the code-review skill. Does not edit or call other agents.
+description: Review delegated code changes using the code-review skill. Does not edit, execute terminal commands, or call other agents.
 model: GPT-6 Luna (copilot)
 reasoning-effort: medium
 target: vscode
