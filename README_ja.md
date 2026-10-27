@@ -63,6 +63,8 @@ Orchestrator は、契約内であればWorkerの変更、実行順の変更、T
 
 同じ契約で許可した正確な操作対象が複数ある場合は、1枚のTask Cardでまとめて委譲できます。Workerはその集合から必要な操作を選び、順番や登録定義内の引数を判断できます。ただし、登録済みという理由だけで未承認コマンドは実行できません。Workspaceやコマンドの未登録が確認された場合、Workerは根拠と不足情報を報告します。登録の追加承認・委譲・その後の作業再開はOrchestratorが行い、Workerは独断で登録や再実行をしません。
 
+適用対象の`AGENTS.md`などの規約にビルド・Lint・整形・テストが指定されている場合、Orchestratorは**Worker非依存の必須検証操作**を初回TFRの境界付き認可ルールとして提案します。承認後は、適合するWorkerが固有の手段で正確な実行対象を発見します（CommandRunnerならそのWorkspaceに登録済みのコマンド）。Orchestratorは報告された対象・効果を汎用ルールと照合し、初回にIDが不明でも、承認範囲内なら追加確認なく正確な操作を委譲できます。規約やコマンド登録の存在そのものは権限ではなく、未登録・定義変更・不明な副作用・ルール外の操作は自動許可されません。契約内の実装・修正・再検証は自律的に継続し、拡張やユーザーの判断が必要な場合だけ確認します。Copilot／terminal本体の権限確認は別の仕組みであり、回避しません。
+
 ## 主な特徴
 
 - **短い承認画面**: ユーザーが確認するのは、Goal、Completion Criterion、完全な対象・Action・Effect Operation、自動追加上限、検証要件、除外、再承認条件だけ
@@ -294,6 +296,7 @@ assets/
 ## 互換性と前提条件
 
 - DANDORI Agentは明示的にVS Codeを対象とします。
+- 対応するAgentは、VS Code Local／Copilot harness双方のToolエイリアス（委譲の`agent`／`task`、CommandRunnerの`execute/runInTerminal`／`execute`など）を宣言します。これは実行可能性の保証ではありません。使用中のharnessでToolが動作するか、[conformanceケース](./tests/conformance.md)（特に`CONF-024`）で確認してください。
 - Subagent制限には、現在Experimentalである`agents` allowlistを使用します。
 - `GitHubResearcher`にはGitHub Pull Requests拡張機能と、その拡張機能が公開するToolが必要です。
 - `BrowserQA`には設定済みのbrowser Tool群が必要です。
@@ -309,7 +312,7 @@ DANDORI は、Orchestratorへ推論能力の高いモデルを使用すること
 
 Orchestrator は、実行方法の曖昧さと権限の曖昧さを区別し、契約を広げずに正規化し、最小Task Cardを作り、Worker結果を監査し、矛盾を処理し、包含関係を確認できない場合に停止する必要があります。
 
-Workerは、委譲する作業に応じて、小型・高速・専門モデルを選択できます。
+同梱のAgent定義では、**Orchestratorは GPT-6.1 Sol (copilot)**、**6種類のWorkerはすべて GPT-6 Luna (copilot)** に固定し、7定義とも`reasoning-effort: medium`を指定します。`reasoning-effort`はCopilot harness向けのフィールドであり、モデルの実際の認識・選択はVS Codeで確認が必要です。追加した外部Workerのモデルは別途選択できます。
 
 ## インストール
 

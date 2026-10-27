@@ -52,12 +52,14 @@ class ValidatorMutationTests(unittest.TestCase):
             self.assert_invalid(repo, "Orchestrator tools must be exactly")
 
     def test_worker_rejects_agent_tool(self) -> None:
-        temp, repo = self.make_repo()
-        with temp:
-            path = repo / ".copilot/agents/Writer.agent.md"
-            text = path.read_text().replace("tools:\n", "tools:\n  - agent\n", 1)
-            path.write_text(text)
-            self.assert_invalid(repo, "worker must not include the agent tool")
+        for delegation_tool in ("agent", "task"):
+            with self.subTest(delegation_tool=delegation_tool):
+                temp, repo = self.make_repo()
+                with temp:
+                    path = repo / ".copilot/agents/Writer.agent.md"
+                    text = path.read_text().replace("tools:\n", f"tools:\n  - {delegation_tool}\n", 1)
+                    path.write_text(text)
+                    self.assert_invalid(repo, "worker must not include the agent tool")
 
     def test_runner_cannot_lose_delegated_command_selection(self) -> None:
         temp, repo = self.make_repo()
@@ -544,8 +546,22 @@ class ValidatorMutationTests(unittest.TestCase):
         temp, repo = self.make_repo()
         with temp:
             path = repo / ".copilot/agents/Researcher.agent.md"
-            path.write_text(path.read_text().replace("model: Auto (copilot)\n", "", 1))
+            path.write_text(path.read_text().replace("model: GPT-6 Luna (copilot)\n", "", 1))
             self.assert_invalid(repo, "bundled agent frontmatter is missing required keys")
+
+    def test_bundled_agents_require_selected_models_and_medium_effort(self) -> None:
+        cases = (
+            ("Orchestrator", "model: GPT-6.1 Sol (copilot)", "model: Auto (copilot)", "must use model"),
+            ("Writer", "model: GPT-6 Luna (copilot)", "model: Auto (copilot)", "must use model"),
+            ("Researcher", "reasoning-effort: medium", "reasoning-effort: high", "must use reasoning-effort"),
+        )
+        for name, previous, replacement, message in cases:
+            with self.subTest(name=name):
+                temp, repo = self.make_repo()
+                with temp:
+                    path = repo / f".copilot/agents/{name}.agent.md"
+                    path.write_text(path.read_text().replace(previous, replacement, 1))
+                    self.assert_invalid(repo, message)
 
     def test_bundled_agent_filename_is_fixed(self) -> None:
         temp, repo = self.make_repo()

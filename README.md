@@ -63,6 +63,8 @@ The Orchestrator may change workers, reorder internal work, split or combine Tas
 
 For compatible operations already explicitly authorized, a single Task Card can list several exact targets. The Worker may select among those targets and choose the execution order and valid arguments without another approval. This does not authorize additional operations just because they are registered or discoverable. A Worker reports confirmed missing prerequisites (for example, a workspace or command registration) with its evidence and missing information; only the Orchestrator decides whether to request a TFC, delegate registration, and issue a new Task Card to resume. The Worker does not register or resume on its own initiative.
 
+When applicable project instructions (such as `AGENTS.md`) require local build, lint, format, or test checks, the Orchestrator offers a **worker-neutral**, bounded criterion-required verification rule in the *initial* TFR. Once approved, an appropriate Worker discovers exact executable subjects using its own interface (for example, already-registered workspace commands in CommandRunner) and reports their identity and effects. The Orchestrator checks that evidence against the generic rule before delegating an exact operation, without requesting approval just because its ID was not known at intake. Neither instructions nor command registration alone grant permission; missing registrations, changed definitions, unknown effects, or operations outside the rule do not inherit it. Implementation, corrections, and reruns proceed within the approved goal; only wider authority or a genuine user decision requires another approval. Host-level Copilot/terminal permissions remain separate and cannot be bypassed.
+
 ## Key features
 
 - **Compact approval**: users review one goal, completion criteria, complete target/action/effect operations, target-expansion limit, verification requirements, exclusions, and reapproval conditions.
@@ -291,6 +293,7 @@ assets/
 ## Compatibility and prerequisites
 
 - DANDORI agents explicitly target VS Code.
+- Bundled agents declare both VS Code Local and Copilot harness tool aliases where supported (`agent`/`task` for delegation and `execute/runInTerminal`/`execute` for CommandRunner). These declarations are compatibility candidates, not proof of runtime availability. Verify the active harness and loaded tools using the [conformance cases](./tests/conformance.md), especially `CONF-024`.
 - Subagent restriction uses the `agents` allowlist, which is currently an experimental VS Code feature.
 - `GitHubResearcher` requires the GitHub Pull Requests extension and its exposed tools.
 - `BrowserQA` requires the configured browser tool set.
@@ -306,7 +309,7 @@ DANDORI works best with a capable reasoning model for the Orchestrator.
 
 The Orchestrator must distinguish execution-method ambiguity from authorization ambiguity, normalize contracts without widening them, create minimal Task Cards, audit worker results, resolve conflicts, and stop when containment cannot be established.
 
-Worker models can be smaller, faster, or specialized depending on the delegated task.
+The bundled agent definitions pin **GPT-6.1 Sol (copilot)** for the Orchestrator and **GPT-6 Luna (copilot)** for every Worker, with `reasoning-effort: medium` for all seven agents. The `reasoning-effort` frontmatter field is applied by the Copilot harness; model availability and actual model selection still require runtime verification. Custom or external Workers may select their own models.
 
 ## Installation
 

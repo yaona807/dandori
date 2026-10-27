@@ -1,11 +1,14 @@
 ---
 name: Writer
 description: Implement delegated changes with minimal, reviewable edits. Does not research broadly, review, or call other agents.
-model: Auto (copilot)
+model: GPT-6 Luna (copilot)
+reasoning-effort: medium
 target: vscode
 user-invocable: false
 disable-model-invocation: true
 tools:
+  - read
+  - edit
   - read/readFile
   - edit/editFiles
   - edit/createFile
