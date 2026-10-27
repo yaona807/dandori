@@ -18,7 +18,7 @@
 
 DANDORI は、VS Code上のGitHub Copilot Custom Agents向けOrchestratorレイヤーです。
 
-ユーザーが承認した作業契約を、最小限の境界付き Task Card へ変換します。Orchestrator は、承認済みのGoal・Completion Criterion・Operation・上限・除外・検証要件を変えない限り、内部の実行計画を適応的に変更できます。一方、各 Worker の実行は、毎回発行される狭い Task Card の対象・Action・Effectを結び付けたOperation権限によって制限されます。
+人間が承認したGoalと能力・リソース境界を、厳密なTask Cardへ変換します。Orchestratorは契約内で自律的に調査・計画・再計画し、各Workerは毎回指定された対象・Action・Effectだけを実行します。
 
 DANDORI の中核は **Orchestrator** です。同梱している Worker は reference implementation です。そのまま使うことも、既存の Custom Agent へ置き換えることも、専用 Worker を追加することもできます。Orchestrator へ Worker の内部詳細を埋め込む必要はありません。
 
@@ -40,7 +40,7 @@ AIエージェントは強力ですが、曖昧な委譲には次のような問
 
 DANDORI は、処理を次の2層へ分離します。
 
-- **ユーザーが承認する契約**: 変更しないGoal、Completion Criterion、対象・Action・Effectを結び付けたOperation、自動追加上限、除外、検証要件
+- **ユーザーが承認する契約**: Goal、Completion Criterion、操作能力の種類、リソース境界、累積Effect、除外、検証要件
 - **内部で適応する計画**: Worker選択、実行順、Task Cardの統合・分割、境界内調査、再試行、検証
 
 契約を広げる場合だけユーザーへ再承認を求め、契約内の内部計画変更では再承認しません。
@@ -50,7 +50,7 @@ DANDORI は、処理を次の2層へ分離します。
 DANDORI は、次の包含関係を中心に設計されています。
 
 ```text
-Worker execution operation ⊆ exact Task Card operation ⊆ exact contract permission or authorized instantiation of a contract rule
+Worker execution operation ⊆ exact Task Card operation ⊆ instance of a human-approved capability envelope
 
 active approved contract = ordered fold(authorization source sequence)
 ```
@@ -59,27 +59,27 @@ active approved contract = ordered fold(authorization source sequence)
 
 **Task Card** は、1回のWorker呼び出しに対する、Worker非依存の実行契約です。具体的な目的、Criterion参照、許可された対象・Action・EffectのOperation、呼び出し上限、期待する進捗、中断条件を定義します。
 
-Orchestrator は、契約内であればWorkerの変更、実行順の変更、Task Cardの統合・分割、境界内の調査、再試行、検証追加を再承認なしで行えます。承認契約そのものを広げる場合だけ、**Task Flow Change（TFC）** を提示します。
+人間は目的と対象領域・可能な操作・副作用を承認し、個別ファイル名やコマンドIDは承認しません。Orchestratorは契約内の具体化、Worker選択、調査、修正、再計画を自由に行い、権限を拡張する場合だけ **Task Flow Change（TFC）** を提示します。
 
 同じ契約で許可した正確な操作対象が複数ある場合は、1枚のTask Cardでまとめて委譲できます。Workerはその集合から必要な操作を選び、順番や登録定義内の引数を判断できます。ただし、登録済みという理由だけで未承認コマンドは実行できません。Workspaceやコマンドの未登録が確認された場合、Workerは根拠と不足情報を報告します。登録の追加承認・委譲・その後の作業再開はOrchestratorが行い、Workerは独断で登録や再実行をしません。
 
-適用対象の`AGENTS.md`などの規約にビルド・Lint・整形・テストが指定されている場合、Orchestratorは**Worker非依存の必須検証操作**を初回TFRの境界付き認可ルールとして提案します。承認後は、適合するWorkerが固有の手段で正確な実行対象を発見します（CommandRunnerならそのWorkspaceに登録済みのコマンド）。Orchestratorは報告された対象・効果を汎用ルールと照合し、初回にIDが不明でも、承認範囲内なら追加確認なく正確な操作を委譲できます。規約やコマンド登録の存在そのものは権限ではなく、未登録・定義変更・不明な副作用・ルール外の操作は自動許可されません。契約内の実装・修正・再検証は自律的に継続し、拡張やユーザーの判断が必要な場合だけ確認します。Copilot／terminal本体の権限確認は別の仕組みであり、回避しません。
+ビルド・Lint・テストなどは、初回TFRで「登録済みローカル検証」という能力として副作用の範囲を承認できます。Workerが実際のコマンドを発見し、Orchestratorが定義・引数・Workspace・副作用を確認してから正確な実行Task Cardを発行します。規約・登録自体は権限ではありません。定義変更時は再照会・再監査し、ホスト側の権限制限は回避しません。
 
 ## 主な特徴
 
-- **短い承認画面**: ユーザーが確認するのは、Goal、Completion Criterion、完全な対象・Action・Effect Operation、自動追加上限、検証要件、除外、再承認条件だけ
+- **目的単位の承認**: ユーザーはGoal、境界付きCapability、累積Effect、検証、除外を確認し、個別のファイルやコマンドを列挙しない
 - **Revision付き契約**: Task CardとWorker結果を、順序付き・追記専用の正規化Authorization Patchをfoldして再構築した1つの有効な契約Revisionへ結び付ける
 - **適応的な内部計画**: 契約を広げない限り、Worker・順序・Task Card構成を変更できる
 - **競合を避ける並列実行**: 対応環境では独立したTask Cardを最大3件同時に実行し、ファイルや共有リソースの競合時は直列化する
 - **権限境界単位のTask Card**: 工程ごとに細分化せず、同じ対象・効果・検証境界の作業をまとめる
 - **発見と作用の分離**: Workerが発見した対象を、同じ呼び出し内で変更させない
-- **原子的な作用対象**: ディレクトリや「関連ファイル一式」ではなく、個別識別できる対象だけを自動認可する
-- **Operation単位の認可**: 調査境界または正確な作用対象／境界付き認可ルール、Action、そのActionが生み得るすべてのEffectを1つの権限として結び付け、別々の一覧から直積権限を作らない
+- **Workerの原子的な作用対象**: 広い人間契約からOrchestratorが正確な対象を具体化し、Workerにはプロジェクト全体の編集権限を渡さない
+- **Capability単位の認可**: リソース境界・操作の種類・累積Effect・条件を不可分の権限として扱い、直積権限を作らない
 - **Worker非依存**: Worker定義をWorker挙動と出力形式の唯一の情報源とする
 - **契約監査**: Workerが報告したOperation、上限、根拠、期待する進捗、Revisionを確認してからCriterionの進行を認める
-- **別コンテキスト検証**: 永続的な変更は、可能な場合に観察と明示認可された非変更チェックだけを行う別呼び出しで確認する
+- **別コンテキスト検証**: 検証対象を変更しない範囲で、認可済みの検証コマンドが既知のcache等を生成することは許容できる
 - **差分承認**: 拡張を含むRevisionでは、同時に行う縮小も含めたContract Patch全体を提示する
-- **進捗ベースのループ制御**: 新しい根拠、成果物、認可対象、検証結果などが生まれない同等呼び出しを禁止する
+- **証拠ベースのループ制御**: 検証済みの改善または根拠ある診断の進展で継続し、停滞時は固定2回で終了せず戦略を変える
 
 ## 既存Workerを使い回せる
 
@@ -104,7 +104,7 @@ VS Code／Copilotのファイル操作ツールがWorkspace内のファイルを
 
 Orchestratorは、使用中のVS Code Harnessが対応する場合、独立したTask Cardを**最大3件まで並列実行**できます。非対応なら直列実行に戻します。依存先の結果は監査完了まで待ちます。並列実行前にはWorker名ではなく、Task Cardで**許可された操作すべて**から読み取り・書き込み・排他的共有リソースの範囲を評価します。読み取り同士は並列可能ですが、同じファイルへの読み書き・書き込み、共通のコマンド出力先、Gitインデックス、キャッシュ、ポートなどが競合すれば直列化します。シンボリックリンクの同一性や副作用が不明な場合も、独立性を推測しません。
 
-起動前にはFlow全体の自動追加上限を確保し、権限は増やしません。戻り順に関係なくTask Card IDと契約Revisionごとに監査し、タイムアウトで副作用が不明なタスクと競合する操作は待機させます。影響する書き込みが終わってから別コンテキストで検証します。この調整は同じOrchestrator Flow内に限られ、別セッションや人間の編集をロックしません。Worker定義とTask Cardの権限構造は変更しません。実機の検証事項は[CONF-025〜030](./tests/conformance.md)に追加しています。
+人間が対象件数の上限を明示した場合だけ、起動前に残り枠を確保します。戻り順に関係なくTask Card IDと契約Revisionごとに監査し、タイムアウトで副作用が不明なタスクと競合する操作は待機させます。影響する書き込みが終わってから別コンテキストで検証します。この調整は同じOrchestrator Flow内に限られ、別セッションや人間の編集をロックしません。Worker定義とTask Cardの権限構造は変更しません。実機の検証事項は[CONF-025〜030](./tests/conformance.md)に追加しています。
 
 ## 仕組み
 
@@ -117,7 +117,7 @@ Authorization source sequence
    ↓ ordered fold
 Approved Contract revision
    ↓
-Flow Ledger: Completion Criterion、正確なOperation Instance、対象上限の使用状況、重要な根拠
+Flow Ledger: Completion Criterion、正確なOperation Instance、任意上限、修正・診断の根拠
    ↓
 実行可能な独立Task Card（最大3件）
    ↓
@@ -144,23 +144,20 @@ Orchestrator は、次のような短いTask Flow Reviewを提示します。
 
 **完了条件**
 - 原因が根拠とともに説明されている
-- 必要な変更が認可Operation内で実施されている
+- 必要な変更が承認済みCapability内で実施されている
 - 実施できた検証結果または未検証理由が報告されている
 
-**認可するOperation**
-- 調査: 対象リポジトリ — 検索および読み取り (`observe`)
-- 作用: 明示された既存ファイル — 内容の変更 (`change_local`)
-- ルールによる作用: 根拠を確認できた原子的な既存ファイル — 内容の変更 (`change_local`)
-
-**自動追加対象**
-- Flow全体の累計上限: 5件
+**認可するCapability**
+- Inspect: 対象リポジトリ内の検索・読取 (`observe`)
+- Edit local: 対象リポジトリ内のコード・テスト作成と修正 (`change_local`)
+- Run local: 対象リポジトリ内の出力範囲が限定されたcache生成を含む登録済み検証の実行 (`observe, execute, change_local`)
 
 **検証要件**
 - 永続的な変更は別コンテキストで確認する
 
 **再承認**
 別のGoalには新しいTFRが必要です。
-Criterion、Operation、上限の拡張、除外の削除、検証の弱化にはTFCが必要です。
+Criterionの追加、対象範囲・Action種別・Effectの拡張、条件・上限の緩和、除外の削除、検証の弱化にはTFCが必要です。
 ```
 
 承認は完全一致で判定し、表示言語に関係なく共通の英語トークンを使用します。
@@ -171,7 +168,7 @@ APPROVE:TFR-ab12
 
 条件、修正、追加指示が含まれている場合は、承認ではなく変更要求として扱います。同じチャットセッション内では、TFR/TFCのIDと承認トークンを再利用しません。
 
-各認可Operationには、そのActionが生み得る累積Effectをすべて表示します。ルールによる作用が複数あっても、自動追加上限はFlow全体で共有し、各ルール行ではなく独立した項目として表示します。
+各Capabilityには境界・操作種別・許可するActionの種類・累積Effect・重要な条件を表示します。内部の`actions`は表示した種類から導出し、空欄は全操作を拒否します。個別のファイルやコマンドはOrchestratorが厳密なTask Cardへ具体化し、契約内なら再承認しません。
 
 途中で契約を広げる必要が生じた場合は、差分だけを表示します。
 
@@ -179,10 +176,10 @@ APPROVE:TFR-ab12
 ## Task Flow Change: TFC-cd34
 
 **理由**
-現在の自動追加上限を超える対象が必要になった
+ローカル操作だけの契約では許されていない外部作用が必要になった
 
 **Contract patch**
-- Set: 自動追加対象の上限: 5件 → 7件
+- Add: 特定の宛先に限定した外部公開能力 (`affect_external`)
 
 記載していない契約項目は変更しません。
 ```
@@ -220,15 +217,15 @@ DANDORI は、次の累積効果タグを使用します。
 
 効果は排他的ではなく累積します。たとえば、ファイルを変更し得るコマンドには `execute` と `change_local` の両方が必要です。toolや操作を許可しても、その二次的な効果までは自動的に許可されません。
 
-認可はOperation単位で行います。各権限は、1つの調査境界、正確な作用対象、または境界付き認可ルールを、1つのActionとそのActionが生み得るすべてのEffectへ結び付けます。別の対象・Action・Effect一覧は認可を付与しません。
+人間の認可はCapability単位です。各権限はリソース境界・人間に提示した閉じたAction集合・累積Effect・重要な条件を不可分に結び付けます。Orchestratorだけが正確なWorker用Operationを生成し、別々の権限を合成しません。
 
 ## 対象の認可
 
 調査境界と作用対象は分離します。
 
-リポジトリ、ディレクトリ、ドメイン、検索クエリ、ワイルドカードは、調査可能範囲にはできますが、1件の自動認可対象にはできません。作用できるのは、ファイル、文書、レコード、Issue、Pull Request、コメント、APIリソース、設定項目など、安定した識別子で個別指定できる**原子的な対象**だけです。
+人間は対象リポジトリ内の修正を包括的に許可できますが、Workerに渡す作用対象は個別識別できる**原子的な対象**だけです。ディレクトリやワイルドカードをWorkerの一括編集対象にはしません。
 
-発見された対象は単体では認可せず、対象・Action・Effectを結び付けたCandidate Operationとして管理します。再承認なしで正確なOperation Instanceへ昇格できるのは、正確な識別子、承認境界内であること、Completion Criterionとの対応、具体的な根拠位置、元のPermission、リスク、自動追加上限を確認できる場合だけです。候補を新しい探索起点にはせず、発見した呼び出し内では作用させません。
+発見された候補はOrchestratorが、正確な識別子、目的との関連、承認境界、根拠、Action・Effect、任意の件数上限を照合して具体化します。候補を発見したWorker呼び出し内では作用させません。発見自体は権限ではありません。
 
 既存ディレクトリとディレクトリ配下全体は、原子的な作用対象ではありません。正確に認可されたファイルを新規作成する場合、そのファイルを成立させるために不足している祖先ディレクトリだけは付随的な構造として作成でき、追加の作用対象を消費しません。この扱いから兄弟要素や他の子孫への権限は導出しません。ディレクトリ自体を単独で作成する場合は、存在しないことを確認した正確なパスと`create_directory`、`change_local`を結び付けたOperationが引き続き必要です。
 
@@ -236,11 +233,11 @@ DANDORI は、次の累積効果タグを使用します。
 
 表示だけの文言修正やローカライズをRevision不要で行えるのは、正規化されたAuthorization Source Sequenceと実行可能な契約項目がすべてbyte単位で変化しない場合だけです。Criterion、Operation、Effect、上限、検証要件、除外、安定ID、Source順序の変更は構造変更として扱い、対応するRevision経路を使用します。
 
-自動追加上限は、すでに消費した一意な対象数以上の値にだけ縮小できます。対象の一意性と上限消費は、namespaceまたは包含resourceを含む各原子的対象のcanonical typed identityで判定します。PermissionやCriterionを削除しても、消費済み件数は取り消しません。
+対象件数に既定の上限は設けません。任意上限が数えるのは**意図的な原子的作用対象**（直接編集するファイルなど）であり、コマンドIDや明示された限定範囲内の付随cache/report生成物ではありません。付随出力の許可範囲は実行CapabilityとTask Cardの両方に記載し、意図的なソース・基準値・成果物の変更はコマンド経由でも件数を消費します。未知の副作用は免除しません。正規化パッチは`set_max_distinct_targets`省略で上限維持、非負整数で設定、明示的な`null`でTFC承認後に解除します。有限上限は消費済み件数未満にできず、canonical typed identityで重複を防ぎます。
 
 ## 検証とループ制御
 
-永続的なローカル変更、外部作用、破壊的作用は、可能な場合に別の検証呼び出しで確認します。検証Task Cardでは、観察に加えて、明示的に認可された非変更のチェックだけを実行できます。重要なWorker主張が競合した場合も同じ狭い検証Policyを適用し、信頼度ではなく、観察または明示認可された非変更チェックで正確な矛盾を解消します。実行時は書き込み、更新、fixを行わないモードを使用し、ソース、snapshot、lockfile、cache、reportなどの永続的な成果物を書き得るコマンドは、書き込みを無効化できない限り実行しません。検証呼び出しで修正、ローカル変更、外部変更、破壊的操作は行いません。これは**別コンテキスト検証**であり、完全に独立した第三者レビューを保証するものではありません。
+永続的な変更は別コンテキストで検証します。検証Task Cardは、既知のcacheなど付随するローカル生成物を含めてEffectが明示認可され、検証対象を変更しない場合に、登録済みチェックを実行できます。ソース・基準値・snapshotを修正する検証や、未知の副作用・外部作用は許可しません。実行後も予期しない変更がないことを確認します。これは第三者の完全独立レビューを意味しません。
 
 検証手段がない場合は、再承認ループへ入れたり、確認済みと断定したりせず、「未検証」として報告します。
 
@@ -254,7 +251,7 @@ DANDORI は、次の累積効果タグを使用します。
 - 矛盾の解消
 - より具体化された停止理由
 
-DANDORIは、低い固定実行回数ではなく、現在状態に対する検証済みの改善で反復を制御します。`execute`を含むTask Cardは少なくとも1件の有効なCriterionを参照しなければならず、契約全体の競合またはblockerでCriterionを省略できるのは観察だけの場合に限ります。修正後の検証でCriterion/Postconditionのstrictな前進が確認され、以前満たしていたCriterionにregressionがない場合だけCorrection→Verificationを継続します。具体的gapを1件解消しても、同じCriterionに同等以上のblocking gapが新たに生じた場合は進捗とみなしません。新しいEvidence、診断、Worker、Task Card ID、順序、グルーピング、文言だけでは進捗とみなしません。2回連続で実際の進捗が確認できなければCorrectionを停止します。同じ検証コマンドでもmaterial stateが変化した後なら再実行できますが、同一stateへの等価実行を単なる再試行として繰り返すことは禁止し、nondeterminismまたは具体的な競合解消に必要な狭い再実行だけ1回許容します。
+DANDORIは**実質的進捗**（Criterionの検証済み改善）と**診断上の進捗**（根拠を伴う仮説の棄却、前提条件の発見、契約内の新しい有効候補）を区別します。完了根拠になるのは実質的進捗だけです。進捗のない2サイクル後は別戦略や識別力のある調査を検討し、有効な代替策を尽くした場合に部分終了します。同じ状態への等価実行を無意味に繰り返すことは禁止します。`execute`を含むTask Cardには有効なCriterion参照が必要です。
 
 現在セッションの認可状態または累積ループ制御状態を信頼できる形で確立できない場合は、`state_unrecoverable` で停止します。承認済み調査境界内で再取得できる根拠は再観測できますが、権限状態、cap使用数、連続no-progress回数、pending resultとRevisionの対応を推測またはリセットしません。DANDORIはセッションを跨ぐresumeやdurable workflow stateを提供しません。
 
@@ -391,7 +388,7 @@ rm -rf .github/skills/code-review
 2. `Orchestrator` Agentを選択する
 3. 作業を依頼する
 4. 短いTask Flow Reviewを確認する
-5. Goal、Completion Criterion、認可Operation、自動追加上限、除外、検証要件が正しい場合だけ、承認用の1行をそのまま返信する
+5. Goal、承認するCapability、リソースとEffectの境界、除外、検証要件が正しい場合だけ、承認用の1行をそのまま返信する
 6. 後から契約を広げる必要が出た場合は、差分だけを確認する
 
 ## 定義の検証
@@ -550,7 +547,7 @@ DANDORI はWorkerの逸脱を完全に不可能にすると主張しません。
 
 DANDORI は次のものではありません。
 
-- 汎用的な自律coding agent
+- 人間が承認した能力・対象境界を持たずに動く無制限の自律coding agent
 - GitHub Copilotや人間レビューの代替
 - OSレベルのセキュリティサンドボックス
 - 永続状態を持つworkflow engine

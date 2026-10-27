@@ -18,7 +18,7 @@
 
 DANDORI is an Orchestrator layer for GitHub Copilot Custom Agents in VS Code.
 
-It converts a user-approved work contract into minimal, bounded Task Cards. The Orchestrator can adapt the internal execution plan without repeatedly asking for approval, while every worker invocation remains constrained by the approved goal, completion criteria, operation permissions, target-expansion limit, exclusions, and verification requirements.
+It converts a human-approved goal and capability envelope into minimal, bounded Task Cards. Orchestrator may replan freely inside the approved resource/effect boundary while every Worker remains constrained by exact delegated operations.
 
 The core of DANDORI is the **Orchestrator**. The included workers are reference implementations. You can use them as-is, replace them with your own agents, or add specialized workers without embedding their internal details into the Orchestrator.
 
@@ -40,7 +40,7 @@ Token efficiency is not only about shorter prompts. In agentic workflows, unnece
 
 DANDORI separates the workflow into two layers:
 
-- **User-approved contract**: one immutable goal, completion criteria, target/action/effect operations, target-expansion limit, exclusions, and verification requirements
+- **User-approved contract**: one immutable goal, completion criteria, resource-bounded capability families, complete effect classes, exclusions, and verification requirements
 - **Adaptive internal plan**: worker choice, ordering, Task Card grouping, bounded investigation, retry, and verification
 
 The contract remains fixed until the user approves a meaningful widening. The internal plan can change freely inside that contract.
@@ -50,7 +50,7 @@ The contract remains fixed until the user approves a meaningful widening. The in
 DANDORI is built around one containment rule:
 
 ```text
-worker execution operation ⊆ exact Task Card operation ⊆ exact contract permission or authorized instantiation of a contract rule
+worker execution operation ⊆ exact Task Card operation ⊆ instance of a human-approved capability envelope
 
 active approved contract = ordered fold(authorization source sequence)
 ```
@@ -59,27 +59,27 @@ A **Task Flow Review (TFR)** is a short human decision surface. It is not a deta
 
 A **Task Card** is a worker-neutral execution contract for one permission boundary. It defines the concrete objective, criterion references, exact target/action/effect operations, invocation limits, expected progress, and stop conditions for one invocation.
 
-The Orchestrator may change workers, reorder internal work, split or combine Task Cards, perform bounded investigation, and add verification without reapproval. It must request a **Task Flow Change (TFC)** only when the approved contract itself must widen.
+The human approves the goal, resource boundary, capability classes, effects, and exclusions—not file names or command IDs. The Orchestrator investigates, chooses exact targets/checks, changes workers, and replans within that envelope; it requests a **Task Flow Change (TFC)** only to widen authority. Every Worker remains bound by an exact Task Card.
 
 For compatible operations already explicitly authorized, a single Task Card can list several exact targets. The Worker may select among those targets and choose the execution order and valid arguments without another approval. This does not authorize additional operations just because they are registered or discoverable. A Worker reports confirmed missing prerequisites (for example, a workspace or command registration) with its evidence and missing information; only the Orchestrator decides whether to request a TFC, delegate registration, and issue a new Task Card to resume. The Worker does not register or resume on its own initiative.
 
-When applicable project instructions (such as `AGENTS.md`) require local build, lint, format, or test checks, the Orchestrator offers a **worker-neutral**, bounded criterion-required verification rule in the *initial* TFR. Once approved, an appropriate Worker discovers exact executable subjects using its own interface (for example, already-registered workspace commands in CommandRunner) and reports their identity and effects. The Orchestrator checks that evidence against the generic rule before delegating an exact operation, without requesting approval just because its ID was not known at intake. Neither instructions nor command registration alone grant permission; missing registrations, changed definitions, unknown effects, or operations outside the rule do not inherit it. Implementation, corrections, and reruns proceed within the approved goal; only wider authority or a genuine user decision requires another approval. Host-level Copilot/terminal permissions remain separate and cannot be bypassed.
+For build/lint/test checks, the initial TFR may authorize registered local verification as a capability with bounded side effects. A Worker discovers exact available commands; Orchestrator verifies their identity, arguments, workspace, and effects, then issues a separate exact execution Task Card. Instructions and registrations supply evidence, never authority. Stale definitions must be re-discovered and re-audited, and host restrictions cannot be bypassed. Known in-scope discoveries do not force reapproval.
 
 ## Key features
 
-- **Compact approval**: users review one goal, completion criteria, complete target/action/effect operations, target-expansion limit, verification requirements, exclusions, and reapproval conditions.
+- **Goal-level approval**: users review a goal, bounded capability families, effect classes, verification, and exclusions, without enumerating individual files or commands.
 - **Revisioned contracts**: every Task Card and result belongs to one active contract revision reconstructed by folding an ordered, append-only sequence of normalized authorization patches.
 - **Adaptive planning**: internal routing and execution order can change without reapproval when the contract does not widen.
 - **Conflict-aware parallelism**: up to three independent Task Cards may run concurrently when supported; overlapping file or shared-resource effects serialize.
 - **Permission-boundary Task Cards**: work is grouped by authorization boundary rather than mechanically split into many tiny steps.
 - **Discovery/effect separation**: a target discovered by a worker cannot be affected in the same invocation.
-- **Atomic effect targets**: automatic authorization applies only to individually addressable targets, not directories, wildcard sets, or “related files.”
-- **Operation-level authorization**: each permission binds an observation boundary or exact effect target/rule, one action, and every effect the action may produce; separate lists never create Cartesian-product permission.
+- **Atomic Worker targets**: Orchestrator instantiates exact, individually addressable effect targets from the approved envelope; no Worker receives project-wide edit rights.
+- **Capability containment**: a human grant binds resource boundary, operation family, complete effects, and conditions; separate lists never create Cartesian-product authority.
 - **Worker-neutral orchestration**: worker definitions remain the source of truth for worker behavior and output conventions.
 - **Contract audit**: worker-reported operations, limits, evidence, expected progress, and revision are checked before criterion progress is accepted.
-- **Separate-context verification**: persistent changes are verified through a separate invocation that may observe and run explicitly authorized non-mutating checks.
+- **Separate-context verification**: a separate invocation may run approved checks with declared incidental local outputs (such as caches), never silently mutate verification targets.
 - **Differential approval**: the complete contract patch is shown whenever a revision contains widening, including concurrent reductions.
-- **Progress-based loop control**: equivalent calls without new evidence, artifacts, authorization, verification, or a more specific blocker are prohibited.
+- **Evidence-driven loop control**: validated material progress or new supported diagnostic progress permits continuation; stagnation requires a strategy change rather than a fixed two-cycle flow stop.
 
 ## Bring your own workers
 
@@ -104,7 +104,7 @@ If a VS Code/Copilot file tool incorrectly reports an authorized file as outside
 
 The Orchestrator can dispatch up to **three independent Task Cards concurrently** when the active VS Code harness supports it, falling back to serial delegation otherwise. A task waits until its dependencies have been audited. Before dispatch, the Orchestrator compares conservative read, write, and exclusive-resource footprints derived from **all permitted operations**, not worker names. Two reads may overlap; a read/write or write/write collision, shared command output, index, cache, port, unknown side effect, or unresolved resource identity prevents overlapping execution. Verified aliases and overlapping subtrees count as the same resource when appropriate.
 
-Concurrent dispatch reserves the shared automatic-target cap before launch, without adding authorization. Results are audited per Task Card ID and contract revision, regardless of return order. Timed-out or uncertain effects keep conflicting tasks waiting until safely resolved, and verification waits for relevant writes to finish. Parallel scheduling is internal to one Orchestrator flow; it does not lock other sessions or human edits. Worker definitions and Task Card permissions remain unchanged. Test real overlap and fallback in [CONF-025–030](./tests/conformance.md).
+Concurrent dispatch reserves any optional human-imposed target cap before launch, without adding authorization. Results are audited per Task Card ID and contract revision, regardless of return order. Timed-out or uncertain effects keep conflicting tasks waiting until safely resolved, and verification waits for relevant writes to finish. Parallel scheduling is internal to one Orchestrator flow; it does not lock other sessions or human edits. Worker definitions and Task Card permissions remain unchanged. Test real overlap and fallback in [CONF-025–030](./tests/conformance.md).
 
 ## How it works
 
@@ -117,7 +117,7 @@ Authorization source sequence
    ↓ ordered fold
 Approved Contract revision
    ↓
-Flow Ledger: criteria, exact operation instances, target-cap usage, limits, material evidence
+Flow Ledger: criteria, exact operation instances, optional cap usage, material/diagnostic evidence
    ↓
 Ready independent Task Cards (up to three)
    ↓
@@ -144,23 +144,20 @@ Fix the specified defect.
 
 **Completion criteria**
 - The cause is explained with evidence.
-- Required changes are completed within the authorized operations.
+- Required changes are completed within the approved capability envelope.
 - Available verification results or the reason verification was unavailable are reported.
 
-**Authorized operations**
-- Observe: the target repository — search and read (`observe`)
-- Affect: explicitly listed existing files — modify existing content (`change_local`)
-- Affect by rule: evidence-backed atomic existing files — modify existing content (`change_local`)
-
-**Automatic target addition**
-- Flow-wide cumulative maximum: 5
+**Authorized capabilities**
+- Inspect: search/read within the target repository (`observe`)
+- Edit local: create/modify code and tests within the target repository (`change_local`)
+- Run local: execute registered checks with bounded cache output scopes inside the repository (`observe, execute, change_local`)
 
 **Verification requirements**
 - Persistent changes are checked in a separate context.
 
 **Reapproval**
 A new TFR is required for a different goal.
-A TFC is required for broader criteria, operations, limits, removed exclusions, or reduced verification.
+A TFC is required for additional criteria, broader boundaries/action classes/effects, relaxed conditions or caps, removed exclusions, or reduced verification.
 ```
 
 Approval is exact-token based and language-neutral:
@@ -171,7 +168,7 @@ APPROVE:TFR-ab12
 
 Extra conditions, corrections, or additional instructions are treated as a change request, not approval. TFR/TFC IDs and approval tokens are never reused within the same chat session.
 
-Every authorized operation displays all cumulative effects it may produce. A rule-based operation shares one flow-wide automatic-target cap with every other rule-based operation; the cap is shown separately rather than repeated per rule.
+Every capability displays its boundary, family, approved action classes, cumulative effects, and material conditions. The internal `actions` set must come from those approved classes; an empty set denies all actions. New exact in-scope files or commands need no reapproval, but each Worker gets a narrow Task Card.
 
 If the contract must widen later, the Orchestrator displays only the difference:
 
@@ -179,10 +176,10 @@ If the contract must widen later, the Orchestrator displays only the difference:
 ## Task Flow Change: TFC-cd34
 
 **Reason**
-The work requires more targets than the current automatic-addition cap permits.
+The work requires a remote operation excluded by the original local-only contract.
 
 **Contract patch**
-- Set: auto-added target maximum: 5 → 7
+- Add: remote publishing capability for one named destination (`affect_external`)
 
 All unlisted contract fields remain unchanged.
 ```
@@ -220,13 +217,13 @@ DANDORI uses cumulative effect tags:
 
 Effects are cumulative, not exclusive. For example, a command that can modify files requires both `execute` and `change_local`. Allowing a tool or action never implicitly authorizes its secondary effects.
 
-Authorization is operation-based. Each permission binds one observation boundary, exact affect target, or bounded authorization rule to one action and all effects that action may produce. No separate target, action, or effect list grants authorization.
+Human authorization is capability-based: each indivisible grant binds a resource boundary, a closed set of displayed action classes, complete effects, and material conditions. Orchestrator translates a matching grant into exact Worker operations; separate grants never multiply authority.
 
 ## Target authorization
 
 Observation boundaries and effect targets are separate.
 
-A repository, directory, domain, query, or wildcard may define where observation is allowed, but it is not one automatically authorized effect target. Effects may be applied only to **atomic targets**: the smallest individually addressable target with a stable identifier, such as a file, document, record, issue, pull request, comment, API resource, or specific configuration item.
+The human may approve local edits across a repository without pre-enumerating files. A Worker may affect only **atomic targets** instantiated by Orchestrator, such as an exact file; a repository, directory, query, or wildcard is never itself a Worker effect target.
 
 Discovered targets move through bounded states:
 
@@ -235,7 +232,7 @@ explicit → authorized
 candidate → authorized or rejected
 ```
 
-A candidate can be authorized without reapproval only when its exact identity, approved-boundary containment, deliverable traceability, concrete evidence source, required target/action/effect operation, risk state, and cumulative cap can all be established. A candidate never becomes a new discovery anchor and cannot be affected in the invocation that discovered it.
+A candidate can be authorized by Orchestrator without human reapproval when its exact identity, relevance, containment, evidence, action/effects, and any optional user cap all match one approved capability. Discovery does not grant authority, and a candidate cannot be affected by the Worker invocation that discovered it.
 
 Existing directories and directory subtrees are not atomic effect targets. Creating an exact authorized file may also create only the missing ancestor directories required to materialize that file; those ancestors are incidental structure, consume no separate effect target, and grant no permission over siblings or other descendants. A standalone directory creation still requires a confirmed-nonexistent exact path bound to `create_directory` and `change_local`.
 
@@ -243,15 +240,15 @@ The active contract is a materialized view reconstructed by folding an append-on
 
 Display-only wording or localization can avoid a revision only when the normalized authorization source sequence and every executable contract field remain byte-for-byte unchanged. A change to a criterion, operation, effect, limit, verification requirement, exclusion, stable ID, or source order is structural and follows the applicable revision path.
 
-An automatic-target cap may be reduced only to a value greater than or equal to the number of unique targets already consumed. Target uniqueness and cap consumption use the canonical typed identity of each atomic subject, including its namespace or containing resource. Removing permissions or criteria does not reverse consumed usage.
+No target-count cap is imposed by default. An optional cap counts **intentional atomic effect targets** (e.g. directly edited files), not command identities or declared disposable cache/report outputs. Such incidental outputs require separately bounded scopes inside the approved local-execution grant and exact Task Card; intentional source/baseline/artifact changes always count, even when caused by commands. Unknown side effects are not exempt. Identical canonical typed targets count once. Contract patches omit `set_max_distinct_targets` to preserve the cap, use a nonnegative integer to set it, and use an explicit present `null` to clear it with approved TFC; a finite cap cannot drop below consumed usage.
 
 ## Verification and limits
 
-Persistent local changes, external effects, and destructive effects require a separate verification invocation when possible. A verification Task Card may observe and may run explicitly authorized checks only when they are non-mutating and use no-write, no-update, and no-fix modes. The same narrow verification policy applies when material Worker claims conflict, so an exact contradiction may be resolved by observation or an explicitly authorized non-mutating check rather than confidence. Commands that may write source files, snapshots, lockfiles, caches, reports, or other persistent artifacts must be configured not to write them or remain unexecuted. Verification never performs corrections or local, external, or destructive mutations. This is **separate-context verification**, not guaranteed independent third-party review.
+Persistent changes require separate-context verification. The verifier may run an approved registered check with declared incidental local outputs (such as caches), but must not intentionally modify source, baselines, snapshots, or the state under verification. All real effects must be authorized and no unexpected changes may occur. Unknown effects block that method. Verification never silently performs corrections or remote/destructive actions.
 
 If verification is unavailable, DANDORI reports the result as unverified rather than entering an approval loop or claiming completion without qualification.
 
-DANDORI limits repeated work by requiring each invocation to produce a concrete delta and by judging refinement from verified current-state progress rather than a low fixed execution count. Any Task Card containing `execute` must reference at least one active criterion; a contract-wide conflict or blocker may omit criteria only when it is observation-only. Productive correction→verification cycles may continue only while current-state verification confirms strict criterion/postcondition advance with no regression; resolving one concrete gap counts only when it is not replaced by an equal-or-worse gap for the same criterion. New evidence, diagnosis, Worker choice, Task Card ID, order, grouping, or wording alone is not progress. Two consecutive no-progress correction→verification cycles stop further correction work. The same verification command may run again after material state changes, while equivalent execution against unchanged material state is not repeated merely to try again, except for one narrow rerun needed to resolve nondeterminism or a concrete conflict.
+DANDORI tracks **material progress** (independently verified criterion improvement without regression) separately from **diagnostic progress** (new source-backed evidence eliminating a hypothesis, finding a prerequisite, or producing an actionable candidate). Only material progress completes criteria. Two no-progress correction→verification cycles trigger re-planning, not an automatic full stop; if no distinct in-contract strategy remains, report a partial result. Equivalent executions on unchanged state are still prohibited, except for one narrow conflict/nondeterminism check. An `execute` Task Card always references an active criterion.
 
 If the current session's authorization or cumulative loop-control state cannot be established reliably, DANDORI stops with `state_unrecoverable`. Re-observable evidence may be reacquired inside the approved observation boundary, but permission state, cap usage, the consecutive no-progress counter, and pending-revision bindings are never guessed or reset. DANDORI does not provide cross-session resume or durable workflow state.
 
@@ -388,7 +385,7 @@ Avoid keeping multiple active copies of the same agent definition in different l
 2. Select the `Orchestrator` agent.
 3. Give it a task.
 4. Review the compact Task Flow Review.
-5. Reply with only the exact approval token when the goal, completion criteria, authorized operations, target-expansion limit, exclusions, and verification requirements are correct.
+5. Reply with only the exact approval token when the goal, approved capabilities, resource/effect boundaries, exclusions, and verification requirements are correct.
 6. Review only differential changes if the approved contract later needs to widen.
 
 ## Definition validation
@@ -440,7 +437,7 @@ DANDORI does not claim that worker deviation is impossible. It narrows contracts
 
 DANDORI is not:
 
-- a general-purpose autonomous coding agent
+- an unbounded autonomous coding agent acting without a human-approved capability envelope
 - a replacement for GitHub Copilot or human review
 - an operating-system security sandbox
 - a durable workflow engine

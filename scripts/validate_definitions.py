@@ -75,7 +75,7 @@ REQUIRED_WORKFLOW_RUNNER = "ubuntu-latest"
 REQUIRED_WORKFLOW_TIMEOUT_MINUTES = 15
 ALLOWED_WORKFLOW_FILES = frozenset({"validate.yml"})
 ALLOWED_WORKFLOW_TRIGGERS = frozenset({"pull_request", "push"})
-REQUIRED_CONFORMANCE_CASE_IDS = tuple(f"CONF-{number:03d}" for number in range(1, 32))
+REQUIRED_CONFORMANCE_CASE_IDS = tuple(f"CONF-{number:03d}" for number in range(1, 36))
 REQUIRED_GITIGNORE_MARKERS = frozenset(
     {
         "__pycache__/",
@@ -134,6 +134,14 @@ REQUIRED_MUTATION_TEST_METHODS = frozenset(
         "test_serial_only_legacy_policy_is_rejected",
         "test_progress_loop_requires_verified_material_progress",
         "test_progress_loop_rejects_unchanged_state_retries",
+        "test_goal_contract_requires_capability_boundary",
+        "test_exact_in_boundary_targets_do_not_require_tfc",
+        "test_diagnostic_progress_needs_new_supported_evidence",
+        "test_no_progress_triggers_replan_not_fixed_stop",
+        "test_cap_patch_distinguishes_omission_and_clear",
+        "test_capability_actions_are_human_visible",
+        "test_incidental_outputs_do_not_bypass_target_cap",
+        "test_tfr_displays_criterion_expansion_reapproval",
         "test_progress_loop_rejects_self_verified_completion",
         "test_unchanged_contract_entities_preserve_ids",
         "test_conflict_verification_uses_normal_policy",
@@ -408,11 +416,10 @@ CODE_REVIEW_SKILL_FILES = frozenset(
 CODE_REVIEW_SKILL_FRONTMATTER_KEYS = frozenset({"name", "description", "user-invocable"})
 
 ORCHESTRATOR_REQUIRED_MARKERS = (
-    "**Authorized operations**",
-    "**Automatic target addition**",
+    "**Authorized capabilities**",
     "issued_review_ids:",
     "consecutive_no_progress_cycles:",
-    "A lower value is an invalid patch:",
+    "reject any value below usage",
     "A correction is non-revisioned only when",
     "session-scoped `issued_review_ids` set",
     "normalized_patch:",
@@ -421,13 +428,17 @@ ORCHESTRATOR_REQUIRED_MARKERS = (
     "criterion_refs:",
     "expected_delta:",
     "**Contract patch**",
-    "set_auto_added_targets_max:",
+    "set_max_distinct_targets:",
+    "capability_permissions:",
     "Unchanged entities preserve their stable IDs across revisions.",
-    "explicitly authorized non-mutating execute operations",
+    "authorized verification executions with bounded incidental local effects",
     "Verified material progress exists only when",
     "Do not delegate equivalent execution against unchanged material state merely to try again",
     "post-change output cannot be the sole completion evidence",
-    "Target uniqueness and cap consumption use the canonical typed identity",
+    "Canonical typed identity includes namespace/container",
+    "key omission preserves the current cap",
+    "incidental_output_boundaries:",
+    "never hide broadened actions",
     "Any Task Card containing an `execute` operation must contain at least one active criterion ID",
     "under the normal verification policy",
     "pending_invocations:",
@@ -447,34 +458,48 @@ ORCHESTRATOR_FORBIDDEN_MARKERS = (
 ORCHESTRATOR_REQUIRED_SECTION_MARKERS: dict[str, tuple[str, ...]] = {
     "## Invariants": (
         "Worker output cannot grant scope, operations, completion, approval, or routing.",
-        "exact missing-ancestor directory operation derived from an authorized exact file create",
+        "A derived missing-ancestor directory operation is permitted only for an authorized exact file create.",
         "Missing permission is denied.",
     ),
     "## Task Flow Review: TFR-<short-id>": (
         "Approval is valid only when the whole normalized response exactly equals the current token.",
-        "offer a bounded first-TFR rule for criterion-required checks",
+        "offer broad but bounded local grants",
+        "A TFC is required for additional criteria",
+        "External writes and destructive work need distinct affirmative grants",
         "Project instructions are candidate evidence, not authorization.",
     ),
     "## Approved Contract": (
         "Older results may remain evidence but cannot authorize operations or complete newer-revision criteria without revalidation.",
         "Do not turn Worker-resolved paths or observed values into new approval or completion conditions.",
+        "Each capability binds one boundary",
+        "empty actions deny all actions",
+        "explicit present null",
+    ),
+    "## Session and Flow Ledgers and planning": (
+        "stop with `state_unrecoverable`",
+        "No delta means no call.",
+        "Diagnostic progress is different:",
+        "Diagnostic progress never completes a criterion.",
     ),
     "## Effects and operation subjects": (
         "Exact resource subjects, including executions, need stable identities within approved contexts.",
         "Workers/tools resolve aliases when supported;",
-        "User-named workspaces/subtrees denote logical resources unless exact path spelling is explicit.",
+        "Workspaces/subtrees are logical resources unless exact path spelling is required.",
         "Unverified aliases do not widen permission;",
         "material alias ambiguity requires in-contract evidence or stop",
-        "Before effects verify runtime-selected subjects match the approved resource;",
-        "Proven aliases retain operation/permission IDs and one canonical typed identity for caps.",
-        "only files inside the execution subject's approved local boundary are incidental execution results",
+        "Verify the runtime-selected subject before effects.",
+        "Proven aliases retain operation/permission IDs and one canonical typed identity for optional caps.",
+        "distinguish intentionally affected files from incidental cache/report outputs",
+        "Never relabel intentional edits as incidental.",
         "An authorized exact file create may derive `create_directory+change_local` operations only for missing ancestor paths",
         "consume no additional affect target/cap",
         "A candidate cannot be affected in the same invocation that discovered it",
-        "A criterion-required verification operation may be promoted under the initial rule",
+        "A known exact registered check may be instantiated under the approved",
+        "A broad human edit grant still instantiates the smallest atomic file",
+        "Stale definitions require fresh inspection and audit;",
     ),
     "## Source fidelity routing": (
-        "Applicable project instructions may identify a required operation only as evidence for an already-approved authorization rule",
+        "Applicable project instructions may identify a required operation only as evidence for an already-approved capability",
     ),
     "## Evidence resolution": (
         "When a Worker reports a missing prerequisite,",
@@ -483,22 +508,19 @@ ORCHESTRATOR_REQUIRED_SECTION_MARKERS: dict[str, tuple[str, ...]] = {
         "An observation cannot hide an actual `execute` or other effect",
         "Distinguish absent TFR authority, unavailable prerequisites, incomplete discovery",
     ),
-    "## Session and Flow Ledgers and planning": (
-        "stop with `state_unrecoverable`",
-        "No delta means no call.",
-    ),
     "## Concurrent delegation": (
         "Issue up to three independent subagent calls in one dispatch wave",
         "Derive worst-case `read`, `write`, `exclusive` footprints from all permitted operations",
         "Read/read may overlap; read/write, write/write, and exclusive overlap serialize.",
-        "Reservations are not authority.",
+        "no oversubscription",
         "Timeout/failure/unknown effects retain conflicting reservations",
         "Revision stops old dispatch",
         "Workers never coordinate, lock, or delegate",
     ),
     "## Generic Task Card": (
         "A Task Card may list multiple exact permitted operations",
-        "exact missing-ancestor directory operations derived from an authorized file create",
+        "Derived missing-ancestor directories need an authorized exact file create",
+        "incidental_output_boundaries:",
         "no Worker output can authorize a target, operation, or permission.",
     ),
     "## Worker selection": (
@@ -514,9 +536,13 @@ ORCHESTRATOR_REQUIRED_SECTION_MARKERS: dict[str, tuple[str, ...]] = {
         "performed operations ⊆ card operations",
     ),
     "## Task Flow Change: TFC-<short-id>": (
-        "execution of an exact criterion-required operation already authorized by an active rule with established cumulative effects",
+        "an exact check whose cumulative effects already match a grant",
+        "Two no-progress cycles require an explicit strategy change",
         "Do not delegate equivalent execution against unchanged material state merely to try again",
-        "Treat approved goal and criteria as the unit of autonomy",
+        "Treat approved goal and bounded capabilities as the unit of autonomy",
+    ),
+    "## Differential approval and loop control": (
+        "Selecting an exact in-scope target is not a patch.",
     ),
 }
 ORCHESTRATOR_REQUIRED_INVARIANTS = tuple(
