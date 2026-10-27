@@ -429,6 +429,7 @@ Install the bundled user-level agents and fixed runner in a disposable VS Code/C
 **Expected**
 
 - The Orchestrator delegates only to its permitted workers through a real available subagent tool. Worker lists include the needed compatible read/edit/execute capabilities without accidentally granting delegation, general terminal use, or file editing to the wrong worker.
+- The active Copilot harness resolves the Orchestrator to GPT-6.1 Sol and the six bundled Workers to GPT-6 Luna, all with medium reasoning effort; inspect the effective model rather than inferring it from frontmatter alone. Report unavailable models or ignored effort fields as runtime incompatibilities.
 - The agent-scoped `PreToolUse` hook is discovered and fires on the actual Copilot terminal tool. It allows canonical fixed-interface invocations and denies raw or compound commands, with a decision shape the active host recognizes; a mere valid local JSON response is not treated as runtime proof.
 - Actual workspace and command identity guards still reject stale or wrong-target execution before launch. A failed host tool approval is distinguished from a DANDORI TFR authorization gap.
 - All legacy Local harness paths that are still supported continue to apply the fixed-runner policy, or the incompatibility is explicitly reported. Record VS Code/Copilot versions, selected harness, observed tool names, and pass/fail evidence.

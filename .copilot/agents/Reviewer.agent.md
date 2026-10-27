@@ -1,7 +1,8 @@
 ---
 name: Reviewer
 description: Review delegated code changes using the code-review skill. Does not edit or call other agents.
-model: Auto (copilot)
+model: GPT-6 Luna (copilot)
+reasoning-effort: medium
 target: vscode
 user-invocable: false
 disable-model-invocation: true

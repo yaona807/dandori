@@ -1,7 +1,8 @@
 ---
 name: Researcher
 description: Investigate the codebase and return compact implementation-relevant facts. Does not edit, plan globally, or call other agents.
-model: Auto (copilot)
+model: GPT-6 Luna (copilot)
+reasoning-effort: medium
 target: vscode
 user-invocable: false
 disable-model-invocation: true

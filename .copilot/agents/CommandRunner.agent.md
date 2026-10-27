@@ -13,7 +13,8 @@ description: >-
   resolves cwd symlinks and derives workspace roots; callers do not guess roots.
   Terminal cwd may differ from the editor-opened workspace; equivalence cannot
   be inferred. Does not run raw commands, switch workspaces, or call agents.
-model: Auto (copilot)
+model: GPT-6 Luna (copilot)
+reasoning-effort: medium
 target: vscode
 user-invocable: false
 disable-model-invocation: true

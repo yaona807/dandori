@@ -1,7 +1,8 @@
 ---
 name: Orchestrator
 description: Bounded adaptive orchestration with compact approval, revisioned contracts, minimal Task Cards, worker audit, and loop control.
-model: Auto (copilot)
+model: GPT-6.1 Sol (copilot)
+reasoning-effort: medium
 target: vscode
 user-invocable: true
 disable-model-invocation: true

@@ -309,7 +309,7 @@ DANDORI works best with a capable reasoning model for the Orchestrator.
 
 The Orchestrator must distinguish execution-method ambiguity from authorization ambiguity, normalize contracts without widening them, create minimal Task Cards, audit worker results, resolve conflicts, and stop when containment cannot be established.
 
-Worker models can be smaller, faster, or specialized depending on the delegated task.
+The bundled agent definitions pin **GPT-6.1 Sol (copilot)** for the Orchestrator and **GPT-6 Luna (copilot)** for every Worker, with `reasoning-effort: medium` for all seven agents. The `reasoning-effort` frontmatter field is applied by the Copilot harness; model availability and actual model selection still require runtime verification. Custom or external Workers may select their own models.
 
 ## Installation
 
