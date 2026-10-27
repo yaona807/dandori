@@ -251,7 +251,7 @@ $COPILOT_HOME/command-runner/executions/<workspace-id>/<UTC-timestamp>_<UUID>/
 - コマンドは `spawn(..., shell: false)` で起動します。
 - timeoutまたは出力上限による停止時は、RunnerがコマンドのPOSIX process group全体へ停止を送り、固定猶予後に `SIGTERM` から `SIGKILL` へ昇格するため、通常の子孫processをbounded runの外へ残しません。意図的にdetachされた子孫processはこの保証の対象外です。
 - Agent固有Hookは固定Runnerのインターフェースだけを許可し、ユーザーレベルの制御ファイルを保護します。
-- Hookは従来の`execute/runInTerminal`に加え、Copilot harnessの`Bash`などのターミナルTool名を判別し、両形式の許可判定フィールドを返します。ただし、静的テストだけではVS Code／Copilot実機がHookを呼び出して判定を強制するか確認できません。[conformanceの`CONF-024`](../../tests/conformance.md)で実行時に確認してください。
+- HookはLocalの`execute`・`terminal/execute`、従来の`execute/runInTerminal`、Copilot harnessの`Bash`などのターミナルTool名に対して、同じ固定Runner検証を適用します。未認識ツールの拒否も維持し、両形式の許可判定フィールドを返します。ただし、静的テストだけではVS Code／Copilot実機がHookを呼び出して判定を強制するか確認できません。実際のツール名と許可・拒否を[conformanceの`CONF-024`](../../tests/conformance.md)で確認してください。既存インストールでは更新したHookを再配置し、Agentセッションを再読み込みします。
 - `output`は有効なexecution IDだけを受け取り、現在のWorkspaceのexecution領域配下だけを解決します。任意ファイルパスは受け付けません。
 - 実行出力は信頼できないデータとして扱い、後続コマンドの権限にはなりません。
 

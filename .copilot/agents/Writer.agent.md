@@ -1,6 +1,6 @@
 ---
 name: Writer
-description: Implement delegated changes with minimal, reviewable edits. Does not research broadly, review, or call other agents.
+description: Edit and create delegated files with minimal, reviewable changes. Cannot execute terminal commands (including tests, builds, lint, or formatting), research broadly, review, or call other agents.
 model: GPT-6 Luna (copilot)
 reasoning-effort: medium
 target: vscode

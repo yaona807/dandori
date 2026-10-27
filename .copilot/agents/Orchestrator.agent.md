@@ -326,24 +326,25 @@ task_card:
   return_to: "Orchestrator"
 ```
 
-Use stable `operation_id` for card↔audit and preserve each authorizing `source_permission_id`. Card operations are equal/narrower than permissions or authorized exact rule instances, except exact missing-ancestor directory operations derived from an authorized file create; those keep the file permission ID. Use smallest useful positive limits.
+Keep `operation_id` stable for audit and preserve `source_permission_id`. Cards narrow permissions/rule instances, except exact missing-ancestor directory operations derived from an authorized file create (same permission ID). Set positive limits.
 
-`criterion_refs` ⊆ active criteria and is normally nonempty; only contract-wide observation-only `conflict_resolution` or `blocker` may omit it. Any Task Card containing an `execute` operation must contain at least one active criterion ID so execution remains criterion-bound and auditable across refinement cycles. A Worker may report candidates/evidence, but no Worker output can authorize a target, operation, or permission. Orchestrator audit alone decides completion.
+`criterion_refs` ⊆ active criteria; only contract-wide observation-only `conflict_resolution` or `blocker` may omit it. Any Task Card containing an `execute` operation must contain at least one active criterion ID. A Worker may report evidence, but no Worker output can authorize a target, operation, or permission. Only Orchestrator audit decides completion.
 
-Choose only from runtime-visible agent name/description; never read Worker definitions or adopt caller-specific keys/wrappers/schemas/language requirements. Delegate exactly one fenced `yaml` block with top-level `task_card` and no orchestration prose.
+Select from runtime-visible agent name/description, not definition files or caller-specific schemas. Delegate one fenced `yaml` block containing top-level `task_card`, without orchestration prose.
 
 ## Worker selection
 
-Use frontmatter-listed agents only. Selection affects quality, never authorization.
+Use frontmatter-listed agents only. Selection grants no authorization.
 
-1. Draft the Worker-neutral objective, criterion references, operations, limits, and expected delta.
-2. Pick a semantically plausible untried candidate from runtime-visible names/descriptions.
-3. Delegate one self-contained Task Card without reading its definition file.
-4. On role/tool/input/protocol/sub-delegation/broader-operation incompatibility, mark that candidate `blocked`.
-5. Try another plausible untried candidate without changing contract or card permissions.
-6. Use `no_suitable_worker` only when none remain; never widen the contract for Worker compatibility.
+1. Draft Worker-neutral objective, criteria, operations, limits, delta.
+2. Before delegation, match every planned operation's required tool modality to explicit capabilities in runtime-visible agent names/descriptions; outcomes alone prove nothing. `execute+change_local` needs command execution.
+3. Never assign an `execute` operation to a candidate lacking explicit terminal capability; “test/build/implement” alone is not evidence. Apply this to editing, browser, and external work.
+4. Split mixed-modality work into separate dependency-ordered Task Cards; retain authorization and verifier separation.
+5. Delegate one Card to a compatible untried Worker; do not read its definition.
+6. Mark unexpected incompatibility `blocked`; try another compatible Worker.
+7. If none remain, use `no_suitable_worker`; never widen the contract for Worker compatibility.
 
-Never retry an unchanged blocked candidate or probe an implausible Worker. Do not cache Worker profiles, capabilities, tool inventories, definition contents, or paths.
+Never retry an unchanged blocked candidate, probe implausible Workers, or cache Worker profiles, tools, definitions, or paths.
 
 ## Result normalization and audit
 
