@@ -951,14 +951,16 @@ test('hook denies terminal execution overrides and background execution', async 
   });
 });
 
-test('hook ignores non-terminal tools except writes to control files', async () => {
+test('hook permits only explicit read-only non-terminal tools', async () => {
   await withFixture(async (fixture) => {
-    const read = runHook(fixture, {
-      hook_event_name: 'PreToolUse',
-      tool_name: 'read/readFile',
-      tool_input: { path: 'README.md' },
-    });
-    assert.deepEqual(JSON.parse(read.stdout), { continue: true });
+    for (const toolName of ['read/readFile', 'Read', 'view']) {
+      const read = runHook(fixture, {
+        hook_event_name: 'PreToolUse',
+        tool_name: toolName,
+        tool_input: { path: 'README.md' },
+      });
+      assert.deepEqual(JSON.parse(read.stdout), { continue: true });
+    }
 
     const protectedWrite = runHook(fixture, {
       hook_event_name: 'PreToolUse',
@@ -984,6 +986,35 @@ test('hook ignores non-terminal tools except writes to control files', async () 
         files: [{ path: 'src/example.js', replacement: 'export {};' }],
       },
     });
-    assert.deepEqual(JSON.parse(unrelated.stdout), { continue: true });
+    assert.equal(JSON.parse(unrelated.stdout).permissionDecision, 'deny');
+  });
+});
+
+test('hook fails closed for unknown terminal names in both harness envelopes', async () => {
+  await withFixture(async (fixture) => {
+    for (const input of [
+      {
+        hook_event_name: 'PreToolUse',
+        tool_name: 'execute',
+        tool_input: { command: 'npm publish' },
+      },
+      {
+        sessionId: 'copilot-session',
+        toolName: 'terminal/execute',
+        toolArgs: JSON.stringify({
+          command: 'node ~/.copilot/command-runner/command-runner-interface.mjs list',
+        }),
+      },
+      {
+        hook_event_name: 'PreToolUse',
+        tool_name: 'edit/editFiles',
+        tool_input: { files: [{ path: 'src/example.js', replacement: 'unsafe' }] },
+      },
+    ]) {
+      const result = runHook(fixture, input);
+      assert.equal(result.status, 0, result.stderr);
+      assert.equal(JSON.parse(result.stdout).permissionDecision, 'deny');
+      assert.equal(JSON.parse(result.stdout).hookSpecificOutput.permissionDecision, 'deny');
+    }
   });
 });

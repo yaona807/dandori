@@ -443,8 +443,8 @@ ORCHESTRATOR_REQUIRED_SECTION_MARKERS: dict[str, tuple[str, ...]] = {
     ),
     "## Task Flow Review: TFR-<short-id>": (
         "Approval is valid only when the whole normalized response exactly equals the current token.",
-        "offer a bounded first-TFR rule for applicable `AGENTS.md`-required, registered local checks",
-        "Instructions and registration are candidate evidence, not authorization.",
+        "offer a bounded first-TFR rule for criterion-required checks",
+        "Project instructions are candidate evidence, not authorization.",
     ),
     "## Approved Contract": (
         "Older results may remain evidence but cannot authorize operations or complete newer-revision criteria without revalidation.",
@@ -462,7 +462,7 @@ ORCHESTRATOR_REQUIRED_SECTION_MARKERS: dict[str, tuple[str, ...]] = {
         "An authorized exact file create may derive `create_directory+change_local` operations only for missing ancestor paths",
         "consume no additional affect target/cap",
         "A candidate cannot be affected in the same invocation that discovered it",
-        "an exact current-workspace registered command ID can be promoted under the rule without being individually displayed in TFR",
+        "A criterion-required verification operation may be promoted under the initial rule",
     ),
     "## Source fidelity routing": (
         "Applicable project instructions may identify a required operation only as evidence for an already-approved authorization rule",
@@ -472,7 +472,7 @@ ORCHESTRATOR_REQUIRED_SECTION_MARKERS: dict[str, tuple[str, ...]] = {
         "A partial or filtered search cannot establish global absence.",
         "Discovery provides candidates, not authority.",
         "An observation cannot hide an actual `execute` or other effect",
-        "Distinguish absent TFR authority, missing registration, incomplete discovery",
+        "Distinguish absent TFR authority, unavailable prerequisites, incomplete discovery",
     ),
     "## Session and Flow Ledgers and planning": (
         "stop with `state_unrecoverable`",

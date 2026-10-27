@@ -12,6 +12,10 @@ const TERMINAL_TOOL_NAMES = new Set([
   'powershell',
   'shell',
 ]);
+// CommandRunner currently exposes only execution tools. Keep these explicitly
+// read-only compatibility names non-blocking, but never default-allow unknown
+// tools: an unrecognized terminal alias must not escape fixed-runner validation.
+const READ_ONLY_TOOL_NAMES = new Set(['read/readFile', 'Read', 'view']);
 const COMMAND_ID_PATTERN = /^[a-z][a-z0-9_-]{0,63}$/;
 const EXECUTION_ID_PATTERN = /^\d{8}T\d{6}\.\d{3}Z_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const PARAMETER_TOKEN_PATTERN = /^[a-z][a-zA-Z0-9_-]{0,63}=[A-Za-z0-9._~%/-]*$/;
@@ -267,8 +271,10 @@ try {
       && containsProtectedPath(toolInput)
     ) {
       deny('User-level CommandRunner control files cannot be modified by agent write tools.');
-    } else {
+    } else if (READ_ONLY_TOOL_NAMES.has(toolName)) {
       output({ continue: true });
+    } else {
+      deny('CommandRunner permits only fixed-runner terminal calls and explicitly read-only tools.');
     }
   } else {
     validateTerminalInput(toolInput);
