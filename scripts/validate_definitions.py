@@ -75,7 +75,7 @@ REQUIRED_WORKFLOW_RUNNER = "ubuntu-latest"
 REQUIRED_WORKFLOW_TIMEOUT_MINUTES = 15
 ALLOWED_WORKFLOW_FILES = frozenset({"validate.yml"})
 ALLOWED_WORKFLOW_TRIGGERS = frozenset({"pull_request", "push"})
-REQUIRED_CONFORMANCE_CASE_IDS = tuple(f"CONF-{number:03d}" for number in range(1, 25))
+REQUIRED_CONFORMANCE_CASE_IDS = tuple(f"CONF-{number:03d}" for number in range(1, 31))
 REQUIRED_GITIGNORE_MARKERS = frozenset(
     {
         "__pycache__/",
@@ -126,6 +126,10 @@ REQUIRED_MUTATION_TEST_METHODS = frozenset(
         "test_reusable_workflow_requires_full_commit_sha",
         "test_repository_symlinks_are_rejected",
         "test_verification_execute_policy_is_required",
+        "test_parallel_pending_invocations_are_required",
+        "test_parallel_conflict_policy_is_required",
+        "test_parallel_timeout_containment_is_required",
+        "test_serial_only_legacy_policy_is_rejected",
         "test_progress_loop_requires_verified_material_progress",
         "test_progress_loop_rejects_unchanged_state_retries",
         "test_progress_loop_rejects_self_verified_completion",
@@ -424,6 +428,7 @@ ORCHESTRATOR_REQUIRED_MARKERS = (
     "Target uniqueness and cap consumption use the canonical typed identity",
     "Any Task Card containing an `execute` operation must contain at least one active criterion ID",
     "under the normal verification policy",
+    "pending_invocations:",
 )
 ORCHESTRATOR_FORBIDDEN_MARKERS = (
     "normalized_delta:",
@@ -434,6 +439,8 @@ ORCHESTRATOR_FORBIDDEN_MARKERS = (
     "new fact, artifact, authorized target",
     "kind: \"authorized_target\"",
     "set_limits:",
+    "Keep one active invocation.",
+    "pending_invocation:",
 )
 ORCHESTRATOR_REQUIRED_SECTION_MARKERS: dict[str, tuple[str, ...]] = {
     "## Invariants": (
@@ -477,6 +484,15 @@ ORCHESTRATOR_REQUIRED_SECTION_MARKERS: dict[str, tuple[str, ...]] = {
     "## Session and Flow Ledgers and planning": (
         "stop with `state_unrecoverable`",
         "No delta means no call.",
+    ),
+    "## Concurrent delegation": (
+        "Issue up to three independent subagent calls in one dispatch wave",
+        "Derive worst-case `read`, `write`, `exclusive` footprints from all permitted operations",
+        "Read/read may overlap; read/write, write/write, and exclusive overlap serialize.",
+        "Reservations are not authority.",
+        "Timeout/failure/unknown effects retain conflicting reservations",
+        "Revision stops old dispatch",
+        "Workers never coordinate, lock, or delegate",
     ),
     "## Generic Task Card": (
         "A Task Card may list multiple exact permitted operations",

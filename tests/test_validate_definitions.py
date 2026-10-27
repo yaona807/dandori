@@ -190,6 +190,46 @@ class ValidatorMutationTests(unittest.TestCase):
             )
             self.assert_invalid(repo, "missing required Orchestrator marker")
 
+    def test_parallel_pending_invocations_are_required(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".copilot/agents/Orchestrator.agent.md"
+            path.write_text(path.read_text().replace("pending_invocations:", "pending_call:", 1))
+            self.assert_invalid(repo, "missing required Orchestrator marker")
+
+    def test_parallel_conflict_policy_is_required(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".copilot/agents/Orchestrator.agent.md"
+            path.write_text(
+                path.read_text().replace(
+                    "Read/read may overlap; read/write, write/write, and exclusive overlap serialize.",
+                    "All operations can run concurrently.",
+                    1,
+                )
+            )
+            self.assert_invalid(repo, "missing required Orchestrator invariant")
+
+    def test_parallel_timeout_containment_is_required(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".copilot/agents/Orchestrator.agent.md"
+            path.write_text(
+                path.read_text().replace(
+                    "Timeout/failure/unknown effects retain conflicting reservations",
+                    "Unknown effects release all reservations",
+                    1,
+                )
+            )
+            self.assert_invalid(repo, "missing required Orchestrator invariant")
+
+    def test_serial_only_legacy_policy_is_rejected(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".copilot/agents/Orchestrator.agent.md"
+            path.write_text(path.read_text() + "\nKeep one active invocation.\n")
+            self.assert_invalid(repo, "forbidden legacy marker")
+
     def test_pr1_consumed_cap_floor_policy_is_required(self) -> None:
         temp, repo = self.make_repo()
         with temp:
