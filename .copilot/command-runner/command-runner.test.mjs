@@ -921,7 +921,7 @@ test('hook applies the same fixed-interface policy to the Copilot harness tool e
   });
 });
 
-test('hook validates Local execution aliases instead of rejecting the fixed runner', async () => {
+test('hook validates actual Local and Copilot terminal aliases instead of rejecting the fixed runner', async () => {
   await withFixture(async (fixture) => {
     const accepted = 'node ~/.copilot/command-runner/command-runner-interface.mjs list';
     const localEnvelopes = [
@@ -933,6 +933,16 @@ test('hook validates Local execution aliases instead of rejecting the fixed runn
       (command) => ({
         sessionId: 'local-session',
         toolName: 'terminal/execute',
+        toolArgs: JSON.stringify({ command }),
+      }),
+      (command) => ({
+        hook_event_name: 'PreToolUse',
+        tool_name: 'run_in_terminal',
+        tool_input: { command },
+      }),
+      (command) => ({
+        sessionId: 'copilot-session',
+        toolName: 'run_in_terminal',
         toolArgs: JSON.stringify({ command }),
       }),
     ];
@@ -950,11 +960,13 @@ test('hook validates Local execution aliases instead of rejecting the fixed runn
       }
     }
 
-    const overridden = runHook(fixture, {
-      tool_name: 'execute',
-      tool_input: { command: accepted, cwd: fixture.beta },
-    });
-    assert.equal(JSON.parse(overridden.stdout).permissionDecision, 'deny');
+    for (const name of ['execute', 'run_in_terminal']) {
+      const overridden = runHook(fixture, {
+        tool_name: name,
+        tool_input: { command: accepted, cwd: fixture.beta },
+      });
+      assert.equal(JSON.parse(overridden.stdout).permissionDecision, 'deny');
+    }
   });
 });
 
@@ -1040,6 +1052,11 @@ test('hook fails closed for unknown terminal names in both harness envelopes', a
         sessionId: 'copilot-session',
         toolName: 'terminal/unrecognizedExecute',
         toolArgs: JSON.stringify({ command: accepted }),
+      },
+      {
+        hook_event_name: 'PreToolUse',
+        tool_name: 'run_in_terminal_unrecognized',
+        tool_input: { command: accepted },
       },
       {
         hook_event_name: 'PreToolUse',
