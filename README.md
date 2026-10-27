@@ -70,6 +70,7 @@ When applicable project instructions (such as `AGENTS.md`) require local build, 
 - **Compact approval**: users review one goal, completion criteria, complete target/action/effect operations, target-expansion limit, verification requirements, exclusions, and reapproval conditions.
 - **Revisioned contracts**: every Task Card and result belongs to one active contract revision reconstructed by folding an ordered, append-only sequence of normalized authorization patches.
 - **Adaptive planning**: internal routing and execution order can change without reapproval when the contract does not widen.
+- **Conflict-aware parallelism**: up to three independent Task Cards may run concurrently when supported; overlapping file or shared-resource effects serialize.
 - **Permission-boundary Task Cards**: work is grouped by authorization boundary rather than mechanically split into many tiny steps.
 - **Discovery/effect separation**: a target discovered by a worker cannot be affected in the same invocation.
 - **Atomic effect targets**: automatic authorization applies only to individually addressable targets, not directories, wildcard sets, or “related files.”
@@ -99,6 +100,12 @@ A worker description explains delegable capabilities, not permissions. A workspa
 
 If a VS Code/Copilot file tool incorrectly reports an authorized file as outside the workspace, do not invent extra DANDORI permissions or bypass the host's prompt. Record the tool, VS Code/Copilot versions, and paths for diagnosis. See upstream fixes [microsoft/vscode#331566](https://github.com/microsoft/vscode/issues/331566) and [microsoft/vscode#334409](https://github.com/microsoft/vscode/issues/334409); whether a specific installation includes the fixes must be checked separately.
 
+## Parallel worker dispatch
+
+The Orchestrator can dispatch up to **three independent Task Cards concurrently** when the active VS Code harness supports it, falling back to serial delegation otherwise. A task waits until its dependencies have been audited. Before dispatch, the Orchestrator compares conservative read, write, and exclusive-resource footprints derived from **all permitted operations**, not worker names. Two reads may overlap; a read/write or write/write collision, shared command output, index, cache, port, unknown side effect, or unresolved resource identity prevents overlapping execution. Verified aliases and overlapping subtrees count as the same resource when appropriate.
+
+Concurrent dispatch reserves the shared automatic-target cap before launch, without adding authorization. Results are audited per Task Card ID and contract revision, regardless of return order. Timed-out or uncertain effects keep conflicting tasks waiting until safely resolved, and verification waits for relevant writes to finish. Parallel scheduling is internal to one Orchestrator flow; it does not lock other sessions or human edits. Worker definitions and Task Card permissions remain unchanged. Test real overlap and fallback in [CONF-025–030](./tests/conformance.md).
+
 ## How it works
 
 ```text
@@ -112,11 +119,11 @@ Approved Contract revision
    ↓
 Flow Ledger: criteria, exact operation instances, target-cap usage, limits, material evidence
    ↓
-Minimal Task Card for one permission boundary
+Ready independent Task Cards (up to three)
    ↓
-Selected Worker
+Selected Workers (one card each)
    ↓
-Result normalization and contract audit
+Per-card result normalization and contract audit
    ↓
 Separate-context verification when required
    ↓

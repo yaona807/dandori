@@ -70,6 +70,7 @@ Orchestrator は、契約内であればWorkerの変更、実行順の変更、T
 - **短い承認画面**: ユーザーが確認するのは、Goal、Completion Criterion、完全な対象・Action・Effect Operation、自動追加上限、検証要件、除外、再承認条件だけ
 - **Revision付き契約**: Task CardとWorker結果を、順序付き・追記専用の正規化Authorization Patchをfoldして再構築した1つの有効な契約Revisionへ結び付ける
 - **適応的な内部計画**: 契約を広げない限り、Worker・順序・Task Card構成を変更できる
+- **競合を避ける並列実行**: 対応環境では独立したTask Cardを最大3件同時に実行し、ファイルや共有リソースの競合時は直列化する
 - **権限境界単位のTask Card**: 工程ごとに細分化せず、同じ対象・効果・検証境界の作業をまとめる
 - **発見と作用の分離**: Workerが発見した対象を、同じ呼び出し内で変更させない
 - **原子的な作用対象**: ディレクトリや「関連ファイル一式」ではなく、個別識別できる対象だけを自動認可する
@@ -99,6 +100,12 @@ Workerのdescriptionは委譲できる仕事を示すもので、操作権限を
 
 VS Code／Copilotのファイル操作ツールがWorkspace内のファイルを誤って範囲外と判定した場合も、Dandoriの承認範囲を勝手に広げたり、ツール側の許可確認を回避したりはしません。ツール名・VS Code／Copilotのバージョン・該当パスを記録して切り分けます。関連する上流の修正は[microsoft/vscode#331566](https://github.com/microsoft/vscode/issues/331566)と[microsoft/vscode#334409](https://github.com/microsoft/vscode/issues/334409)です。現在の環境に修正が入っているかは別途確認が必要です。
 
+## Workerの並列呼び出し
+
+Orchestratorは、使用中のVS Code Harnessが対応する場合、独立したTask Cardを**最大3件まで並列実行**できます。非対応なら直列実行に戻します。依存先の結果は監査完了まで待ちます。並列実行前にはWorker名ではなく、Task Cardで**許可された操作すべて**から読み取り・書き込み・排他的共有リソースの範囲を評価します。読み取り同士は並列可能ですが、同じファイルへの読み書き・書き込み、共通のコマンド出力先、Gitインデックス、キャッシュ、ポートなどが競合すれば直列化します。シンボリックリンクの同一性や副作用が不明な場合も、独立性を推測しません。
+
+起動前にはFlow全体の自動追加上限を確保し、権限は増やしません。戻り順に関係なくTask Card IDと契約Revisionごとに監査し、タイムアウトで副作用が不明なタスクと競合する操作は待機させます。影響する書き込みが終わってから別コンテキストで検証します。この調整は同じOrchestrator Flow内に限られ、別セッションや人間の編集をロックしません。Worker定義とTask Cardの権限構造は変更しません。実機の検証事項は[CONF-025〜030](./tests/conformance.md)に追加しています。
+
 ## 仕組み
 
 ```text
@@ -112,11 +119,11 @@ Approved Contract revision
    ↓
 Flow Ledger: Completion Criterion、正確なOperation Instance、対象上限の使用状況、重要な根拠
    ↓
-1つの権限境界に対する最小Task Card
+実行可能な独立Task Card（最大3件）
    ↓
-選択されたWorker
+選択されたWorker（Task Cardごとに1件）
    ↓
-結果の正規化と契約監査
+Task Cardごとの結果正規化と契約監査
    ↓
 必要な場合だけ別コンテキスト検証
    ↓

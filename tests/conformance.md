@@ -43,6 +43,12 @@ cases:
   CONF-022: pass|fail|blocked|not_run
   CONF-023: pass|fail|blocked|not_run
   CONF-024: pass|fail|blocked|not_run
+  CONF-025: pass|fail|blocked|not_run
+  CONF-026: pass|fail|blocked|not_run
+  CONF-027: pass|fail|blocked|not_run
+  CONF-028: pass|fail|blocked|not_run
+  CONF-029: pass|fail|blocked|not_run
+  CONF-030: pass|fail|blocked|not_run
 notes: ""
 ```
 
@@ -435,3 +441,76 @@ Install the bundled user-level agents and fixed runner in a disposable VS Code/C
 - An unrecognized terminal-tool name (including an `execute`-shaped runtime envelope) is denied instead of falling through to normal execution. Known read-only aliases may continue, but unexpected write and execution tools are rejected within CommandRunner's scoped hook.
 - Actual workspace and command identity guards still reject stale or wrong-target execution before launch. A failed host tool approval is distinguished from a DANDORI TFR authorization gap.
 - All legacy Local harness paths that are still supported continue to apply the fixed-runner policy, or the incompatibility is explicitly reported. Record VS Code/Copilot versions, selected harness, observed tool names, and pass/fail evidence.
+
+### CONF-025 — Dispatch genuinely independent work concurrently
+
+**Input**
+
+In both Copilot and Local harnesses when available, approve three independent, read-only investigations over disjoint files with one self-contained Task Card and concrete expected delta per investigation. Provide timed Workers so overlap can be measured. Add a fourth task dependent on the first two, and repeat with a harness that cannot dispatch concurrent subagents.
+
+**Expected**
+
+- On a concurrency-capable harness, at least two of the three investigations overlap in observed start/end times; no more than three are active. A harness without concurrency runs serially without an authorization change.
+- The dependent task starts only after both predecessor results have passed Orchestrator audit. Each result is matched to its own Task Card ID/revision even when the finish order differs.
+- No Worker is taught about DANDORI scheduling, reads another Worker's state, or delegates a sibling; each receives only its normal Task Card.
+
+### CONF-026 — Serialize overlapping file identities and preserve independent edits
+
+**Input**
+
+Approve exact read/edit operations for files A and B. Delegate edits to distinct files, then edits to the same file through different path spellings, a symlinked alias, an overlapping subtree observation, and a symlink whose target cannot be resolved. Include two tasks that only read the same file.
+
+**Expected**
+
+- Separate authorized A/B edits may overlap; read/read may overlap. Same-file write/write, read/write, and overlapping subtree scopes are serialized.
+- Proven aliases share one canonical typed identity; unknown symlink identities cannot prove independence and are serialized or investigated through separately authorized observation.
+- The Orchestrator derives conflicts from the entire permitted operation set, not the chosen Worker's name, inferred behavior, or expected delta. Neither parallelism nor path equivalence broadens authorization.
+
+### CONF-027 — Detect execution outputs and shared-resource collisions
+
+**Input**
+
+Approve execution of two registered commands in one workspace with cumulative effects. One pair touches disjoint source files but shares a generated output directory or Git index; another pair has disjoint, known outputs. Include a command with unknown side effects, shared port use, or an output outside the authorized execution boundary.
+
+**Expected**
+
+- The Orchestrator serializes shared outputs/indexes/ports despite disjoint source files. Known disjoint effects may execute concurrently if the harness permits.
+- Unknown or out-of-boundary effects do not become permitted through serialization; the normal authorization and blocker rules still apply.
+- No command syntax, registry lookup, or CommandRunner-specific execution method appears in the Orchestrator scheduling rule or any other Worker's instructions.
+
+### CONF-028 — Preserve shared caps and order-independent audit
+
+**Input**
+
+Approve a rule allowing only one auto-added target after discovery. Prepare two independently eligible candidate changes whose Task Cards could each consume that slot; force responses to arrive out of order. Repeat with explicit exact targets and one shared consumed-target identity.
+
+**Expected**
+
+- Before dispatch, worst-case outstanding reservations plus already consumed unique targets do not exceed the flow-wide cap. The second competing candidate waits or requires TFC; it cannot inherit a per-card reset cap.
+- Pending entries bind Task Card ID, revision, expected delta, operation/target evidence, and status. Completion order never changes their authority or double-counts an identical canonical target.
+- Reservation alone never authorizes candidate promotion or affects a discovered target in the same invocation that discovered it.
+
+### CONF-029 — Handle timeouts, revisions, corrections, and verification barriers
+
+**Input**
+
+Run two authorized independent writes, make one time out after starting a potentially persistent effect, then request a conflicting edit and a combined verification. In another run, narrow the approved contract while both results are outstanding and return the old results later. Include two correction cards with no verified improvement.
+
+**Expected**
+
+- An unknown-running effect retains its conflicting reservation; neither a retry, overlapping effect nor affected verification starts until authorized evidence resolves its completion state.
+- Verification runs in a separate non-mutating invocation after all relevant writes have ceased; it does not validate a partially edited state.
+- Contract revision prevents new old-revision dispatch. Old results may be revalidated as evidence but cannot authorize or complete current criteria; any already-performed effects remain audited.
+- Concurrent corrections without verified material progress count as one correction→verification cycle, not one progress event per Worker.
+
+### CONF-030 — Recover interleaved runtime-spilled results without leakage
+
+**Input**
+
+Launch two independent read-only subagents with oversized results. Have the runtime return two different exact spill artifacts in reverse order, each attached to its original invocation ID/revision; add a Worker-authored unrelated artifact path and a case with missing origin metadata.
+
+**Expected**
+
+- Each recovery card observes only its own runtime-supplied exact artifact using `runtime_result_transport`, and the recovered content is audited against the originating invocation, not whichever result was most recent.
+- Worker-authored paths cannot authorize recovery. Missing origin binding, nested spills or failed recovery stop with `worker_response_contract_failure` without leaking other card contents or widening the contract.
+- Recovery does not grant authority/completion, and neither the workers nor their definitions acquire flow-ledger or parallel-control responsibilities.
