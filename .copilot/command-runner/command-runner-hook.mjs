@@ -94,6 +94,14 @@ function validateEncodedParameter(token) {
   return token.slice(0, separator);
 }
 
+function validateWorkspaceGuard(token) {
+  const prefix = '--expected-workspace=';
+  if (typeof token !== 'string' || !token.startsWith(prefix)
+    || !COMMAND_ID_PATTERN.test(token.slice(prefix.length))) {
+    throw new Error('scoped operations require --expected-workspace=<id> first');
+  }
+}
+
 function validateRunnerInvocation(tokens) {
   if (
     tokens.length < FIXED_PREFIX.length + 1
@@ -103,8 +111,14 @@ function validateRunnerInvocation(tokens) {
   }
 
   const operation = tokens[2];
-  if (operation === 'workspace-list' || operation === 'list') {
+  if (operation === 'workspace-list') {
     for (const token of tokens.slice(3)) validateEncodedParameter(token);
+    return;
+  }
+
+  if (operation === 'list') {
+    validateWorkspaceGuard(tokens[3]);
+    for (const token of tokens.slice(4)) validateEncodedParameter(token);
     return;
   }
 
@@ -132,7 +146,8 @@ function validateRunnerInvocation(tokens) {
     if (!EXECUTION_ID_PATTERN.test(executionId ?? '')) {
       throw new Error('output requires a safe execution ID');
     }
-    for (const token of tokens.slice(4)) validateEncodedParameter(token);
+    validateWorkspaceGuard(tokens[4]);
+    for (const token of tokens.slice(5)) validateEncodedParameter(token);
     return;
   }
 
@@ -141,30 +156,34 @@ function validateRunnerInvocation(tokens) {
     throw new Error('describe, register, update, unregister, and run require a safe command ID');
   }
   if (operation === 'describe') {
-    if (tokens.length !== 4) {
-      throw new Error('describe accepts exactly one command ID');
+    if (tokens.length !== 5) {
+      throw new Error('describe requires a command ID and workspace guard');
     }
+    validateWorkspaceGuard(tokens[4]);
     return;
   }
   if (operation === 'register') {
-    if (tokens.length !== 5 || validateEncodedParameter(tokens[4]) !== 'definition') {
-      throw new Error('register accepts exactly definition=<encoded-json>');
+    validateWorkspaceGuard(tokens[4]);
+    if (tokens.length !== 6 || validateEncodedParameter(tokens[5]) !== 'definition') {
+      throw new Error('register accepts exactly --expected-workspace=<id> definition=<encoded-json>');
     }
     return;
   }
   if (operation === 'update') {
+    validateWorkspaceGuard(tokens[4]);
     if (
-      tokens.length !== 6
-      || validateEncodedParameter(tokens[4]) !== 'expected'
-      || validateEncodedParameter(tokens[5]) !== 'definition'
+      tokens.length !== 7
+      || validateEncodedParameter(tokens[5]) !== 'expected'
+      || validateEncodedParameter(tokens[6]) !== 'definition'
     ) {
-      throw new Error('update accepts exactly expected=<definition-hash> definition=<encoded-json>');
+      throw new Error('update accepts exactly --expected-workspace=<id> expected=<definition-hash> definition=<encoded-json>');
     }
     return;
   }
   if (operation === 'unregister') {
-    if (tokens.length !== 5 || validateEncodedParameter(tokens[4]) !== 'expected') {
-      throw new Error('unregister accepts exactly expected=<definition-hash>');
+    validateWorkspaceGuard(tokens[4]);
+    if (tokens.length !== 6 || validateEncodedParameter(tokens[5]) !== 'expected') {
+      throw new Error('unregister accepts exactly --expected-workspace=<id> expected=<definition-hash>');
     }
     return;
   }

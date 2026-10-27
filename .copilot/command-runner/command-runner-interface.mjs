@@ -157,6 +157,20 @@ function allowOnly(provided, names) {
   }
 }
 
+// A workspace assertion never selects a workspace. The core still selects by
+// its actual terminal cwd; this guard only prevents disclosure or mutation of
+// a workspace other than the one in the delegated operation.
+function scopedArguments(tokens) {
+  const guard = tokens[0];
+  const prefix = '--expected-workspace=';
+  const expectedWorkspace = typeof guard === 'string' && guard.startsWith(prefix)
+    ? guard.slice(prefix.length) : '';
+  if (!COMMAND_ID_RE.test(expectedWorkspace) || guard !== `${prefix}${expectedWorkspace}`) {
+    throw new InterfaceError('invalid_argument', '--expected-workspace=<id> is required first');
+  }
+  return { expectedWorkspace, rest: tokens.slice(1) };
+}
+
 function offset(value) {
   if (value === undefined) return 0;
   if (!/^(?:0|[1-9]\d*)$/u.test(value)) {
@@ -379,9 +393,12 @@ async function readConfigurationSource() {
   };
 }
 
-async function readStableConfiguration() {
+async function readStableConfiguration(expectedWorkspace) {
   const before = await readConfigurationSource();
   const selected = await runCore(['list']);
+  if (selected.workspaceId !== expectedWorkspace) {
+    throw new InterfaceError('workspace_scope_mismatch', 'selected terminal workspace differs from the delegated workspace');
+  }
   const afterSource = await readFile(configurationPath(), 'utf8');
   if (afterSource !== before.source) {
     throw new InterfaceError('configuration_changed', 'workspaces.json changed while it was being inspected');
@@ -623,8 +640,8 @@ async function withConfigurationLock(callback) {
   }
 }
 
-async function describeConfiguredCommand(id) {
-  const snapshot = await readStableConfiguration();
+async function describeConfiguredCommand(id, expectedWorkspace) {
+  const snapshot = await readStableConfiguration(expectedWorkspace);
   const command = snapshot.workspace.commands?.[id];
   if (!command) {
     throw new InterfaceError(
@@ -654,9 +671,9 @@ function parseCommandDefinition(id, definitionSource) {
   return definition;
 }
 
-async function registerConfiguredCommand(id, definitionSource) {
+async function registerConfiguredCommand(id, definitionSource, expectedWorkspace) {
   return withConfigurationLock(async () => {
-    const snapshot = await readStableConfiguration();
+    const snapshot = await readStableConfiguration(expectedWorkspace);
     if (snapshot.workspace.commands?.[id]) {
       throw new InterfaceError(
         'command_already_registered',
@@ -678,12 +695,12 @@ async function registerConfiguredCommand(id, definitionSource) {
   });
 }
 
-async function updateConfiguredCommand(id, expectedHash, definitionSource) {
+async function updateConfiguredCommand(id, expectedHash, definitionSource, expectedWorkspace) {
   if (!DEFINITION_HASH_RE.test(expectedHash)) {
     throw new InterfaceError('invalid_argument', 'expected must be a sha256 definition hash returned by describe');
   }
   return withConfigurationLock(async () => {
-    const snapshot = await readStableConfiguration();
+    const snapshot = await readStableConfiguration(expectedWorkspace);
     const current = snapshot.workspace.commands?.[id];
     if (!current) {
       throw new InterfaceError(
@@ -711,12 +728,12 @@ async function updateConfiguredCommand(id, expectedHash, definitionSource) {
   });
 }
 
-async function unregisterConfiguredCommand(id, expectedHash) {
+async function unregisterConfiguredCommand(id, expectedHash, expectedWorkspace) {
   if (!DEFINITION_HASH_RE.test(expectedHash)) {
     throw new InterfaceError('invalid_argument', 'expected must be a sha256 definition hash returned by describe');
   }
   return withConfigurationLock(async () => {
-    const snapshot = await readStableConfiguration();
+    const snapshot = await readStableConfiguration(expectedWorkspace);
     const command = snapshot.workspace.commands?.[id];
     if (!command) {
       throw new InterfaceError(
@@ -818,10 +835,13 @@ async function cleanupExecutions(reserveBytes = 0) {
   }
 }
 
-async function workspaceId() {
+async function workspaceId(expectedWorkspace) {
   const result = await runCore(['list']);
   if (typeof result.workspaceId !== 'string' || !COMMAND_ID_RE.test(result.workspaceId)) {
     throw new InterfaceError('runner_protocol_error', 'fixed runner returned an invalid workspace ID');
+  }
+  if (result.workspaceId !== expectedWorkspace) {
+    throw new InterfaceError('workspace_scope_mismatch', 'selected terminal workspace differs from the delegated workspace');
   }
   return result.workspaceId;
 }
@@ -955,7 +975,7 @@ async function main() {
   ].includes(operation)) {
     throw new InterfaceError(
       'usage',
-      'usage: command-runner-interface.mjs workspace-list [query=<value>] [offset=<n>] | workspace-describe <id> | workspace-register <id> | workspace-unregister <id> expected=<workspace-hash> | list [query=<value>] [offset=<n>] | describe <id> | register <id> definition=<encoded-json> | update <id> expected=<definition-hash> definition=<encoded-json> | unregister <id> expected=<definition-hash> | run <id> --expected-workspace=<id> --expected-identity=<sha256> --expected-definition=<sha256> [name=encoded-value ...] | output <execution-id> stream=stdout|stderr [offset=<n>]',
+      'usage: command-runner-interface.mjs workspace-list [query=<value>] [offset=<n>] | workspace-describe <id> | workspace-register <id> | workspace-unregister <id> expected=<workspace-hash> | list --expected-workspace=<id> [query=<value>] [offset=<n>] | describe <id> --expected-workspace=<id> | register <id> --expected-workspace=<id> definition=<encoded-json> | update <id> --expected-workspace=<id> expected=<definition-hash> definition=<encoded-json> | unregister <id> --expected-workspace=<id> expected=<definition-hash> | run <id> --expected-workspace=<id> --expected-identity=<sha256> --expected-definition=<sha256> [name=encoded-value ...] | output <execution-id> --expected-workspace=<id> stream=stdout|stderr [offset=<n>]',
     );
   }
 
@@ -1018,14 +1038,15 @@ async function main() {
 
   if (operation === 'list') {
     const tokens = subject === undefined ? rest : [subject, ...rest];
-    const provided = parseArguments(tokens);
+    const { expectedWorkspace, rest: parameters } = scopedArguments(tokens);
+    const provided = parseArguments(parameters);
     allowOnly(provided, new Set(['query', 'offset', 'revision']));
     const query = one(provided, 'query');
     if (query !== undefined && (query.length === 0 || Buffer.byteLength(query) > LIMITS.commandQueryBytes)) {
       throw new InterfaceError('invalid_argument', `query must be non-empty and at most ${LIMITS.commandQueryBytes} bytes`);
     }
     const start = offset(one(provided, 'offset'));
-    const snapshot = await readStableConfiguration();
+    const snapshot = await readStableConfiguration(expectedWorkspace);
     const revision = definitionHash([snapshot.workspaceIdentity, snapshot.workspace.commands]);
     const expectedRevision = one(provided, 'revision');
     if (start > 0 && expectedRevision === undefined) {
@@ -1061,10 +1082,12 @@ async function main() {
   }
 
   if (operation === 'describe') {
-    if (!COMMAND_ID_RE.test(subject ?? '') || rest.length) {
-      throw new InterfaceError('usage', 'describe accepts exactly one safe command ID');
+    if (!COMMAND_ID_RE.test(subject ?? '')) {
+      throw new InterfaceError('usage', 'describe requires one safe command ID');
     }
-    const response = await describeConfiguredCommand(subject);
+    const { expectedWorkspace, rest: parameters } = scopedArguments(rest);
+    if (parameters.length) throw new InterfaceError('invalid_argument', 'describe accepts no additional arguments');
+    const response = await describeConfiguredCommand(subject, expectedWorkspace);
     if (Buffer.byteLength(serialize(response)) > LIMITS.describeBytes) {
       throw new InterfaceError('definition_too_large', 'command definition is too large to return safely');
     }
@@ -1076,9 +1099,10 @@ async function main() {
     if (!COMMAND_ID_RE.test(subject ?? '')) {
       throw new InterfaceError('usage', 'register requires a safe command ID');
     }
-    const provided = parseArguments(rest, LIMITS.managementDefinitionBytes);
+    const { expectedWorkspace, rest: parameters } = scopedArguments(rest);
+    const provided = parseArguments(parameters, LIMITS.managementDefinitionBytes);
     allowOnly(provided, new Set(['definition']));
-    emit(await registerConfiguredCommand(subject, one(provided, 'definition', true)));
+    emit(await registerConfiguredCommand(subject, one(provided, 'definition', true), expectedWorkspace));
     return 0;
   }
 
@@ -1086,12 +1110,14 @@ async function main() {
     if (!COMMAND_ID_RE.test(subject ?? '')) {
       throw new InterfaceError('usage', 'update requires a safe command ID');
     }
-    const provided = parseArguments(rest, LIMITS.managementDefinitionBytes);
+    const { expectedWorkspace, rest: parameters } = scopedArguments(rest);
+    const provided = parseArguments(parameters, LIMITS.managementDefinitionBytes);
     allowOnly(provided, new Set(['expected', 'definition']));
     emit(await updateConfiguredCommand(
       subject,
       one(provided, 'expected', true),
       one(provided, 'definition', true),
+      expectedWorkspace,
     ));
     return 0;
   }
@@ -1100,9 +1126,10 @@ async function main() {
     if (!COMMAND_ID_RE.test(subject ?? '')) {
       throw new InterfaceError('usage', 'unregister requires a safe command ID');
     }
-    const provided = parseArguments(rest);
+    const { expectedWorkspace, rest: parameters } = scopedArguments(rest);
+    const provided = parseArguments(parameters);
     allowOnly(provided, new Set(['expected']));
-    emit(await unregisterConfiguredCommand(subject, one(provided, 'expected', true)));
+    emit(await unregisterConfiguredCommand(subject, one(provided, 'expected', true), expectedWorkspace));
     return 0;
   }
 
@@ -1147,8 +1174,9 @@ async function main() {
   if (!EXECUTION_ID_RE.test(subject ?? '')) {
     throw new InterfaceError('usage', 'output requires a safe execution ID');
   }
-  const workspace = await workspaceId();
-  emit(await readOutput(workspace, subject, parseArguments(rest)));
+  const { expectedWorkspace, rest: parameters } = scopedArguments(rest);
+  const workspace = await workspaceId(expectedWorkspace);
+  emit(await readOutput(workspace, subject, parseArguments(parameters)));
   return 0;
 }
 

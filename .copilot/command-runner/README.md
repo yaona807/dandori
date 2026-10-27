@@ -96,20 +96,20 @@ node ~/.copilot/command-runner/command-runner-interface.mjs workspace-list [quer
 node ~/.copilot/command-runner/command-runner-interface.mjs workspace-describe <workspace-id>
 node ~/.copilot/command-runner/command-runner-interface.mjs workspace-register <workspace-id>
 node ~/.copilot/command-runner/command-runner-interface.mjs workspace-unregister <workspace-id> expected=<workspace-hash>
-node ~/.copilot/command-runner/command-runner-interface.mjs list [query=<encoded-search-text>] [offset=<n>] [revision=<sha256>]
-node ~/.copilot/command-runner/command-runner-interface.mjs describe test
-node ~/.copilot/command-runner/command-runner-interface.mjs register lint definition=<encoded-json>
-node ~/.copilot/command-runner/command-runner-interface.mjs update lint expected=<definition-hash> definition=<encoded-json>
-node ~/.copilot/command-runner/command-runner-interface.mjs unregister lint expected=<definition-hash>
+node ~/.copilot/command-runner/command-runner-interface.mjs list --expected-workspace=example [query=<encoded-search-text>] [offset=<n>] [revision=<sha256>]
+node ~/.copilot/command-runner/command-runner-interface.mjs describe test --expected-workspace=example
+node ~/.copilot/command-runner/command-runner-interface.mjs register lint --expected-workspace=example definition=<encoded-json>
+node ~/.copilot/command-runner/command-runner-interface.mjs update lint --expected-workspace=example expected=<definition-hash> definition=<encoded-json>
+node ~/.copilot/command-runner/command-runner-interface.mjs unregister lint --expected-workspace=example expected=<definition-hash>
 node ~/.copilot/command-runner/command-runner-interface.mjs run test --expected-workspace=example --expected-identity=<sha256> --expected-definition=<sha256> runInBand=true
-node ~/.copilot/command-runner/command-runner-interface.mjs output <execution-id> stream=stdout|stderr [offset=<n>]
+node ~/.copilot/command-runner/command-runner-interface.mjs output <execution-id> --expected-workspace=example stream=stdout|stderr [offset=<n>]
 ```
 
 Argument values use URI component encoding. Workspace path arguments are resolved under the selected root and rejected when they escape it. `register` and `update` accept one URI-component-encoded JSON command definition; the decoded definition is bounded to 16 KiB. `update` additionally requires the current `definitionHash`.
 
 The agent and hook expose only `command-runner-interface.mjs`. Execution still delegates command schema validation and process execution to the fixed `command-runner.mjs` core. Management validates the complete candidate configuration through that same core before persisting it.
 
-Running a registered command requires the previously observed workspace ID, `workspaceIdentity`, and command `executionHash` from `describe` as `--expected-workspace`, `--expected-identity`, and `--expected-definition`. These guards cannot select a workspace. The core runner checks all three against its selected workspace and loaded command **before spawning**; mismatches fail closed. New workspace registrations include a generation ID, so reuse of an ID is not reuse of the prior authorization; legacy configurations remain readable. A missing exact command returned by `describe` includes the selected `workspaceId` in its structured error.
+`list`, `describe`, command-definition registration/update/removal, and `output` require the delegated workspace ID as the first `--expected-workspace` assertion. The fixed runner selects the workspace from the actual terminal cwd and compares it against that ID **before exposing command data or modifying definitions**. On mismatch it returns `workspace_scope_mismatch`; the worker neither checks the terminal cwd nor tries to change it. This assertion is not a workspace selector or an authorization grant. Running a registered command requires the previously observed workspace ID, `workspaceIdentity`, and command `executionHash` from `describe` as `--expected-workspace`, `--expected-identity`, and `--expected-definition`. These guards cannot select a workspace. The core runner checks all three against its selected workspace and loaded command **before spawning**; mismatches fail closed. New workspace registrations include a generation ID, so reuse of an ID is not reuse of the prior authorization; legacy configurations remain readable. A missing exact command returned by `describe` includes the selected `workspaceId` in its structured error.
 
 All interface responses are bounded below the terminal spill threshold. `list` includes a `revision` tied to the selected workspace and command catalog. Pass it with the same query when fetching subsequent pages; changed catalogs reject with `stale_listing` rather than implying absence. `list` returns only command IDs **for the selected terminal-cwd workspace**, at most 100 per call, with `total` and `nextOffset` when more matches remain. `query` performs a case-insensitive substring match against command IDs and descriptions; it only narrows discovery and never authorizes execution. **A filtered miss, an unfinished page, or a different selected workspace does not prove that a command is unregistered.** A successful exact-ID `describe` confirms presence for its returned `workspaceId`. A complete unfiltered list (or a verified exact-ID missing response) can establish absence **only in the verified selected workspace**; tool failures and unknown scope cannot. `describe` returns both the canonical `definitionHash` for management CAS and `executionHash` covering effective inherited timeout and output defaults for safe execution. Never register a replacement or invent an ID from a search miss.
 
@@ -267,5 +267,5 @@ VS Code hook timeouts are fail-open. The hook uses a 30-second timeout to reduce
 node --test \
   .copilot/command-runner/command-runner.test.mjs \
   .copilot/command-runner/command-runner-interface.test.mjs
-COPILOT_HOME=/path/to/test-home node .copilot/command-runner/command-runner-interface.mjs list
+COPILOT_HOME=/path/to/test-home node .copilot/command-runner/command-runner-interface.mjs list --expected-workspace=example
 ```
