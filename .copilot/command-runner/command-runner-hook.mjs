@@ -7,6 +7,7 @@ const TERMINAL_TOOL_NAMES = new Set([
   'execute/runInTerminal',
   'execute',
   'terminal/execute',
+  'run_in_terminal',
   'runInTerminal',
   'runTerminalCommand',
   'Bash',
@@ -14,8 +15,8 @@ const TERMINAL_TOOL_NAMES = new Set([
   'powershell',
   'shell',
 ]);
-// The Local execute aliases must pass the same fixed-runner validation as the
-// Copilot terminal aliases. Never default-allow an unrecognized execution tool.
+// Local/Copilot terminal aliases, including the host's run_in_terminal name,
+// must pass the same fixed-runner validation. Never default-allow unknown tools.
 // Keep only these explicitly read-only compatibility names non-blocking.
 const READ_ONLY_TOOL_NAMES = new Set(['read/readFile', 'Read', 'view']);
 const COMMAND_ID_PATTERN = /^[a-z][a-z0-9_-]{0,63}$/;
@@ -32,7 +33,7 @@ const PROTECTED_SUFFIXES = new Set([
   '.copilot/command-runner/workspaces.json',
 ]);
 const WRITE_TOOL_NAME_PATTERN = /(?:^|[/._-])(?:edit|write|create|delete|remove|move|rename|patch)(?:$|[/._-])/iu;
-const EXECUTION_OVERRIDE_KEY_PATTERN = /^(?:cwd|workingDirectory|working_directory|env|environment|shell|executable|profile|terminal|options)$/iu;
+const EXECUTION_OVERRIDE_KEY_PATTERN = /^(?:cwd|workingDirectory|working_directory|env|environment|shell|executable|profile|terminal|options|requestUnsandboxedExecution|requestAllowNetwork)$/iu;
 
 function output(value) {
   process.stdout.write(`${JSON.stringify(value)}\n`);
@@ -241,6 +242,10 @@ function validateTerminalInput(toolInput) {
   }
   if (toolInput.isBackground === true || toolInput.background === true) {
     throw new Error('background terminal execution is not allowed');
+  }
+  if ((toolInput.mode !== undefined && toolInput.mode !== 'sync')
+    || (toolInput.timeout !== undefined && toolInput.timeout !== 0)) {
+    throw new Error('asynchronous or timed background terminal execution is not allowed');
   }
   validateRunnerInvocation(parseCommand(toolInput.command));
 }
