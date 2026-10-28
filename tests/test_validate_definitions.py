@@ -158,7 +158,7 @@ class ValidatorMutationTests(unittest.TestCase):
         temp, repo = self.make_repo()
         with temp:
             path = repo / ".copilot/agents/Orchestrator.agent.md"
-            path.write_text(path.read_text().replace("criterion_refs:\n", "", 1))
+            path.write_text(path.read_text().replace("criterion_refs:", ""))
             self.assert_invalid(repo, "missing required Orchestrator marker")
 
     def test_pr1_tfr_requires_capability_envelope_marker(self) -> None:
@@ -448,12 +448,32 @@ class ValidatorMutationTests(unittest.TestCase):
             path = repo / ".copilot/agents/Orchestrator.agent.md"
             path.write_text(
                 path.read_text().replace(
-                    "Any Task Card containing an `execute` operation must contain at least one active criterion ID",
+                    "Any Task Card containing an `execute` operation must link to at least one active criterion ID",
                     "A Task Card containing an `execute` operation may omit criterion IDs",
                     1,
                 )
             )
             self.assert_invalid(repo, "missing required Orchestrator marker")
+
+    def test_worker_task_card_rejects_internal_control_fields(self) -> None:
+        for field in ("source_permission_id", "criterion_refs", "expected_delta", "return_to"):
+            with self.subTest(field=field):
+                temp, repo = self.make_repo()
+                with temp:
+                    path = repo / ".copilot/agents/Orchestrator.agent.md"
+                    source = path.read_text()
+                    marker = '  objective: ""\n'
+                    self.assertIn(marker, source)
+                    path.write_text(source.replace(marker, marker + f"  {field}: leaked\n", 1))
+                    self.assert_invalid(repo, "internal field in Worker-facing Task Card")
+
+    def test_worker_task_card_requires_deliverables(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".copilot/agents/Orchestrator.agent.md"
+            source = path.read_text().replace("  deliverables:\n", "  outputs:\n", 1)
+            path.write_text(source)
+            self.assert_invalid(repo, "Worker-facing Task Card missing field")
 
     def test_target_usage_requires_canonical_typed_identity(self) -> None:
         temp, repo = self.make_repo()

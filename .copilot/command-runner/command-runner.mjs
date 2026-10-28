@@ -40,8 +40,10 @@ function identityHash(value) {
   return `sha256-${createHash('sha256').update(JSON.stringify(canonicalize(value))).digest('hex')}`;
 }
 function executionHash(command, defaults) {
+  // Human-readable descriptions are metadata, not execution semantics.
+  const { description: _description, ...executableCommand } = command;
   return identityHash({
-    ...command,
+    ...executableCommand,
     timeoutMs: command.timeoutMs ?? defaults.timeoutMs,
     maxOutputBytes: command.maxOutputBytes ?? defaults.maxOutputBytes,
   });
