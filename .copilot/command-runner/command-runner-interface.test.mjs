@@ -228,7 +228,7 @@ function guarded(fixture, cwd, args) {
 }
 
 function runInterface(fixture, cwd, args) {
-  const scoped = new Set(['list', 'describe', 'register', 'update', 'unregister', 'output']);
+  const scoped = new Set(['list', 'describe', 'inspect', 'register', 'update', 'unregister', 'output']);
   let scopedArgs = args;
   if (scoped.has(args[0])) {
     const index = args[0] === 'list' ? 1 : 2;
@@ -383,6 +383,86 @@ test('describe returns one bounded command definition and stable hash', async ()
     assert.equal(first.definitionHash, second.definitionHash);
     assert.match(first.executionHash, /^sha256-[0-9a-f]{64}$/u);
     assert.equal(first.executionHash, second.executionHash);
+  });
+});
+
+test('inspect audits an exact known ID without list/describe or executing it', async () => {
+  await withManagementFixture(async (fixture) => {
+    const configPath = path.join(fixture.commandRunner, 'workspaces.json');
+    const config = JSON.parse(await readFile(configPath, 'utf8'));
+    config.workspaces[0].commands.keep.arguments = {
+      fast: { kind: 'flag', token: '--fast' },
+    };
+    await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`);
+    const raw = runInterfaceWithoutHashes(fixture, fixture.alpha, [
+      'inspect', 'keep', '--expected-workspace=alpha',
+    ]);
+    const inspected = parseSuccess(raw);
+    assert.equal(inspected.workspaceId, 'alpha');
+    assert.equal(inspected.commandId, 'keep');
+    assert.equal(inspected.source, 'local-registry');
+    assert.deepEqual(inspected.execution, {
+      argv: [process.execPath, 'echo-args.mjs'],
+      cwd: '.',
+      timeoutMs: 10_000,
+      maxOutputBytes: 16_384,
+    });
+    assert.deepEqual(inspected.arguments, config.workspaces[0].commands.keep.arguments);
+    assert.ok(!('definitionHash' in inspected));
+    await assert.rejects(readdir(path.join(fixture.home, 'command-runner', 'executions')), { code: 'ENOENT' });
+  });
+});
+
+test('inspect enforces exact workspace and command, bounded output and no additional parameters', async () => {
+  await withManagementFixture(async (fixture) => {
+    const configPath = path.join(fixture.commandRunner, 'workspaces.json');
+    const before = await readFile(configPath, 'utf8');
+    const mismatched = runInterfaceWithoutHashes(fixture, fixture.beta, [
+      'inspect', 'keep', '--expected-workspace=alpha',
+    ]);
+    parseFailure(mismatched, 'workspace_scope_mismatch');
+    assert.equal(mismatched.stdout, '');
+    const missing = parseFailure(runInterfaceWithoutHashes(fixture, fixture.alpha, [
+      'inspect', 'missing', '--expected-workspace=alpha',
+    ]), 'command_not_registered');
+    assert.equal(missing.workspaceId, 'alpha');
+    parseFailure(runInterfaceWithoutHashes(fixture, fixture.alpha, [
+      'inspect', 'keep', '--expected-workspace=alpha', 'query=x',
+    ]), 'invalid_argument');
+    assert.equal(await readFile(configPath, 'utf8'), before);
+
+    const config = JSON.parse(before);
+    config.workspaces[0].commands.keep.run = [process.execPath, ...Array(65).fill('x'.repeat(180))];
+    await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`);
+    const oversized = runInterfaceWithoutHashes(fixture, fixture.alpha, [
+      'inspect', 'keep', '--expected-workspace=alpha',
+    ]);
+    parseFailure(oversized, 'inspection_too_large');
+    assert.equal(oversized.stdout, '');
+  });
+});
+
+test('inspect refuses to disclose obvious embedded credentials', async () => {
+  await withManagementFixture(async (fixture) => {
+    const configPath = path.join(fixture.commandRunner, 'workspaces.json');
+    const base = JSON.parse(await readFile(configPath, 'utf8'));
+    const syntheticSecret = 'do-not-print-this-value';
+    const examples = [
+      (command) => { command.run = ['example', `--api-key=${syntheticSecret}`]; },
+      (command) => { command.arguments = { credential: { kind: 'flag', token: `--api-key=${syntheticSecret}` } }; },
+      (command) => { command.arguments = { mode: { kind: 'option', token: '--mode', value: { type: 'choice', values: [`github_pat_${'x'.repeat(30)}`] } } }; },
+    ];
+    for (const prepare of examples) {
+      const config = structuredClone(base);
+      prepare(config.workspaces[0].commands.keep);
+      await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`);
+      const inspected = runInterfaceWithoutHashes(fixture, fixture.alpha, [
+        'inspect', 'keep', '--expected-workspace=alpha',
+      ]);
+      parseFailure(inspected, 'inspection_sensitive');
+      assert.equal(inspected.stdout, '');
+      assert.doesNotMatch(inspected.stderr, /do-not-print-this-value|github_pat_/u);
+    }
   });
 });
 
@@ -944,6 +1024,7 @@ test('hook permits only bounded execution and management interface shapes', asyn
       `node ~/.copilot/command-runner/command-runner-interface.mjs workspace-unregister alpha expected=sha256-${'0'.repeat(64)}`,
       'node ~/.copilot/command-runner/command-runner-interface.mjs list --expected-workspace=alpha query=test',
       'node ~/.copilot/command-runner/command-runner-interface.mjs describe echo --expected-workspace=alpha',
+      'node ~/.copilot/command-runner/command-runner-interface.mjs inspect echo --expected-workspace=alpha',
       'node ~/.copilot/command-runner/command-runner-interface.mjs register lint --expected-workspace=alpha definition=%7B%22description%22%3A%22Lint%22%7D',
       `node ~/.copilot/command-runner/command-runner-interface.mjs update echo --expected-workspace=alpha expected=sha256-${'0'.repeat(64)} definition=%7B%22description%22%3A%22Echo%22%7D`,
       `node ~/.copilot/command-runner/command-runner-interface.mjs unregister echo --expected-workspace=alpha expected=sha256-${'0'.repeat(64)}`,
@@ -959,6 +1040,8 @@ test('hook permits only bounded execution and management interface shapes', asyn
       { command: 'node ~/.copilot/command-runner/command-runner-interface.mjs run echo' },
       { command: 'node ~/.copilot/command-runner/command-runner-interface.mjs list query=test' },
       { command: 'node ~/.copilot/command-runner/command-runner-interface.mjs describe echo' },
+      { command: 'node ~/.copilot/command-runner/command-runner-interface.mjs inspect echo' },
+      { command: 'node ~/.copilot/command-runner/command-runner-interface.mjs inspect echo --expected-workspace=alpha extra=value' },
       { command: 'node ~/.copilot/command-runner/command-runner-interface.mjs list --expected-workspace=OTHER' },
       { command: 'npm test' },
       { command: 'node ~/.copilot/command-runner/command-runner-interface.mjs workspace-register alpha root=%2Ftmp%2Falpha' },

@@ -29,6 +29,7 @@ const EXECUTION_ID_RE = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})\.(\d{3})Z_
 const LIMITS = {
   responseBytes: 12_288,
   describeBytes: 10_000,
+  inspectBytes: 10_000,
   listPageSize: 100,
   commandQueryBytes: 128,
   previewBytes: 512,
@@ -377,6 +378,33 @@ function publicConfiguredCommand(id, command) {
   };
 }
 
+// The inspection surface must not echo commonly embedded credentials. The
+// registry should use runtime secret stores rather than literal secret values.
+// This is defense-in-depth, not a general secret-classification guarantee.
+function containsSensitiveExecutionLiteral(command) {
+  const secretKey = /(?:^|[^a-z0-9])(?:password|passwd|secret|api[-_]?key|access[-_]?token|auth(?:orization)?|credential|private[-_]?key)(?:$|[^a-z0-9])/iu;
+  const secretAssignment = /(?:password|passwd|secret|api[-_]?key|access[-_]?token|auth(?:orization)?|credential|private[-_]?key)\s*(?:=|:)/iu;
+  const recognizableSecret = /(?:github_pat_[a-z0-9_]+|gh[pousr]_[a-z0-9]{20,}|sk-[a-z0-9_-]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY-----)/iu;
+  // Inspect discloses more than the fixed argv: argument tokens, choice values,
+  // allowed extensions and cwd must receive the same sensitive-value checks.
+  const inspectionLiterals = [
+    ...command.run,
+    command.cwd ?? '.',
+    ...Object.values(command.arguments ?? {}).flatMap((spec) => [
+      spec.token,
+      ...(spec.value?.values ?? []),
+      ...(spec.value?.extensions ?? []),
+    ]),
+  ].filter((value) => typeof value === 'string');
+  return inspectionLiterals.some((part) =>
+    recognizableSecret.test(part)
+    || secretAssignment.test(part)
+    || /:\/\/[^/\s@]+:[^/\s@]+@/u.test(part))
+    || command.run.some((part, index) =>
+      secretKey.test(part) && index + 1 < command.run.length
+      && /^--?[a-z0-9][a-z0-9_-]*$/iu.test(part));
+}
+
 async function readConfigurationSource() {
   const file = configurationPath();
   let info;
@@ -658,6 +686,37 @@ async function describeConfiguredCommand(id, expectedWorkspace) {
     command: publicConfiguredCommand(id, command),
     definitionHash: definitionHash(command),
     executionHash: executionHash(command, snapshot.raw.defaults),
+  };
+}
+
+async function inspectConfiguredCommand(id, expectedWorkspace) {
+  const snapshot = await readStableConfiguration(expectedWorkspace);
+  const command = snapshot.workspace.commands?.[id];
+  if (!command) {
+    throw new InterfaceError(
+      'command_not_registered',
+      `command is not registered for workspace ${snapshot.workspaceId}: ${id}`,
+      snapshot.workspaceId,
+    );
+  }
+  if (containsSensitiveExecutionLiteral(command)) {
+    throw new InterfaceError(
+      'inspection_sensitive',
+      'registered command may contain embedded credentials; execution details were not disclosed',
+      snapshot.workspaceId,
+    );
+  }
+  return {
+    workspaceId: snapshot.workspaceId,
+    commandId: id,
+    source: 'local-registry',
+    execution: {
+      argv: [...command.run],
+      cwd: command.cwd ?? '.',
+      timeoutMs: command.timeoutMs ?? snapshot.raw.defaults?.timeoutMs ?? 300_000,
+      maxOutputBytes: command.maxOutputBytes ?? snapshot.raw.defaults?.maxOutputBytes ?? 1_048_576,
+    },
+    arguments: command.arguments ?? {},
   };
 }
 
@@ -969,6 +1028,7 @@ async function main() {
     'workspace-unregister',
     'list',
     'describe',
+    'inspect',
     'register',
     'update',
     'unregister',
@@ -977,7 +1037,7 @@ async function main() {
   ].includes(operation)) {
     throw new InterfaceError(
       'usage',
-      'usage: command-runner-interface.mjs workspace-list [query=<value>] [offset=<n>] | workspace-describe <id> | workspace-register <id> | workspace-unregister <id> expected=<workspace-hash> | list --expected-workspace=<id> [query=<value>] [offset=<n>] | describe <id> --expected-workspace=<id> | register <id> --expected-workspace=<id> definition=<encoded-json> | update <id> --expected-workspace=<id> expected=<definition-hash> definition=<encoded-json> | unregister <id> --expected-workspace=<id> expected=<definition-hash> | run <id> --expected-workspace=<id> [name=encoded-value ...] | output <execution-id> --expected-workspace=<id> stream=stdout|stderr [offset=<n>]',
+      'usage: command-runner-interface.mjs workspace-list [query=<value>] [offset=<n>] | workspace-describe <id> | workspace-register <id> | workspace-unregister <id> expected=<workspace-hash> | list --expected-workspace=<id> [query=<value>] [offset=<n>] | describe <id> --expected-workspace=<id> | inspect <id> --expected-workspace=<id> | register <id> --expected-workspace=<id> definition=<encoded-json> | update <id> --expected-workspace=<id> expected=<definition-hash> definition=<encoded-json> | unregister <id> --expected-workspace=<id> expected=<definition-hash> | run <id> --expected-workspace=<id> [name=encoded-value ...] | output <execution-id> --expected-workspace=<id> stream=stdout|stderr [offset=<n>]',
     );
   }
 
@@ -1092,6 +1152,20 @@ async function main() {
     const response = await describeConfiguredCommand(subject, expectedWorkspace);
     if (Buffer.byteLength(serialize(response)) > LIMITS.describeBytes) {
       throw new InterfaceError('definition_too_large', 'command definition is too large to return safely');
+    }
+    emit(response);
+    return 0;
+  }
+
+  if (operation === 'inspect') {
+    if (!COMMAND_ID_RE.test(subject ?? '')) {
+      throw new InterfaceError('usage', 'inspect requires one safe command ID');
+    }
+    const { expectedWorkspace, rest: parameters } = scopedArguments(rest);
+    if (parameters.length) throw new InterfaceError('invalid_argument', 'inspect accepts no additional arguments');
+    const response = await inspectConfiguredCommand(subject, expectedWorkspace);
+    if (Buffer.byteLength(serialize(response)) > LIMITS.inspectBytes) {
+      throw new InterfaceError('inspection_too_large', 'command execution definition is too large to inspect safely');
     }
     emit(response);
     return 0;

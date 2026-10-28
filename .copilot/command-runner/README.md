@@ -87,6 +87,8 @@ For `workspace-file` and `workspace-directory`, existing paths are checked after
 
 A command's public `describe` representation is also bounded. It includes a `definitionHash` for compare-and-swap replacement or removal without exposing the fixed argv or other private configuration fields. A `describe` request fails closed when the public representation would be too large to return safely.
 
+The separate read-only `inspect` operation provides the effective registered execution specification for exactly one authorized command: fixed `argv`, workspace-relative `cwd`, inherited timeout/output limits, and complete named-argument tokens/specifications. Unlike public `describe`, it reveals execution internals and must be separately permitted on the Worker Task Card. When the ID is already known, `inspect` requires no preceding `list` or preview. It does not execute, register, or update anything. Workspace selection is still checked against the delegated ID. The response is bounded to 10 KiB, and common embedded credential patterns are rejected with `inspection_sensitive` instead of being echoed. This detection is defense-in-depth, not a complete secret scanner; do not place credential literals in registered definitions. A failed/partial inspection cannot serve as a completed effects audit; fixed argv alone cannot prove all side effects. Execution remains bound to the current registered definition, not a frozen inspection snapshot.
+
 ## Runner interface
 
 Run command operations from the active workspace. Workspace inspection/removal can also operate on stale registrations:
@@ -98,6 +100,7 @@ node ~/.copilot/command-runner/command-runner-interface.mjs workspace-register <
 node ~/.copilot/command-runner/command-runner-interface.mjs workspace-unregister <workspace-id> expected=<workspace-hash>
 node ~/.copilot/command-runner/command-runner-interface.mjs list --expected-workspace=example [query=<encoded-search-text>] [offset=<n>] [revision=<sha256>]
 node ~/.copilot/command-runner/command-runner-interface.mjs describe test --expected-workspace=example
+node ~/.copilot/command-runner/command-runner-interface.mjs inspect test --expected-workspace=example
 node ~/.copilot/command-runner/command-runner-interface.mjs register lint --expected-workspace=example definition=<encoded-json>
 node ~/.copilot/command-runner/command-runner-interface.mjs update lint --expected-workspace=example expected=<definition-hash> definition=<encoded-json>
 node ~/.copilot/command-runner/command-runner-interface.mjs unregister lint --expected-workspace=example expected=<definition-hash>

@@ -153,11 +153,11 @@ function validateRunnerInvocation(tokens) {
 
   const commandId = tokens[3];
   if (!COMMAND_ID_PATTERN.test(commandId ?? '')) {
-    throw new Error('describe, register, update, unregister, and run require a safe command ID');
+    throw new Error('describe, inspect, register, update, unregister, and run require a safe command ID');
   }
-  if (operation === 'describe') {
+  if (operation === 'describe' || operation === 'inspect') {
     if (tokens.length !== 5) {
-      throw new Error('describe requires a command ID and workspace guard');
+      throw new Error(`${operation} requires a command ID and workspace guard`);
     }
     validateWorkspaceGuard(tokens[4]);
     return;
