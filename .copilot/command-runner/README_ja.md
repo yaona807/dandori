@@ -101,7 +101,7 @@ node ~/.copilot/command-runner/command-runner-interface.mjs describe test --expe
 node ~/.copilot/command-runner/command-runner-interface.mjs register lint --expected-workspace=example definition=<encoded-json>
 node ~/.copilot/command-runner/command-runner-interface.mjs update lint --expected-workspace=example expected=<definition-hash> definition=<encoded-json>
 node ~/.copilot/command-runner/command-runner-interface.mjs unregister lint --expected-workspace=example expected=<definition-hash>
-node ~/.copilot/command-runner/command-runner-interface.mjs run test --expected-workspace=example --expected-identity=<sha256> --expected-definition=<sha256> runInBand=true
+node ~/.copilot/command-runner/command-runner-interface.mjs run test --expected-workspace=example runInBand=true
 node ~/.copilot/command-runner/command-runner-interface.mjs output <execution-id> --expected-workspace=example stream=stdout|stderr [offset=<n>]
 ```
 
@@ -109,7 +109,7 @@ node ~/.copilot/command-runner/command-runner-interface.mjs output <execution-id
 
 AgentとHookが直接呼べるのは `command-runner-interface.mjs` だけです。実行時のcommand schema検証とprocess起動は、従来どおり固定 `command-runner.mjs` coreへ委譲します。管理操作でも、保存前に候補となる設定全体を同じcoreで検証します。
 
-`list`・`describe`・コマンド定義の登録/更新/削除・`output`は、委譲された対象IDを`--expected-workspace`で渡す必要があります。固定Runnerが実際の端末cwdから選択したWorkspaceと照合し、不一致なら情報の返却や設定変更の前に`workspace_scope_mismatch`を返します。Agentが端末cwdを調査する必要はありません。これは対象を切り替える指定でも新たな承認でもありません。登録済みコマンドの実行には、事前の`describe`で確認したWorkspace ID・Workspaceの識別ハッシュ・実行設定ハッシュ`executionHash`（継承されたタイムアウトと出力上限を含む）を渡します。`--expected-workspace`・`--expected-identity`・`--expected-definition`は対象の選択ではなく実行前の一致条件です。不一致・省略時は起動しません。新規Workspace登録には世代IDを付け、同じWorkspace IDで登録し直した場合も以前の承認を引き継ぎません。既存の登録設定はそのまま読み込めます。`describe`でコマンドが未登録だった場合は、エラーにも照会対象の`workspaceId`を返します。
+`list`・`describe`・コマンド定義の登録/更新/削除・`run`・`output`は、委譲されたWorkspace IDを`--expected-workspace`で渡します。固定Runnerは実際の端末cwdから選択したWorkspaceと照合し、不一致なら情報返却・設定変更・コマンド起動の前に`workspace_scope_mismatch`を返します。Agentが端末cwdを調査・変更する必要はありません。実行時には承認済みの正確なコマンドID・Workspace ID・検証済み引数だけを渡し、**Workerは実行ハッシュを取得・転記しません**。実行時の登録定義を正本とするため、調査後の定義更新は実行内容を変更し得ます。登録の更新は別途権限が必要であり、司令塔は認識した変更を再監査します。移行期の旧呼出しで2つのハッシュを両方指定する場合は、従来の厳密な照合も引き続き有効です。`describe`で未登録だった場合は照会Workspace IDをエラーへ含めます。
 
 Runnerがターミナルに返すレスポンスにはサイズ上限があります。`list`は設定リビジョン`revision`を返し、2ページ目以降はその値を渡します。途中でコマンド一覧やWorkspaceが変わると`stale_listing`となり、その結果から未登録と断定できません。`list`は**実際のカレントディレクトリから選ばれたWorkspace内**のcommand IDを1回最大100件返し、`total`と、続きがある場合の`nextOffset`を返します。`query`はIDとdescriptionの大文字小文字を区別しない部分一致検索であり、候補を絞るだけです。**検索結果が0件でも、フィルタ付き・未取得ページあり・別Workspaceの結果なら「未登録」とは断定できません。** 完全に取得したフィルタなしの一覧か、実行Workspaceを確認したうえでの正確なIDの照会結果だけが、そのWorkspace内の存在・不在の根拠になります。ツールの失敗や対象Workspaceの不明は「未確認」として扱います。`describe`は公開定義と、管理操作用の`definitionHash`および実行前照合用の`executionHash`を返します。検索ミスを根拠にIDを推測したり、代替コマンドを新規登録したりしてはいけません。
 
@@ -117,7 +117,7 @@ Runnerがターミナルに返すレスポンスにはサイズ上限があり�
 
 ### コマンド管理
 
-管理用の`definitionHash`は説明文を含む定義全体を対象とし、実行用の`executionHash`は説明文だけを除き、実行コマンド、cwd、引数制約、実効タイムアウト・出力上限を含めます。説明文の変更だけでは既存の実行承認を失効させず、実行内容が変わった場合は従来どおり`stale_definition`で実行前に拒否します。
+管理用の`definitionHash`は説明文を含む定義全体を対象とします。`executionHash`は監査と旧形式の厳密照合向けに残しますが、新しい`run`では不要です。旧形式のハッシュ指定がある場合に限り、定義変更は従来どおり`stale_definition`として拒否します。
 
 コマンド定義では必須引数と任意引数を直接設定できます。`required` を省略した場合は任意扱いで、未指定時に実行を拒否したい引数は `required: true` とします。
 

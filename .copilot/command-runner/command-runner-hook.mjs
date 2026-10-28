@@ -197,15 +197,20 @@ function validateRunnerInvocation(tokens) {
     ) {
       throw new Error('run requires --expected-workspace=<id> first');
     }
-    const identity = tokens[5];
-    const definition = tokens[6];
-    if (
-      typeof identity !== 'string' || !/^--expected-identity=sha256-[0-9a-f]{64}$/u.test(identity)
-      || typeof definition !== 'string' || !/^--expected-definition=sha256-[0-9a-f]{64}$/u.test(definition)
-    ) {
-      throw new Error('run requires expected identity and definition hashes');
+    // Legacy assertions remain valid during upgrades, but current Workers do
+    // not need to handle any execution hash. Partial assertions are rejected.
+    let argumentStart = 5;
+    if (tokens[5]?.startsWith('--expected-identity=')
+      || tokens[5]?.startsWith('--expected-definition=')) {
+      if (
+        !/^--expected-identity=sha256-[0-9a-f]{64}$/u.test(tokens[5])
+        || !/^--expected-definition=sha256-[0-9a-f]{64}$/u.test(tokens[6] ?? '')
+      ) {
+        throw new Error('legacy run assertions require both valid hashes');
+      }
+      argumentStart = 7;
     }
-    for (const token of tokens.slice(7)) validateEncodedParameter(token);
+    for (const token of tokens.slice(argumentStart)) validateEncodedParameter(token);
     return;
   }
   throw new Error(`unsupported command-runner operation: ${operation}`);

@@ -245,6 +245,14 @@ function runInterface(fixture, cwd, args) {
   );
 }
 
+function runInterfaceWithoutHashes(fixture, cwd, args) {
+  return spawnSync(
+    process.execPath,
+    [path.join(fixture.commandRunner, 'command-runner-interface.mjs'), ...args],
+    { cwd, encoding: 'utf8', env: { ...process.env, COPILOT_HOME: fixture.home } },
+  );
+}
+
 function runHook(fixture, toolInput) {
   return spawnSync(
     process.execPath,
@@ -427,7 +435,7 @@ test('effectful run denies wrong workspace before executing a matching command',
 
     const denied = parseFailure(runInterface(fixture, fixture.beta, [
       'run', 'keep', '--expected-workspace=alpha',
-    ]), 'workspace_identity_changed');
+    ]), 'workspace_scope_mismatch');
     assert.equal(denied.status, 'error');
     await assert.rejects(readFile(path.join(fixture.beta, 'wrong-workspace.txt')), { code: 'ENOENT' });
 
@@ -443,6 +451,32 @@ test('effectful run denies wrong workspace before executing a matching command',
       { cwd: fixture.alpha, encoding: 'utf8', env: { ...process.env, COPILOT_HOME: fixture.home } },
     );
     parseFailure(raw, 'invalid_argument');
+  });
+});
+
+test('hash-free interface run executes the latest registered command without allowing scope or argument expansion', async () => {
+  await withManagementFixture(async (fixture) => {
+    const invoke = (args, cwd = fixture.alpha) => runInterfaceWithoutHashes(fixture, cwd, [
+      'run', 'keep', '--expected-workspace=alpha', ...args,
+    ]);
+
+    const original = parseSuccess(invoke([]));
+    assert.equal(original.workspaceId, 'alpha');
+    assert.equal(original.commandId, 'keep');
+
+    const configPath = path.join(fixture.commandRunner, 'workspaces.json');
+    const config = JSON.parse(await readFile(configPath, 'utf8'));
+    config.workspaces[0].commands.keep.run = [process.execPath, 'echo-args.mjs', '--new-current'];
+    await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`);
+    const changed = parseSuccess(invoke([]));
+    assert.match(changed.stdoutPreview, /--new-current/u);
+
+    parseFailure(invoke([], fixture.beta), 'workspace_scope_mismatch');
+    parseFailure(invoke(['unexpected=value']), 'invalid_argument');
+    parseFailure(runInterfaceWithoutHashes(fixture, fixture.alpha, [
+      'run', 'not_registered', '--expected-workspace=alpha',
+    ]), 'command_not_registered');
+    parseFailure(invoke(['--expected-identity=sha256-' + 'a'.repeat(64)]), 'invalid_argument');
   });
 });
 
