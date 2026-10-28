@@ -445,15 +445,24 @@ test('inspect enforces exact workspace and command, bounded output and no additi
 test('inspect refuses to disclose obvious embedded credentials', async () => {
   await withManagementFixture(async (fixture) => {
     const configPath = path.join(fixture.commandRunner, 'workspaces.json');
-    const config = JSON.parse(await readFile(configPath, 'utf8'));
-    config.workspaces[0].commands.keep.run = ['example', '--api-key=do-not-print-this-value'];
-    await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`);
-    const inspected = runInterfaceWithoutHashes(fixture, fixture.alpha, [
-      'inspect', 'keep', '--expected-workspace=alpha',
-    ]);
-    parseFailure(inspected, 'inspection_sensitive');
-    assert.equal(inspected.stdout, '');
-    assert.doesNotMatch(inspected.stderr, /do-not-print-this-value/u);
+    const base = JSON.parse(await readFile(configPath, 'utf8'));
+    const syntheticSecret = 'do-not-print-this-value';
+    const examples = [
+      (command) => { command.run = ['example', `--api-key=${syntheticSecret}`]; },
+      (command) => { command.arguments = { credential: { kind: 'flag', token: `--api-key=${syntheticSecret}` } }; },
+      (command) => { command.arguments = { mode: { kind: 'option', token: '--mode', value: { type: 'choice', values: [`github_pat_${'x'.repeat(30)}`] } } }; },
+    ];
+    for (const prepare of examples) {
+      const config = structuredClone(base);
+      prepare(config.workspaces[0].commands.keep);
+      await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`);
+      const inspected = runInterfaceWithoutHashes(fixture, fixture.alpha, [
+        'inspect', 'keep', '--expected-workspace=alpha',
+      ]);
+      parseFailure(inspected, 'inspection_sensitive');
+      assert.equal(inspected.stdout, '');
+      assert.doesNotMatch(inspected.stderr, /do-not-print-this-value|github_pat_/u);
+    }
   });
 });
 

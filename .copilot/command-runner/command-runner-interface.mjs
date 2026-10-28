@@ -385,12 +385,24 @@ function containsSensitiveExecutionLiteral(command) {
   const secretKey = /(?:^|[^a-z0-9])(?:password|passwd|secret|api[-_]?key|access[-_]?token|auth(?:orization)?|credential|private[-_]?key)(?:$|[^a-z0-9])/iu;
   const secretAssignment = /(?:password|passwd|secret|api[-_]?key|access[-_]?token|auth(?:orization)?|credential|private[-_]?key)\s*(?:=|:)/iu;
   const recognizableSecret = /(?:github_pat_[a-z0-9_]+|gh[pousr]_[a-z0-9]{20,}|sk-[a-z0-9_-]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY-----)/iu;
-  return command.run.some((part, index) =>
+  // Inspect discloses more than the fixed argv: argument tokens, choice values,
+  // allowed extensions and cwd must receive the same sensitive-value checks.
+  const inspectionLiterals = [
+    ...command.run,
+    command.cwd ?? '.',
+    ...Object.values(command.arguments ?? {}).flatMap((spec) => [
+      spec.token,
+      ...(spec.value?.values ?? []),
+      ...(spec.value?.extensions ?? []),
+    ]),
+  ].filter((value) => typeof value === 'string');
+  return inspectionLiterals.some((part) =>
     recognizableSecret.test(part)
     || secretAssignment.test(part)
-    || (secretKey.test(part) && index + 1 < command.run.length
-      && /^--?[a-z0-9][a-z0-9_-]*$/iu.test(part))
-    || /:\/\/[^/\s@]+:[^/\s@]+@/u.test(part));
+    || /:\/\/[^/\s@]+:[^/\s@]+@/u.test(part))
+    || command.run.some((part, index) =>
+      secretKey.test(part) && index + 1 < command.run.length
+      && /^--?[a-z0-9][a-z0-9_-]*$/iu.test(part));
 }
 
 async function readConfigurationSource() {
