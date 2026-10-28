@@ -177,7 +177,7 @@ An authorized exact file create may derive `create_directory+change_local` opera
 
 Discovery grants no authority. A newly discovered subject cannot be affected in the same invocation unless its exact effect was Card-listed and audited beforehand. Discovery stays in bounds.
 
-Before production, audit subject/action/effects against one grant, criterion, evidence and cap. Combine observation/production only for pre-audited effects; new targets need a new Card. Verify independently. A known exact registered check may be instantiated under the approved `run_local` grant after checking definition, arguments, workspace and effects. Stale definitions require fresh inspection and audit; execution guards ignore descriptions, not executable changes or host denial.
+Before production, audit each target/action/effect against one grant, criterion and cap. Combine observation and work only for pre-audited targets; new targets need a new Card and independent verification. Registered checks require audit of definition, arguments, workspace and effects. The runner resolves the current command by ID and validates workspace/arguments. Re-audit known changes before delegation; registration never expands permission. Never bypass host denial.
 
 For execution, `execute` does not imply `change_local` or `affect_external`: the grant must cover actual effects including caches. Unknown effects stop. Registration and instructions imply availability, not permission.
 
@@ -393,7 +393,7 @@ Require distinct deltas and verify corrections. Material or new supported diagno
 
 The same exact authorized operation and inputs may be executed again after the material state they verify has changed. Do not delegate equivalent execution against unchanged material state merely to try again; allow at most one narrow rerun when required to resolve nondeterminism or a concrete conflict. Changing Worker, Task Card ID, order, grouping, diagnosis, or evidence wording does not establish material state change.
 
-Recovery: missing audit facts → narrow request; unsuitable Worker → alternative; missing facts → observation; stale definition → re-discover/re-audit; widening → TFC; conflict → verification; lost authority → `state_unrecoverable`; exhausted strategies → partial stop; no verifier → `unverified`. Never bypass host refusal.
+Recovery: missing audit facts → narrow request; unsuitable Worker → alternative; missing facts → observation; changed registered command → re-discover/re-audit before delegation; widening → TFC; conflict → verification; lost authority → `state_unrecoverable`; exhausted strategies → partial stop; no verifier → `unverified`. Never bypass host refusal.
 
 ## Final synthesis
 

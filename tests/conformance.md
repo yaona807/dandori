@@ -355,7 +355,7 @@ Approve registration of the current terminal working directory as an exact works
 - If a user explicitly restricts an exact path or a resolved alias crosses the approved boundary, the restriction wins: require adequate identity/containment evidence, request approval when necessary, or stop. A worker's unsupported claim that two paths are equivalent cannot widen the boundary.
 - The same contract and identity-audit rules apply with another semantically suitable worker resolving a different kind of resource identifier. No worker-specific Orchestrator condition or protocol is introduced.
 - For a command registered with the same ID in workspaces A and B, after authorized discovery in A switch the host's terminal cwd to B before the effect invocation. The fixed runner rejects B **before command launch**, rather than treating the effect's returned B identity as post-hoc evidence. The expected workspace ID comes from the approved/discovered A identity and is an assertion, not an override or new selection permission.
-- Re-register a workspace with the same ID after discovery, including at another root; update an already-described command; or change its inherited default timeout/output limit before `run`. The effect must fail *before spawn* if the registration identity or effective execution hash differs from the observed one (while the management `definitionHash` remains a separate CAS token). Existing legacy registrations remain readable; new registrations carry a generation identifier.
+- Re-register a workspace with the same ID at another root, update an already-described command, or change its inherited defaults. The new hash-free `run` checks the workspace ID actually selected by the terminal cwd and uses the current registered command and its validated arguments. It cannot select another workspace or run an unregistered command; a known materially changed definition is re-audited before delegation. Legacy callers explicitly supplying both hashes continue to reject changed identity or executable semantics before spawn.
 
 ### CONF-019 — Preserve resource identity across file Workers and symlink aliases
 
@@ -405,7 +405,7 @@ Approve a TFR allowing registered local checks with known cumulative effects in 
 - The TFR contains the capability, not command IDs. After discovery the Card contains exact subject/action/effects and source grant; the Orchestrator does not teach Worker-specific CLI grammar.
 - The Worker may choose `lint`, `unit-tests`, or both and select documented arguments within each command's authorized limits. A permitted command may be re-run after relevant material state changes; equivalent unchanged-state retries stay bounded.
 - The Worker never executes `publish`, a newly discovered ID, a raw shell command, or a suggested command from stdout without separate exact permission, even if it is already registered.
-- Workspace/identity/effective-definition guards still apply immediately before every spawn. A stale definition, different terminal cwd, or an unknown side effect blocks the affected operation; no alternate command may be used to bypass the denial.
+- The workspace ID and registered command/argument schema are checked at the time of every spawn. A different terminal workspace, unregistered command, invalid argument, or unknown side effect blocks the affected operation; legacy hash guards, when explicitly supplied, still reject stale definitions.
 - Command-selection details remain Worker-local. The Orchestrator audits exact reported subject/action/effects and result evidence, without adding command-specific schemas or routing rules.
 
 ### CONF-022 — Report actionable registration blockers and resume only after new delegation
@@ -419,7 +419,7 @@ Ask for an already authorized execution objective with relevant observation and 
 - The Worker reports an observed `workspace_not_registered` or `command_not_registered` with matching workspace/cwd identity, search completeness, missing registration subject, and any unknown fields rather than a context-free `blocked`. It does not invent workspace IDs, command definitions, or registration semantics.
 - Case (c) reports incomplete discovery, not confirmed non-registration. Case (d) is decided by the Orchestrator's own contract audit, not a Worker claim of `authorization_required` or a proposal to register again.
 - A Worker never registers on its own initiative. The Orchestrator distinguishes observed prerequisites from missing approval, then asks for TFC or delegates already-approved exact registration via a separate Task Card.
-- After registration, only the Orchestrator audits the result and issues a **new** Task Card to resume the original criterion; registration alone does not authorize execution. The registered command is re-described and current workspace/definition hashes are asserted again at spawn.
+- After registration, only the Orchestrator audits the result and issues a **new** Task Card to resume the original criterion; registration alone does not authorize execution. The runner checks the current registration and selected workspace itself, without requiring Worker-supplied hashes.
 - The registration Worker cannot self-select another Worker, continue execution automatically, or alter the contract. No DANDORI-specific Task Card, TFR/TFC, revision, routing, or ledger protocol is added to the Worker definitions.
 
 ### CONF-023 — Run project-required registered checks under the initial approved rule
@@ -565,7 +565,7 @@ Under an approved goal-level contract, run two unsuccessful corrections without 
 - Two no-progress correction→verification cycles trigger a distinct strategy or discriminating observation, not automatic abandonment while a viable in-contract alternative remains.
 - Supported novel diagnostic evidence enables investigation but never satisfies completion. Duplicate evidence, rewording, renaming Workers or unchanged-state equivalent executions do not manufacture progress.
 - Once every distinct permitted approach is exhausted, Orchestrator reports an honest partial result; it does not loop indefinitely.
-- A stale command definition is re-described and audited before issuing a new exact Task Card if its new effects fit the original grant. The stale hash is never blindly reused.
+- An observed changed command definition is re-described and audited before issuing a new exact Task Card if its new effects fit the original grant. Legacy stale-hash failures are not bypassed by substituting guessed hashes.
 - A host denial is not bypassed by alternate tool syntax or raw shell use. Only a genuinely independent, permitted method may be considered.
 
 ### CONF-034 — Preserve and clear optional target caps without ambiguous patches
@@ -608,16 +608,16 @@ Approve a bounded local edit goal. Before dispatch, audit one exact file read an
 - The newly discovered file is not edited under the original Card; Orchestrator must audit its exact effect and issue a new Card.
 - Independent post-change verification remains separate from production.
 
-### CONF-037 — Distinguish command metadata from executable changes
+### CONF-037 — Run registered commands without Worker-supplied execution hashes
 
 **Input**
 
-Describe an exact registered command and retain both hashes. Modify only its description, then execute with the original workspace identity and execution hash. Next change its executable argv, effective timeout, output cap, or argument schema before an execution attempt. Also test a mismatched workspace and a host denial.
+Describe an exact registered command and run it using only its ID and expected workspace ID. Modify the command description, then its executable argv or effective defaults; repeat the hash-free run after re-auditing any known changes. Separately test a legacy call supplying both old hashes after an executable change, a mismatched workspace, and a host denial.
 
 **Expected**
 
-- A description-only change affects the full management definition hash but not the execution hash; the original execution assertion remains usable.
-- Any executable or effective limit change rejects the old execution hash with `stale_definition` before effects.
+- Ordinary `run` requires no execution hashes, remains constrained to the current selected workspace, and executes the currently registered command definition.
+- Command updates still use the management `definitionHash` CAS; explicit legacy execution hashes, when provided, reject changed executable settings before effects.
 - A workspace mismatch and host denial cannot be bypassed by alternative syntax, guessed identifiers, or unapproved commands.
 - The Worker reports a precise prerequisite or blockage and never blindly retries an execution whose effects are unknown.
 

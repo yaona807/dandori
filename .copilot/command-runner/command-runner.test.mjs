@@ -222,6 +222,14 @@ function runRunner(fixture, cwd, args) {
   );
 }
 
+function runRunnerWithoutHashes(fixture, cwd, args) {
+  return spawnSync(
+    process.execPath,
+    [path.join(fixture.home, 'command-runner', 'command-runner.mjs'), ...args],
+    { cwd, encoding: 'utf8', env: { ...process.env, COPILOT_HOME: fixture.home } },
+  );
+}
+
 function runInterface(fixture, cwd, args) {
   const scoped = new Set(['list', 'describe', 'register', 'update', 'unregister', 'output']);
   let scopedArgs = args;
@@ -614,7 +622,7 @@ test('core denies a mismatched expected workspace before command side effects', 
       'run', 'sample', '--expected-workspace=alpha',
     ]);
     assert.equal(mismatch.status, 2);
-    assert.match(mismatch.stderr, /workspace_identity_changed/u);
+    assert.match(mismatch.stderr, /workspace_scope_mismatch/u);
     await assert.rejects(readFile(path.join(fixture.beta, 'wrong-workspace.txt')), { code: 'ENOENT' });
   });
 });
@@ -656,6 +664,44 @@ test('workspace identity and executable changes are guarded but metadata changes
     const outputDefault = runRunner(fixture, fixture.alpha, bound);
     assert.equal(outputDefault.status, 2);
     assert.match(outputDefault.stderr, /stale_definition/u);
+  });
+});
+
+test('run needs only a selected workspace guard and resolves the current registered command', async () => {
+  await withFixture(async (fixture) => {
+    const invoke = (args, cwd = fixture.alpha) => runRunnerWithoutHashes(fixture, cwd, [
+      'run', 'sample', '--expected-workspace=alpha', ...args,
+    ]);
+    const first = invoke(['text=before']);
+    assert.equal(first.status, 0, first.stderr);
+    assert.match(first.stdout, /before/u);
+
+    const configPath = path.join(fixture.home, 'command-runner', 'workspaces.json');
+    const config = JSON.parse(await readFile(configPath, 'utf8'));
+    config.workspaces[0].commands.sample.run = [process.execPath, 'echo-args.mjs', '--updated'];
+    await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`);
+    const updated = invoke(['text=after']);
+    assert.equal(updated.status, 0, updated.stderr);
+    assert.match(updated.stdout, /--updated/u);
+    assert.match(updated.stdout, /after/u);
+
+    const wrongWorkspace = invoke([], fixture.beta);
+    assert.equal(wrongWorkspace.status, 2);
+    assert.match(wrongWorkspace.stderr, /workspace_scope_mismatch/u);
+
+    const unknown = runRunnerWithoutHashes(fixture, fixture.alpha, [
+      'run', 'absent', '--expected-workspace=alpha',
+    ]);
+    assert.equal(unknown.status, 2);
+    assert.match(unknown.stderr, /command_not_registered/u);
+
+    const invalidArgument = invoke(['not-registered=value']);
+    assert.equal(invalidArgument.status, 2);
+    assert.match(invalidArgument.stderr, /invalid_argument/u);
+
+    const halfLegacy = invoke(['--expected-identity=sha256-' + 'a'.repeat(64)]);
+    assert.equal(halfLegacy.status, 2);
+    assert.match(halfLegacy.stderr, /invalid_argument/u);
   });
 });
 
@@ -887,6 +933,32 @@ test('hook permits canonical bounded-interface calls and denies direct core or c
       JSON.parse(allowed.stdout).hookSpecificOutput.permissionDecision,
       'allow',
     );
+
+    const hashFree = runHook(fixture, {
+      hook_event_name: 'PreToolUse',
+      cwd: fixture.alpha,
+      tool_name: 'execute/runInTerminal',
+      tool_input: {
+        command: 'node ~/.copilot/command-runner/command-runner-interface.mjs run sample --expected-workspace=alpha count=4',
+      },
+    });
+    assert.equal(hashFree.status, 0, hashFree.stderr);
+    assert.equal(JSON.parse(hashFree.stdout).hookSpecificOutput.permissionDecision, 'allow');
+
+    for (const partial of [
+      '--expected-identity=sha256-' + 'a'.repeat(64),
+      '--expected-definition=sha256-' + 'b'.repeat(64),
+    ]) {
+      const blocked = runHook(fixture, {
+        hook_event_name: 'PreToolUse',
+        cwd: fixture.alpha,
+        tool_name: 'execute/runInTerminal',
+        tool_input: {
+          command: `node ~/.copilot/command-runner/command-runner-interface.mjs run sample --expected-workspace=alpha ${partial}`,
+        },
+      });
+      assert.equal(JSON.parse(blocked.stdout).hookSpecificOutput.permissionDecision, 'deny');
+    }
 
     const directCore = runHook(fixture, {
       hook_event_name: 'PreToolUse',

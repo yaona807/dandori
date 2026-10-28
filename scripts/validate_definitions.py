@@ -266,13 +266,13 @@ COMMAND_RUNNER_HOOKS = {
 COMMAND_RUNNER_REQUIRED_SECTION_MARKERS: dict[str, tuple[str, ...]] = {
     "## Responsibilities": (
         "require evidence that it is the same directory before registration;",
-        "Require the workspace identity and effective execution hash established by authorized discovery;",
+        "The fixed runner verifies the selected workspace and current registered command at execution time;",
     ),
     "## Delegated request boundary": (
         "Treat the delegated request as the complete task boundary.",
         "The fixed runner rejects a workspace mismatch before disclosing command data.",
         "A filtered or incomplete miss proves no absence.",
-        "The guards assert the previously approved target and effective execution settings before launch;",
+        "the runner checks the selected workspace, current registered definition, and argument schema before execution.",
         "A delegated list of exact authorized command operations permits selection among those listed IDs,",
         "If a workspace or command is demonstrably unregistered,",
         "If a registration prerequisite blocks execution,",
@@ -496,9 +496,9 @@ ORCHESTRATOR_REQUIRED_SECTION_MARKERS: dict[str, tuple[str, ...]] = {
         "An authorized exact file create may derive `create_directory+change_local` operations only for missing ancestor paths",
         "consume no additional affect target/cap",
         "A newly discovered subject cannot be affected in the same invocation unless",
-        "A known exact registered check may be instantiated under the approved",
+        "Registered checks require audit of definition, arguments, workspace and effects.",
         "A broad human edit grant still instantiates the smallest atomic file",
-        "Stale definitions require fresh inspection and audit;",
+        "The runner resolves the current command by ID and validates workspace/arguments.",
     ),
     "## Source fidelity routing": (
         "Applicable project instructions may identify a required operation only as evidence for an already-approved capability",

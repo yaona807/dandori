@@ -907,7 +907,7 @@ async function main() {
   if (!['validate-config', 'list', 'describe', 'run'].includes(operation)) {
     throw new RunnerError(
       'usage',
-      'usage: command-runner.mjs validate-config | list | describe <id> | run <id> --expected-workspace=<id> --expected-identity=<sha256> --expected-definition=<sha256> [name=encoded-value ...]',
+      'usage: command-runner.mjs validate-config | list | describe <id> | run <id> --expected-workspace=<id> [name=encoded-value ...]',
     );
   }
 
@@ -956,13 +956,10 @@ async function main() {
     );
   }
   const command = workspace.commands[commandId];
-  if (!command) {
-    throw new RunnerError(
-      'command_not_registered',
-      `command is not registered for workspace ${workspace.id}: ${commandId}`,
-    );
-  }
   if (operation === 'describe') {
+    if (!command) {
+      throw new RunnerError('command_not_registered', `command is not registered for workspace ${workspace.id}: ${commandId}`);
+    }
     if (argumentTokens.length) {
       throw new RunnerError(
         'usage',
@@ -988,26 +985,37 @@ async function main() {
   if (!ID_RE.test(expectedWorkspace) || guard !== `${expectedPrefix}${expectedWorkspace}`) {
     throw new RunnerError('invalid_argument', 'run requires --expected-workspace=<id> first');
   }
+  if (workspace.id !== expectedWorkspace) {
+    throw new RunnerError('workspace_scope_mismatch', 'selected workspace differs from delegated workspace');
+  }
+  if (!command) {
+    throw new RunnerError('command_not_registered', `command is not registered for workspace ${workspace.id}: ${commandId}`);
+  }
+  let argumentStart = 1;
   const identityToken = argumentTokens[1];
-  const definitionToken = argumentTokens[2];
-  const expectedIdentity = identityToken?.startsWith('--expected-identity=')
-    ? identityToken.slice('--expected-identity='.length) : '';
-  const expectedDefinition = definitionToken?.startsWith('--expected-definition=')
-    ? definitionToken.slice('--expected-definition='.length) : '';
-  if (!HASH_RE.test(expectedIdentity) || !HASH_RE.test(expectedDefinition)) {
-    throw new RunnerError('invalid_argument', 'run requires expected identity and definition hashes');
-  }
-  if (workspace.id !== expectedWorkspace || workspace.workspaceIdentity !== expectedIdentity) {
-    throw new RunnerError('workspace_identity_changed', 'workspace registration or root changed since discovery');
-  }
-  if (workspace.commandHashes[commandId] !== expectedDefinition) {
-    throw new RunnerError('stale_definition', 'command definition changed since discovery');
+  if (identityToken?.startsWith('--expected-identity=')
+    || identityToken?.startsWith('--expected-definition=')) {
+    const definitionToken = argumentTokens[2];
+    const expectedIdentity = identityToken?.startsWith('--expected-identity=')
+      ? identityToken.slice('--expected-identity='.length) : '';
+    const expectedDefinition = definitionToken?.startsWith('--expected-definition=')
+      ? definitionToken.slice('--expected-definition='.length) : '';
+    if (!HASH_RE.test(expectedIdentity) || !HASH_RE.test(expectedDefinition)) {
+      throw new RunnerError('invalid_argument', 'legacy run assertions require both valid hashes');
+    }
+    if (workspace.workspaceIdentity !== expectedIdentity) {
+      throw new RunnerError('workspace_identity_changed', 'workspace registration or root changed since discovery');
+    }
+    if (workspace.commandHashes[commandId] !== expectedDefinition) {
+      throw new RunnerError('stale_definition', 'command definition changed since discovery');
+    }
+    argumentStart = 3;
   }
   emit(await execute(
     workspace,
     commandId,
     command,
-    parseArguments(argumentTokens.slice(3)),
+    parseArguments(argumentTokens.slice(argumentStart)),
   ));
   return 0;
 }

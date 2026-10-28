@@ -63,7 +63,7 @@ The human approves the goal, resource boundary, capability classes, effects, and
 
 For compatible operations already explicitly authorized, a single Task Card can list several exact targets, including observation followed by changes to previously audited targets. The Worker may select their order and valid arguments, and recover from ordinary no-effect failures within the Card. A general-purpose tool is acceptable if the actual call remains bounded; its broader potential capability alone is not a blocker. Discovery of new effectful targets still requires Orchestrator audit and a new Card. Registration and authority expansion remain Orchestrator decisions.
 
-For build/lint/test checks, the initial TFR may authorize registered local verification with bounded side effects. Orchestrator audits the exact discovered command before delegation. A changed executable definition requires fresh audit; description-only metadata changes leave the execution guard valid. Registration is not authorization, and host restrictions cannot be bypassed.
+For build/lint/test checks, the initial TFR may authorize registered local verification with bounded side effects. Orchestrator audits the exact discovered command before delegation. A known change to executable semantics requires fresh audit, but Worker execution no longer requires copying workspace or definition hashes. The registered command selected at execution time is authoritative; registration is not authorization, and host restrictions cannot be bypassed.
 
 ## Key features
 

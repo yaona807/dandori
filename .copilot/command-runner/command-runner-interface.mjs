@@ -977,7 +977,7 @@ async function main() {
   ].includes(operation)) {
     throw new InterfaceError(
       'usage',
-      'usage: command-runner-interface.mjs workspace-list [query=<value>] [offset=<n>] | workspace-describe <id> | workspace-register <id> | workspace-unregister <id> expected=<workspace-hash> | list --expected-workspace=<id> [query=<value>] [offset=<n>] | describe <id> --expected-workspace=<id> | register <id> --expected-workspace=<id> definition=<encoded-json> | update <id> --expected-workspace=<id> expected=<definition-hash> definition=<encoded-json> | unregister <id> --expected-workspace=<id> expected=<definition-hash> | run <id> --expected-workspace=<id> --expected-identity=<sha256> --expected-definition=<sha256> [name=encoded-value ...] | output <execution-id> --expected-workspace=<id> stream=stdout|stderr [offset=<n>]',
+      'usage: command-runner-interface.mjs workspace-list [query=<value>] [offset=<n>] | workspace-describe <id> | workspace-register <id> | workspace-unregister <id> expected=<workspace-hash> | list --expected-workspace=<id> [query=<value>] [offset=<n>] | describe <id> --expected-workspace=<id> | register <id> --expected-workspace=<id> definition=<encoded-json> | update <id> --expected-workspace=<id> expected=<definition-hash> definition=<encoded-json> | unregister <id> --expected-workspace=<id> expected=<definition-hash> | run <id> --expected-workspace=<id> [name=encoded-value ...] | output <execution-id> --expected-workspace=<id> stream=stdout|stderr [offset=<n>]',
     );
   }
 
@@ -1147,25 +1147,34 @@ async function main() {
     if (!COMMAND_ID_RE.test(expectedWorkspace) || guard !== `${prefix}${expectedWorkspace}`) {
       throw new InterfaceError('invalid_argument', 'run requires --expected-workspace=<id> first');
     }
+    let argumentStart = 1;
     const identityToken = rest[1];
-    const definitionToken = rest[2];
-    const expectedIdentity = identityToken?.startsWith('--expected-identity=')
-      ? identityToken.slice('--expected-identity='.length) : '';
-    const expectedDefinition = definitionToken?.startsWith('--expected-definition=')
-      ? definitionToken.slice('--expected-definition='.length) : '';
-    if (!DEFINITION_HASH_RE.test(expectedIdentity) || !DEFINITION_HASH_RE.test(expectedDefinition)) {
-      throw new InterfaceError('invalid_argument', 'run requires expected identity and definition hashes');
+    let expectedIdentity;
+    if (identityToken?.startsWith('--expected-identity=')
+      || identityToken?.startsWith('--expected-definition=')) {
+      const definitionToken = rest[2];
+      expectedIdentity = identityToken?.startsWith('--expected-identity=')
+        ? identityToken.slice('--expected-identity='.length) : '';
+      const expectedDefinition = definitionToken?.startsWith('--expected-definition=')
+        ? definitionToken.slice('--expected-definition='.length) : '';
+      if (!DEFINITION_HASH_RE.test(expectedIdentity) || !DEFINITION_HASH_RE.test(expectedDefinition)) {
+        throw new InterfaceError('invalid_argument', 'legacy run assertions require both valid hashes');
+      }
+      argumentStart = 3;
     }
-    parseArguments(rest.slice(3));
+    parseArguments(rest.slice(argumentStart));
     // Preflight prevents cache maintenance for an already-mismatched workspace.
     // It is not sufficient for authorization: core rechecks in the same process
     // that starts the command, closing the preflight-to-execution race.
     const preflight = await runCore(['list']);
-    if (preflight.workspaceId !== expectedWorkspace || preflight.workspaceIdentity !== expectedIdentity) {
-      throw new InterfaceError('workspace_identity_changed', 'selected workspace differs from expected workspace');
+    if (preflight.workspaceId !== expectedWorkspace) {
+      throw new InterfaceError('workspace_scope_mismatch', 'selected workspace differs from delegated workspace');
+    }
+    if (expectedIdentity !== undefined && preflight.workspaceIdentity !== expectedIdentity) {
+      throw new InterfaceError('workspace_identity_changed', 'selected workspace identity changed');
     }
     await cleanupExecutions(LIMITS.maxExecutionReserveBytes);
-    const result = await runCore(['run', subject, guard, identityToken, definitionToken, ...rest.slice(3)]);
+    const result = await runCore(['run', subject, ...rest]);
     if (result?.workspaceId !== expectedWorkspace || result?.commandId !== subject) {
       throw new InterfaceError('runner_protocol_error', 'unexpected execution identity');
     }
