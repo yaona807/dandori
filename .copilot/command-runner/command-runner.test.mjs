@@ -188,8 +188,9 @@ function digest(value) {
 }
 
 function executionHash(command, defaults = {}) {
+  const { description: _description, ...executableCommand } = command;
   return digest({
-    ...command,
+    ...executableCommand,
     timeoutMs: command.timeoutMs ?? defaults.timeoutMs ?? 300_000,
     maxOutputBytes: command.maxOutputBytes ?? defaults.maxOutputBytes ?? 1_048_576,
   });
@@ -618,7 +619,7 @@ test('core denies a mismatched expected workspace before command side effects', 
   });
 });
 
-test('reused workspace ID and changed command definition are rejected before effects', async () => {
+test('workspace identity and executable changes are guarded but metadata changes are allowed', async () => {
   await withFixture(async (fixture) => {
     const configPath = path.join(fixture.home, 'command-runner', 'workspaces.json');
     const initial = JSON.parse(readFileSync(configPath, 'utf8'));
@@ -635,6 +636,10 @@ test('reused workspace ID and changed command definition are rejected before eff
 
     initial.workspaces[0].registrationId = undefined;
     initial.workspaces[0].commands.sample.description = 'Changed after discovery';
+    await writeFile(configPath, `${JSON.stringify(initial, null, 2)}\n`);
+    const descriptionOnly = runRunner(fixture, fixture.alpha, bound);
+    assert.equal(descriptionOnly.status, 0, descriptionOnly.stderr);
+    initial.workspaces[0].commands.sample.run = [process.execPath, 'echo-args.mjs', '--modified'];
     await writeFile(configPath, `${JSON.stringify(initial, null, 2)}\n`);
     const changed = runRunner(fixture, fixture.alpha, bound);
     assert.equal(changed.status, 2);

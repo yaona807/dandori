@@ -210,8 +210,10 @@ REQUIRED_MUTATION_TEST_METHODS = frozenset(
     }
 )
 BOUNDARY_ENFORCEMENT_POLICY = (
-    "Use a tool only when its arguments and runtime behavior can enforce the assigned boundary. "
-    "If a tool can operate only on a broader scope, do not call it; return `blocked` and identify the narrower capability required."
+    "Use tools only for delegated subjects and actions. "
+    "A general-purpose tool is allowed when the specific call can be scoped to the assigned subject and its effects fit the delegated boundary; "
+    "the tool need not enforce the entire task policy. "
+    "If a call cannot be bounded safely, return `blocked` and identify the narrower capability required."
 )
 
 BUNDLED_WORKER_TOOLS: dict[str, set[str]] = {
@@ -280,7 +282,7 @@ COMMAND_RUNNER_REQUIRED_SECTION_MARKERS: dict[str, tuple[str, ...]] = {
         "The fixed runner handles cwd resolution for existing-workspace command operations.",
     ),
     "## Strict rules": (
-        "Use a tool only when its arguments and runtime behavior can enforce the assigned boundary.",
+        "Use tools only for delegated subjects and actions.",
         "Do not execute a raw project command.",
         "Do not add, rewrite, infer, substitute, or combine command IDs or arguments.",
         "Do not register a workspace as a fallback or on your own initiative.",
@@ -439,7 +441,7 @@ ORCHESTRATOR_REQUIRED_MARKERS = (
     "key omission preserves the current cap",
     "incidental_output_boundaries:",
     "never hide broadened actions",
-    "Any Task Card containing an `execute` operation must contain at least one active criterion ID",
+    "Any Task Card containing an `execute` operation must link to at least one active criterion ID",
     "under the normal verification policy",
     "pending_invocations:",
 )
@@ -493,7 +495,7 @@ ORCHESTRATOR_REQUIRED_SECTION_MARKERS: dict[str, tuple[str, ...]] = {
         "Never relabel intentional edits as incidental.",
         "An authorized exact file create may derive `create_directory+change_local` operations only for missing ancestor paths",
         "consume no additional affect target/cap",
-        "A candidate cannot be affected in the same invocation that discovered it",
+        "A newly discovered subject cannot be affected in the same invocation unless",
         "A known exact registered check may be instantiated under the approved",
         "A broad human edit grant still instantiates the smallest atomic file",
         "Stale definitions require fresh inspection and audit;",
@@ -519,6 +521,8 @@ ORCHESTRATOR_REQUIRED_SECTION_MARKERS: dict[str, tuple[str, ...]] = {
     ),
     "## Generic Task Card": (
         "A Task Card may list multiple exact permitted operations",
+        "Keep `operation_id` stable in the outward Card and its internal provenance mapping",
+        "Do not expose that link to the Worker.",
         "Derived missing-ancestor directories need an authorized exact file create",
         "incidental_output_boundaries:",
         "no Worker output can authorize a target, operation, or permission.",
@@ -1700,6 +1704,27 @@ def validate_repository(root: Path) -> ValidationResult:
     for marker in ORCHESTRATOR_REQUIRED_MARKERS:
         if marker not in orchestrator.body:
             result.errors.append(f"{relative(orchestrator.path, root)}: missing required Orchestrator marker {marker!r}")
+    card_section_match = re.search(
+        r"(?ms)^## Generic Task Card\s*$(.*?)(?=^## |\Z)", orchestrator.body
+    )
+    card_schema_match = (
+        re.search(r"(?s)```yaml\s*\n(.*?)\n```", card_section_match.group(1))
+        if card_section_match else None
+    )
+    if card_schema_match is None:
+        result.errors.append(f"{relative(orchestrator.path, root)}: missing Worker-facing Task Card schema")
+    else:
+        card_schema = card_schema_match.group(1)
+        for internal_key in ("source_permission_id", "criterion_refs", "expected_delta", "return_to"):
+            if re.search(rf"(?m)^\s*{internal_key}:\s*", card_schema):
+                result.errors.append(
+                    f"{relative(orchestrator.path, root)}: internal field in Worker-facing Task Card: {internal_key}"
+                )
+        for field in ("task_card", "objective", "operations", "limits", "deliverables"):
+            if not re.search(rf"(?m)^\s*{field}:\s*", card_schema):
+                result.errors.append(
+                    f"{relative(orchestrator.path, root)}: Worker-facing Task Card missing field: {field}"
+                )
     for invariant in ORCHESTRATOR_REQUIRED_INVARIANTS:
         if invariant not in orchestrator.body:
             result.errors.append(

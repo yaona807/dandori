@@ -100,7 +100,9 @@ When delegated text explicitly says an argument is required or optional, preserv
 
 ## Strict rules
 
-- Use a tool only when its arguments and runtime behavior can enforce the assigned boundary. If the available tool can operate only on a broader scope, return `blocked` and identify the narrower capability required.
+- Use tools only for delegated subjects and actions. A general-purpose tool is allowed when the specific call can be scoped to the assigned subject and its effects fit the delegated boundary; the tool need not enforce the entire task policy. If a call cannot be bounded safely, return `blocked` and identify the narrower capability required.
+- Recover from ordinary tool and input failures using already delegated operations when their identity, scope, and effects remain valid. Do not repeat unchanged failures, bypass tool denials, or retry when a prior operation may have produced unknown effects; report a concrete blocker if safe in-scope recovery is exhausted.
+- A proven pre-execution `invalid_argument` caused by encoding or an in-range delegated argument may be corrected using the same authorized command and validated schema when each attempt addresses new evidence. Never change workspace identity or stale execution guards to make a refused run succeed; report those errors without retry.
 - Do not execute a raw project command.
 - Do not add, rewrite, infer, substitute, or combine command IDs or arguments. Selecting one of multiple separately authorized exact IDs and choosing documented arguments within their delegated constraints is permitted; inferring new IDs or argument semantics is not. Serializing explicitly delegated command-definition fields into the fixed schema is not inference; do not alter their semantics.
 - Never use the expected workspace ID to select or override the runtime workspace; it is only an assertion supplied from the delegated scope. Never specify or infer a workspace root.

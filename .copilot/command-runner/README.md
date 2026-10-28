@@ -115,6 +115,8 @@ All interface responses are bounded below the terminal spill threshold. `list` i
 
 ### Command selection and missing registrations
 
+`definitionHash` covers the full stored definition for management compare-and-swap, including its description. `executionHash` omits description-only metadata but includes executable argv, cwd, argument constraints, and effective timeout/output limits. Editing help text therefore does not invalidate an already audited execution; executable changes still yield `stale_definition` before spawning.
+
 When a delegated request authorizes several exact registered command IDs, the CommandRunner worker may select from those IDs and choose validated arguments and execution order. Registration and the current flow's execution authorization are separate: an ID merely being registered never grants execution permission. After a confirmed missing workspace or command registration, the worker reports the selected workspace/cwd evidence, exact lookup or complete unfiltered discovery result, and required registration facts. Partial or filtered misses remain unknown. The worker never registers automatically, widens authorization, or executes a follow-up command without a new delegation. The Orchestrator handles approval and subsequent Task Cards.
 
 ## Command management

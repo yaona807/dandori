@@ -43,9 +43,9 @@ const canonical = (v) => Array.isArray(v) ? v.map(canonical) : v && typeof v ===
   ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, canonical(v[k])])) : v;
 const digest = (v) => 'sha256-' + createHash('sha256').update(JSON.stringify(canonical(v))).digest('hex');
 const workspaceIdentity = digest([workspace.id, workspace.root, workspace.registrationId ?? null]);
-const executionHash = (command) => digest({ ...command,
+const executionHash = (command) => { const { description: _description, ...executableCommand } = command; return digest({ ...executableCommand,
   timeoutMs: command.timeoutMs ?? config.defaults?.timeoutMs ?? 300000,
-  maxOutputBytes: command.maxOutputBytes ?? config.defaults?.maxOutputBytes ?? 1048576 });
+  maxOutputBytes: command.maxOutputBytes ?? config.defaults?.maxOutputBytes ?? 1048576 }); };
 const publicCommand = ([commandId, command]) => ({ id: commandId, description: command.description, arguments: command.arguments ?? [] });
 if (operation === 'list') {
   emit({ workspaceId: workspace.id, workspaceIdentity, commands: Object.entries(workspace.commands).map(publicCommand) });
@@ -205,8 +205,9 @@ function digest(value) {
 }
 
 function executionHash(command, defaults = {}) {
+  const { description: _description, ...executableCommand } = command;
   return digest({
-    ...command,
+    ...executableCommand,
     timeoutMs: command.timeoutMs ?? defaults.timeoutMs ?? 300_000,
     maxOutputBytes: command.maxOutputBytes ?? defaults.maxOutputBytes ?? 1_048_576,
   });
@@ -461,6 +462,25 @@ test('effective execution hash changes with inherited defaults but management CA
       `--expected-definition=${before.executionHash}`,
     ]);
     parseFailure(stale, 'stale_definition');
+  });
+});
+
+test('description-only updates keep execution assertions valid but change management CAS', async () => {
+  await withManagementFixture(async (fixture) => {
+    const before = parseSuccess(runInterface(fixture, fixture.alpha, ['describe', 'keep']));
+    const file = path.join(fixture.commandRunner, 'workspaces.json');
+    const config = JSON.parse(await readFile(file, 'utf8'));
+    config.workspaces[0].commands.keep.description = 'Updated help text.';
+    await writeFile(file, `${JSON.stringify(config, null, 2)}\n`);
+    const after = parseSuccess(runInterface(fixture, fixture.alpha, ['describe', 'keep']));
+    assert.notEqual(after.definitionHash, before.definitionHash);
+    assert.equal(after.executionHash, before.executionHash);
+    const result = parseSuccess(runInterface(fixture, fixture.alpha, [
+      'run', 'keep', '--expected-workspace=alpha',
+      `--expected-identity=${before.workspaceIdentity}`,
+      `--expected-definition=${before.executionHash}`,
+    ]));
+    assert.ok(result.executionId);
   });
 });
 

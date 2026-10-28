@@ -352,8 +352,10 @@ function definitionHash(definition) {
     .digest('hex')}`;
 }
 function executionHash(command, defaults = {}) {
+  // Execution guards bind executable semantics, not display-only metadata.
+  const { description: _description, ...executableCommand } = command;
   return definitionHash({
-    ...command,
+    ...executableCommand,
     timeoutMs: command.timeoutMs ?? defaults.timeoutMs ?? 300_000,
     maxOutputBytes: command.maxOutputBytes ?? defaults.maxOutputBytes ?? 1_048_576,
   });
