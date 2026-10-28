@@ -87,6 +87,8 @@ Runnerが参照するのは**ターミナルのカレントディレクトリ**�
 
 1コマンドの公開 `describe` 定義にもサイズ上限を設けます。公開結果には固定argvなどを露出せず、CAS置換・削除に使う `definitionHash` を含めます。安全なサイズで返せない場合は、その `describe` 要求をfail-closedで拒否します。
 
+別の読み取り専用 `inspect` は、Task Cardで正確なIDについて個別に許可された場合に限り、登録済みコマンドの実効的な固定 `argv`、Workspace相対 `cwd`、既定値を反映したtimeout/出力上限、引数トークンとスキーマを返します。既知のIDに対する監査では、事前の `list` やPreviewの往復は不要です。`describe` の許可だけでは `inspect` は使えません。応答は10KiB以下に制限し、典型的な埋め込み認証情報が疑われる定義は `inspection_sensitive` で拒否します。ただし検出は完全な秘密情報スキャナではないため、登録定義に認証情報の値を埋め込まないでください。取得不能な定義は監査完了とみなさず、固定argvの把握だけで全副作用が判明したともみなしません。実行時は監査時のスナップショットではなく現在の登録定義が使用されます。
+
 ## Runnerのインターフェース
 
 command操作は現在のWorkspace内から実行します。stale Workspaceの確認・削除はruntime選択が壊れていても利用できます。
@@ -98,6 +100,7 @@ node ~/.copilot/command-runner/command-runner-interface.mjs workspace-register <
 node ~/.copilot/command-runner/command-runner-interface.mjs workspace-unregister <workspace-id> expected=<workspace-hash>
 node ~/.copilot/command-runner/command-runner-interface.mjs list --expected-workspace=example [query=<encoded-search-text>] [offset=<n>] [revision=<sha256>]
 node ~/.copilot/command-runner/command-runner-interface.mjs describe test --expected-workspace=example
+node ~/.copilot/command-runner/command-runner-interface.mjs inspect test --expected-workspace=example
 node ~/.copilot/command-runner/command-runner-interface.mjs register lint --expected-workspace=example definition=<encoded-json>
 node ~/.copilot/command-runner/command-runner-interface.mjs update lint --expected-workspace=example expected=<definition-hash> definition=<encoded-json>
 node ~/.copilot/command-runner/command-runner-interface.mjs unregister lint --expected-workspace=example expected=<definition-hash>
