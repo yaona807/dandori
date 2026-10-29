@@ -1,0 +1,274 @@
+# ユーザーレベル・ワークスペースコマンドランナー
+
+[English](./README.md)
+
+このディレクトリには、固定Node.jsコマンド本体、boundedな管理・実行interface、Agent固有の `PreToolUse` Hook、個人用Workspace設定のサンプルを格納します。`CommandRunner` Agent定義は、他のDANDORI Agentと同じ `../agents/CommandRunner.agent.md` に配置します。
+
+実際の利用ファイルは `~/.copilot/` 配下へインストールします。CommandRunnerの制御ファイルや個人用の許可コマンド設定を、対象プロジェクトのリポジトリへ追加する必要はありません。
+
+## 対応環境
+
+バージョン1の対象はmacOS、Linux、WSL2です。Windowsネイティブ環境には未対応です。
+
+Hookと固定Runnerの呼び出しには `~/.copilot/...` を使用するため、POSIX互換シェルで `~` が展開される必要があります。
+
+## インストール
+
+Agentは他のDANDORI Agentと一緒に配置し、固定RunnerとHookを追加でインストールします。
+
+```bash
+mkdir -p ~/.copilot/agents ~/.copilot/command-runner
+cp .copilot/agents/CommandRunner.agent.md ~/.copilot/agents/
+cp .copilot/command-runner/command-runner.mjs ~/.copilot/command-runner/
+cp .copilot/command-runner/command-runner-interface.mjs ~/.copilot/command-runner/
+cp .copilot/command-runner/command-runner-hook.mjs ~/.copilot/command-runner/
+test -f ~/.copilot/command-runner/workspaces.json \
+  || cp .copilot/command-runner/workspaces.example.json ~/.copilot/command-runner/workspaces.json
+```
+
+コピーされる初期設定は空のWorkspace registryです。Workspaceにしたいrootディレクトリで `workspace-register <id>` を実行すると、Runnerが実際のカレントディレクトリからcanonical rootを取得して登録します。root引数や `workspaces.json` の手編集は不要です。この個人用ファイルはDANDORIリポジトリへコミットしません。
+
+Agent固有HookはPreview機能のため、VS Codeの `chat.useCustomAgentHooks` を `true` にします。Chat Diagnosticsで、`CommandRunner`が `~/.copilot/agents/CommandRunner.agent.md` から読み込まれていることを確認してください。
+
+`COPILOT_HOME`を設定した場合、Runnerの設定・データ参照先だけが変わります。Runnerは `$COPILOT_HOME/command-runner/workspaces.json` を読み、実行出力を `$COPILOT_HOME/command-runner/executions/` 配下へ保存します。Agent・Runner・Hook本体のインストール先は引き続き `~/.copilot/` です。
+
+## Workspaceの選択
+
+Runnerは実行時に次の処理を行います。
+
+1. 実際のカレントディレクトリを解決する
+2. 登録された各Workspace rootを解決する
+3. カレントディレクトリを含むrootのうち、最も深いrootを選択する
+4. 選択したWorkspaceのコマンドだけを公開する
+5. 一致するWorkspaceがなければfail-closedで拒否する
+
+実行位置はWorkspace rootでも、その配下のディレクトリでも構いません。AgentからWorkspace IDを指定したり、別のWorkspaceを選択したり、ターミナルのcwd・環境変数・shell・profileを上書きしたり、バックグラウンド実行を要求したりすることはできません。リポジトリ名やGit remoteは認可境界として使用しません。
+
+Runnerが参照するのは**ターミナルのカレントディレクトリ**であり、VS Codeで開いているフォルダとは異なる場合があります。依頼対象が「エディタで開いているWorkspace」の場合は、登録前に許可された情報から両者の同一性を確認します。Runnerがエディタ側のフォルダを選び直したり、ターミナルのcwdを上書きしたりはできません。登録結果にrootが返ってきたというだけでは、依頼したフォルダが登録されたことにはなりません。
+
+コマンド管理にも同じ選択規則を使用します。`register` / `update` / `unregister` が変更できるのは、実際のカレントディレクトリから選択されたWorkspaceのcommand mapだけです。Workspace IDやrootを引数で指定することはできません。Workspace管理は別系統で、`workspace-register` は実際のカレントディレクトリだけを登録します。liveなWorkspaceの削除は現在選択されているWorkspaceだけに限定し、rootが消えたstale Workspaceだけはexact IDとworkspace hash CASで削除できます。
+
+カレントディレクトリのシンボリックリンク経由のパスと実体パスは、表記が違っていても同じWorkspaceを指す場合があります。同一性の解決は呼び出し元ではなくRunnerが担当し、Workspace登録には正規化後の実体パスを保存します。ただし、別Workspaceの選択やWorkspace外を指すシンボリックリンクへのアクセスが許可されるわけではありません。
+
+## 設定
+
+各Workspaceには、固定ID、絶対root、Workspace固有のコマンド定義を登録します。コマンドは固定argv配列と、任意の検証済み名前付き引数で構成します。
+
+```json
+{
+  "version": 1,
+  "workspaces": [
+    {
+      "id": "example",
+      "root": "/absolute/path/to/example",
+      "commands": {
+        "test": {
+          "description": "テストを実行する。",
+          "run": ["npm", "test", "--"],
+          "cwd": ".",
+          "arguments": {
+            "runInBand": {
+              "kind": "flag",
+              "token": "--runInBand"
+            }
+          }
+        }
+      }
+    }
+  ]
+}
+```
+
+`run`は必ずargv配列として定義し、shell文字列は使用しません。動的な実行ファイル、raw引数の受け渡し、利用者定義の正規表現、無制限の引数はサポートしません。
+
+`-`から始まるpositional値は拒否します。対象プログラムが対応している場合は、positional引数より前に固定argvとして `--` を登録してください。
+
+`workspace-file`と`workspace-directory`は、symlink解決後のパスを検証します。`mustExist`が `false` の場合も、最も近い既存の親ディレクトリを先に解決するため、Workspace外を指すsymlink配下の未作成パスは拒否されます。
+
+1コマンドの公開 `describe` 定義にもサイズ上限を設けます。公開結果には固定argvなどを露出せず、CAS置換・削除に使う `definitionHash` を含めます。安全なサイズで返せない場合は、その `describe` 要求をfail-closedで拒否します。
+
+別の読み取り専用 `inspect` は、Task Cardで正確なIDについて個別に許可された場合に限り、登録済みコマンドの実効的な固定 `argv`、Workspace相対 `cwd`、既定値を反映したtimeout/出力上限、引数トークンとスキーマを返します。既知のIDに対する監査では、事前の `list` やPreviewの往復は不要です。`describe` の許可だけでは `inspect` は使えません。応答は10KiB以下に制限し、典型的な埋め込み認証情報が疑われる定義は `inspection_sensitive` で拒否します。ただし検出は完全な秘密情報スキャナではないため、登録定義に認証情報の値を埋め込まないでください。取得不能な定義は監査完了とみなさず、固定argvの把握だけで全副作用が判明したともみなしません。実行時は監査時のスナップショットではなく現在の登録定義が使用されます。
+
+## Runnerのインターフェース
+
+command操作は現在のWorkspace内から実行します。stale Workspaceの確認・削除はruntime選択が壊れていても利用できます。
+
+```bash
+node ~/.copilot/command-runner/command-runner-interface.mjs workspace-list [query=<encoded-id-fragment>] [offset=<n>]
+node ~/.copilot/command-runner/command-runner-interface.mjs workspace-describe <workspace-id>
+node ~/.copilot/command-runner/command-runner-interface.mjs workspace-register <workspace-id>
+node ~/.copilot/command-runner/command-runner-interface.mjs workspace-unregister <workspace-id> expected=<workspace-hash>
+node ~/.copilot/command-runner/command-runner-interface.mjs list --expected-workspace=example [query=<encoded-search-text>] [offset=<n>] [revision=<sha256>]
+node ~/.copilot/command-runner/command-runner-interface.mjs describe test --expected-workspace=example
+node ~/.copilot/command-runner/command-runner-interface.mjs inspect test --expected-workspace=example
+node ~/.copilot/command-runner/command-runner-interface.mjs register lint --expected-workspace=example definition=<encoded-json>
+node ~/.copilot/command-runner/command-runner-interface.mjs update lint --expected-workspace=example expected=<definition-hash> definition=<encoded-json>
+node ~/.copilot/command-runner/command-runner-interface.mjs unregister lint --expected-workspace=example expected=<definition-hash>
+node ~/.copilot/command-runner/command-runner-interface.mjs run test --expected-workspace=example runInBand=true
+node ~/.copilot/command-runner/command-runner-interface.mjs output <execution-id> --expected-workspace=example stream=stdout|stderr [offset=<n>]
+```
+
+引数値にはURI component encodingを使用します。Workspace path型の引数は、選択されたroot配下へ解決できない場合に拒否されます。`register`と`update`はURI component encodingしたJSONコマンド定義を1個だけ受け取り、decode後の定義は16 KiB以内に制限します。`update`には現在の `definitionHash` も必要です。
+
+AgentとHookが直接呼べるのは `command-runner-interface.mjs` だけです。実行時のcommand schema検証とprocess起動は、従来どおり固定 `command-runner.mjs` coreへ委譲します。管理操作でも、保存前に候補となる設定全体を同じcoreで検証します。
+
+`list`・`describe`・コマンド定義の登録/更新/削除・`run`・`output`は、委譲されたWorkspace IDを`--expected-workspace`で渡します。固定Runnerは実際の端末cwdから選択したWorkspaceと照合し、不一致なら情報返却・設定変更・コマンド起動の前に`workspace_scope_mismatch`を返します。Agentが端末cwdを調査・変更する必要はありません。実行時には承認済みの正確なコマンドID・Workspace ID・検証済み引数だけを渡し、**Workerは実行ハッシュを取得・転記しません**。実行時の登録定義を正本とするため、調査後の定義更新は実行内容を変更し得ます。登録の更新は別途権限が必要であり、司令塔は認識した変更を再監査します。移行期の旧呼出しで2つのハッシュを両方指定する場合は、従来の厳密な照合も引き続き有効です。`describe`で未登録だった場合は照会Workspace IDをエラーへ含めます。
+
+Runnerがターミナルに返すレスポンスにはサイズ上限があります。`list`は設定リビジョン`revision`を返し、2ページ目以降はその値を渡します。途中でコマンド一覧やWorkspaceが変わると`stale_listing`となり、その結果から未登録と断定できません。`list`は**実際のカレントディレクトリから選ばれたWorkspace内**のcommand IDを1回最大100件返し、`total`と、続きがある場合の`nextOffset`を返します。`query`はIDとdescriptionの大文字小文字を区別しない部分一致検索であり、候補を絞るだけです。**検索結果が0件でも、フィルタ付き・未取得ページあり・別Workspaceの結果なら「未登録」とは断定できません。** 完全に取得したフィルタなしの一覧か、実行Workspaceを確認したうえでの正確なIDの照会結果だけが、そのWorkspace内の存在・不在の根拠になります。ツールの失敗や対象Workspaceの不明は「未確認」として扱います。`describe`は公開定義と、管理操作用の`definitionHash`および実行前照合用の`executionHash`を返します。検索ミスを根拠にIDを推測したり、代替コマンドを新規登録したりしてはいけません。
+
+委譲された作業に複数の**正確な許可済みCommand ID**が含まれる場合、CommandRunnerはその中から必要なコマンドを選び、登録定義に収まる引数と実行順序を決められます。許可済みの一覧にないIDは、既に登録されていても実行できません。正確なWorkspaceやCommand IDの未登録を確認できた場合は、観測したエラー・照会Workspace・不足する登録情報を返し、現在の委譲を終了します。登録するか、追加承認を求めるか、再実行を委譲するかはOrchestratorの判断です。
+
+### コマンド管理
+
+管理用の`definitionHash`は説明文を含む定義全体を対象とします。`executionHash`は監査と旧形式の厳密照合向けに残しますが、新しい`run`では不要です。旧形式のハッシュ指定がある場合に限り、定義変更は従来どおり`stale_definition`として拒否します。
+
+コマンド定義では必須引数と任意引数を直接設定できます。`required` を省略した場合は任意扱いで、未指定時に実行を拒否したい引数は `required: true` とします。
+
+```json
+{
+  "description": "1つのtargetをbuildする。",
+  "run": ["npm", "run", "build", "--"],
+  "cwd": ".",
+  "arguments": {
+    "target": {
+      "kind": "positional",
+      "required": true,
+      "value": { "type": "string", "maxLength": 80 }
+    },
+    "mode": {
+      "kind": "option",
+      "token": "--mode",
+      "required": false,
+      "value": { "type": "choice", "values": ["fast", "safe"] }
+    }
+  }
+}
+```
+
+引数kindは `flag` / `option` / `positional` です。flag以外は `value` を持ち、`boolean`、範囲付き `integer`、`choice`、長さ上限付き `string`、`workspace-file`、`workspace-directory` を使用できます。`option` は固定tokenが必須、`positional` はtokenを持ちません。繰り返し可能なflag以外の引数は `repeatable: true` と有限の `maxItems` を指定します。
+
+`register`は新規作成専用です。同じIDが存在する場合は `command_already_registered` で拒否し、upsertは行いません。渡された定義をstrict JSONとして解析し、現在選択中のWorkspaceにだけ挿入したうえで、候補となる `workspaces.json` 全体を固定Runnerで検証してから保存します。
+
+`update`は既存1コマンドの定義を完全置換し、upsertは行いません。`describe`で取得した現在の `definitionHash` が必須で、古いhashは `stale_definition` で拒否します。置換定義をstrict JSONとして解析し、候補設定全体を検証してからatomicに保存します。
+
+`unregister`には、`describe`で取得した現在の `definitionHash` が必須です。観測後に定義が変わっていた場合は `stale_definition` で拒否します。これにより、同じIDが別定義へ差し替わった後に古い削除要求で消してしまうことを防ぎます。空のcommand mapを有効とするため、最後の1コマンドも削除できます。
+
+管理操作はユーザーレベルの `workspaces.lock` で直列化します。候補設定は同じディレクトリのmode `0600` 一時ファイルへ書き、設定全体の検証と元ファイル不変確認が通った場合だけatomic renameします。生きているlockがある場合は `configuration_busy`、5分を超えたlockは `stale_configuration_lock` として報告し、自動破壊はせず手動削除を要求します。
+
+これらの管理primitiveは「何を登録・置換・削除・実行すべきか」を判断しません.指定されたexact mutationを設定整合性を維持しながら適用するだけです。
+
+### 推奨read-only Gitレシピ
+
+Gitをruntime上の特別な能力にはしません。リポジトリ観測が必要なWorkspaceだけ、次のような通常commandを登録し、他のexact command IDと同じ認可で扱います。
+
+`git-status` はoptionalなindex refreshと設定済みfilesystem monitorを抑えつつ、script向けに安定したstatusを取得できます。
+
+```json
+{
+  "description": "Inspect repository status without optional index refresh.",
+  "run": [
+    "git",
+    "-c",
+    "core.fsmonitor=false",
+    "--no-pager",
+    "--no-optional-locks",
+    "status",
+    "--porcelain=v2",
+    "--branch",
+    "--untracked-files=all",
+    "--ignore-submodules=all"
+  ],
+  "cwd": ".",
+  "arguments": {}
+}
+```
+
+file-scoped diffではpathspecをliteral固定し、external diffとtext conversionを無効化したうえで、各pathをWorkspace境界へ束縛します。`mustExist: false` により明示指定された削除済みファイルも扱えますが、Workspace root外へ逃げるpathは引き続き拒否します。
+
+```json
+{
+  "description": "Inspect unstaged changes for explicitly supplied workspace files.",
+  "run": [
+    "git",
+    "-c",
+    "core.fsmonitor=false",
+    "--no-pager",
+    "--no-optional-locks",
+    "--literal-pathspecs",
+    "diff",
+    "--no-ext-diff",
+    "--no-textconv",
+    "--ignore-submodules=all",
+    "--"
+  ],
+  "cwd": ".",
+  "arguments": {
+    "paths": {
+      "kind": "positional",
+      "required": true,
+      "repeatable": true,
+      "maxItems": 20,
+      "value": { "type": "workspace-file", "mustExist": false }
+    }
+  }
+}
+```
+
+`git-diff-staged` は同じ定義で、`"diff"` の直後に `"--cached"` を追加します。これらはdefaultではなくレシピです。`workspace-register` は今までどおり空のcommand mapを作成し、Git commandを自動注入しません。
+
+project全体の検証は、通常のCI入口と揃えたproject-ownedな `verify` のような1コマンドを推奨します。Runner側へ汎用command sequence機構を追加せず、そのexact commandを登録します。
+
+### 実行出力
+
+`run`はstdout/stderrの全文をRunner管理の実行キャッシュへ保存し、terminalには次の小さい結果だけを返します。
+
+- 選択されたWorkspace IDとcommand ID
+- 推測困難なtimestamp付き `executionId`
+- 設定されたWorkspace相対 `cwd`
+- exit codeとsignal
+- `timedOut` と `outputTruncated`
+- stdout/stderrのバイト数
+- stdout/stderr末尾の短いpreview
+
+指定引数の値は結果へ再掲しません。追加出力は `output` だけで取得します。`output`はファイルパスではなくexecution IDを受け取り、固定サイズのチャンクと `nextOffset` / `eof` を返します。
+
+実行出力は次の場所へ保存します。
+
+```text
+$COPILOT_HOME/command-runner/executions/<workspace-id>/<UTC-timestamp>_<UUID>/
+  stdout.log
+  stderr.log
+```
+
+このキャッシュは一時的な観測データであり、監査ログではありません。新しい `run` の前に24時間を超えた管理対象executionを削除し、必要な場合は管理キャッシュ全体が256 MiB以内になるまで古いexecutionを削除します。容量整理では61分より新しい結果を削除しません。これはcommandの最大timeout 1時間より長いためです。最近の結果だけで容量上限に達している場合は、実行中の可能性がある出力を消さず、新しい `run` をfail-closedで拒否します。
+
+## セキュリティ境界
+
+- 未登録のWorkspaceとcommandはfail-closedで拒否します。
+- 一致するrootが複数ある場合は、最も具体的なrootを選択します。
+- runtime WorkspaceはAgentから指定・選択できず、実際のカレントディレクトリからのみ決定します。
+- 明示委譲されたWorkspace追加・削除だけを固定interfaceから実行できます。追加はroot引数を受け取らず、新規overlap rootを拒否します。live Workspace削除はcurrent Workspace限定、stale削除はexact ID + workspace hash CAS必須です。
+- Workspace登録をcommand不足や未登録runtime Workspaceの自動fallbackとして使うことは禁止します。
+- commandの登録・削除は現在Workspace向けの固定管理operationだけで可能です。Agentの通常write toolによる `workspaces.json` 直接編集は引き続きHookで拒否します。
+- `register`は既存IDを上書きせず、`unregister`は観測したdefinition hashへ束縛されます。
+- 管理候補はatomic更新前にRunner設定全体として検証されます。
+- Hookは、ターミナルのcwd・環境変数・shell・profile・バックグラウンド実行の上書きを拒否します。
+- コマンドは `spawn(..., shell: false)` で起動します。
+- timeoutまたは出力上限による停止時は、RunnerがコマンドのPOSIX process group全体へ停止を送り、固定猶予後に `SIGTERM` から `SIGKILL` へ昇格するため、通常の子孫processをbounded runの外へ残しません。意図的にdetachされた子孫processはこの保証の対象外です。
+- Agent固有Hookは固定Runnerのインターフェースだけを許可し、ユーザーレベルの制御ファイルを保護します。
+- HookはLocalの`execute`・`terminal/execute`、実機で観測されたVS Code／Copilotの`run_in_terminal`、従来の`execute/runInTerminal`、Copilot harnessの`Bash`などのターミナルTool名に対して、同じ固定Runner検証を適用します。未認識ツールの拒否も維持し、両形式の許可判定フィールドを返します。ただし、静的テストだけではVS Code／Copilot実機がHookを呼び出して判定を強制するか確認できません。実際のツール名と許可・拒否を[conformanceの`CONF-024`](../../tests/conformance.md)で確認してください。既存インストールでは更新したHookを再配置し、Agentセッションを再読み込みします。
+- `output`は有効なexecution IDだけを受け取り、現在のWorkspaceのexecution領域配下だけを解決します。任意ファイルパスは受け付けません。
+- 実行出力は信頼できないデータとして扱い、後続コマンドの権限にはなりません。
+
+Hookは追加のガードであり、OS sandboxではありません。登録済みコマンドはプロジェクトコードを実行し、そのコマンド固有の副作用を発生させる可能性があります。コマンド定義をレビューし、より強い分離が必要な場合はWorkspace Trust、通常の承認、コンテナなどを併用してください。
+
+VS CodeのHookはタイムアウト時にfail-openとなります。偶発的な迂回を減らすためHookのtimeoutは30秒にしていますが、Hookだけを唯一のセキュリティ境界として扱ってはいけません。
+
+## ローカル確認
+
+```bash
+node --test \
+  .copilot/command-runner/command-runner.test.mjs \
+  .copilot/command-runner/command-runner-interface.test.mjs
+COPILOT_HOME=/path/to/test-home node .copilot/command-runner/command-runner-interface.mjs list --expected-workspace=example
+```
