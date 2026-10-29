@@ -18,6 +18,7 @@ import { fileURLToPath } from 'node:url';
 
 const SOURCE_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
 const RUNNER_SOURCE = path.join(SOURCE_DIRECTORY, 'command-runner.mjs');
+const BUILTIN_SOURCE = path.join(SOURCE_DIRECTORY, 'builtin-commands.mjs');
 const INTERFACE_SOURCE = path.join(SOURCE_DIRECTORY, 'command-runner-interface.mjs');
 const HOOK_SOURCE = path.join(SOURCE_DIRECTORY, 'command-runner-hook.mjs');
 const AGENT_SOURCE = path.join(SOURCE_DIRECTORY, '..', 'agents', 'CommandRunner.agent.md');
@@ -36,6 +37,10 @@ async function makeFixture(configure = (configuration) => configuration) {
   await writeFile(
     path.join(home, 'command-runner', 'command-runner.mjs'),
     await readFile(RUNNER_SOURCE),
+  );
+  await writeFile(
+    path.join(home, 'command-runner', 'builtin-commands.mjs'),
+    await readFile(BUILTIN_SOURCE),
   );
   await writeFile(
     path.join(home, 'command-runner', 'command-runner-interface.mjs'),
@@ -311,7 +316,7 @@ test('list exposes commands only for the current workspace', async () => {
     const alphaOutput = JSON.parse(alpha.stdout);
     assert.equal(alphaOutput.workspaceId, 'alpha');
     assert.deepEqual(
-      alphaOutput.commands.map(({ id }) => id),
+      alphaOutput.commands.filter(({ id }) => !id.startsWith('builtin-')).map(({ id }) => id),
       ['sample', 'create', 'timeout', 'tree-timeout'],
     );
     assert.equal('run' in alphaOutput.commands[0], false);
@@ -320,7 +325,7 @@ test('list exposes commands only for the current workspace', async () => {
     assert.equal(beta.status, 0, beta.stderr);
     const betaOutput = JSON.parse(beta.stdout);
     assert.equal(betaOutput.workspaceId, 'beta');
-    assert.deepEqual(betaOutput.commands.map(({ id }) => id), ['beta']);
+    assert.deepEqual(betaOutput.commands.filter(({ id }) => !id.startsWith('builtin-')).map(({ id }) => id), ['beta']);
   });
 });
 
@@ -458,7 +463,7 @@ test('registered workspace may have an empty command map', async () => {
   await withFixture(async (fixture) => {
     const result = runRunner(fixture, fixture.alpha, ['list']);
     assert.equal(result.status, 0, result.stderr);
-    assert.deepEqual(JSON.parse(result.stdout).commands, []);
+    assert.deepEqual(JSON.parse(result.stdout).commands.filter(({ id }) => !id.startsWith('builtin-')), []);
   }, (configuration) => {
     configuration.workspaces[0].commands = {};
     return configuration;
