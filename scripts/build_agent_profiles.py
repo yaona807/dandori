@@ -2,7 +2,6 @@
 """Build and verify committed VS Code Local / GitHub Copilot agent bundles."""
 from __future__ import annotations
 import argparse
-import difflib
 from pathlib import Path
 import shutil
 import tempfile
