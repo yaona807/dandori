@@ -43,6 +43,38 @@ class ValidatorMutationTests(unittest.TestCase):
     def test_repository_is_valid(self) -> None:
         self.assert_valid(ROOT)
 
+    def test_committed_harness_packages_are_current(self) -> None:
+        result = subprocess.run(
+            [sys.executable, "scripts/build_agent_profiles.py", "--check"],
+            cwd=ROOT, capture_output=True, text=True, check=False,
+        )
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+
+    def test_copilot_bundle_drift_is_rejected(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            target = repo / "packages/copilot/agents/Writer.agent.md"
+            target.write_text(target.read_text() + "\n# unauthorized drift\n")
+            self.assert_invalid(repo, "outdated bundle file: copilot/agents/Writer.agent.md")
+
+    def test_missing_copilot_bundle_is_rejected(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            (repo / "packages/copilot/agents/Reviewer.agent.md").unlink()
+            self.assert_invalid(repo, "missing or unexpected bundle file: copilot/agents/Reviewer.agent.md")
+
+    def test_copilot_runner_has_scoped_hook(self) -> None:
+        path = ROOT / "packages/copilot/agents/CommandRunner.agent.md"
+        _, front, _ = path.read_text().split("---\\n", 2)
+        metadata = yaml.safe_load(front)
+        self.assertEqual("github-copilot", metadata["target"])
+        self.assertEqual(["execute"], metadata["tools"])
+        self.assertFalse(metadata["user-invocable"])
+        self.assertFalse(metadata["disable-model-invocation"])
+        hooks = metadata["hooks"]["preToolUse"]
+        self.assertEqual("node ~/.copilot/command-runner/command-runner-hook.mjs", hooks[0]["command"])
+        self.assertEqual(30, hooks[0]["timeoutSec"])
+
     def test_orchestrator_rejects_edit_tool(self) -> None:
         temp, repo = self.make_repo()
         with temp:
@@ -135,6 +167,7 @@ class ValidatorMutationTests(unittest.TestCase):
                 1,
             )
             path.write_text(text)
+            subprocess.run([sys.executable, str(repo / 'scripts/build_agent_profiles.py'), '--write'], cwd=repo, check=True)
             result = validator.validate_repository(repo)
             self.assertEqual([], result.errors, "\n".join(result.errors))
             self.assertTrue(any("ExternalWorker" in warning for warning in result.warnings))
@@ -787,6 +820,7 @@ Inspect only the delegated resource. Do not call another agent.
             for readme_name in ("README.md", "README_ja.md"):
                 readme = repo / readme_name
                 readme.write_text(readme.read_text() + "\nCustomInspector.agent.md\n")
+            subprocess.run([sys.executable, str(repo / 'scripts/build_agent_profiles.py'), '--write'], cwd=repo, check=True)
             result = validator.validate_repository(repo)
             self.assertEqual([], result.errors, "\n".join(result.errors))
             self.assertTrue(any("custom local worker" in warning for warning in result.warnings))
