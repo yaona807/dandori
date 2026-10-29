@@ -65,7 +65,7 @@ class ValidatorMutationTests(unittest.TestCase):
 
     def test_copilot_runner_has_scoped_hook(self) -> None:
         path = ROOT / "packages/copilot/agents/CommandRunner.agent.md"
-        _, front, _ = path.read_text().split("---\\n", 2)
+        _, front, _ = path.read_text().split("---\n", 2)
         metadata = yaml.safe_load(front)
         self.assertEqual("github-copilot", metadata["target"])
         self.assertEqual(["execute"], metadata["tools"])
