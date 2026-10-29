@@ -40,6 +40,7 @@ def transform(source: str, name: str, profile: str) -> str:
         raise ValueError(profile)
     if profile == "local":
         return source
+    body = body.replace("Use frontmatter-listed agents only.", "Use only the eligible delegated agents exposed by this harness.") if name == "Orchestrator" else body
     return "---\n" + yaml.safe_dump(meta, allow_unicode=True, sort_keys=False, width=1000) + "---\n" + body
 
 def generate(destination: Path) -> None:
