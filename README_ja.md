@@ -561,3 +561,13 @@ DANDORI は次のものではありません。
 ## License
 
 MIT. 詳細は [LICENSE](./LICENSE) を参照してください。
+
+## ビルド済みの Local / Copilot 配布物
+
+GitHub の「Download ZIP」には `packages/local/` と `packages/copilot/` が含まれます。いずれも 7 つの Agent、code-review Skill、CommandRunner の実行スクリプトを収録しています。利用する Session Target に合う **片方だけ**を選択し、同名 Agent の重複を避けて配置してください。
+
+- `agents/` と `skills/` は対応する VS Code のユーザープロファイルまたはワークスペースで有効な Agent / Skill ディレクトリへ配置します。
+- `command-runner/` は `~/.copilot/command-runner/` に配置します。Copilot 版の CommandRunner は `preToolUse` フックを利用するため、対象環境でフックが実行されることを **先に確認**してください。フックが使えない環境では CommandRunner に実行権限を与えないでください。
+- 配布物の検証には `python scripts/build_agent_profiles.py --check`、再生成には `--write` を使います。変更時は両方の配布物をコミットしてください。
+
+Copilot 用のサブエージェント呼び出し・モデル選択・ツール・フックは Local と同一仕様ではありません。Copilot 版では未確認のモデル ID を固定せず、実行時の選択モデルを継承します。ホストによる Worker 許可リストの強制は Local のみに依存するため、Copilot ではリポジトリでの権限管理も必要です。
