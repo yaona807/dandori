@@ -1213,3 +1213,103 @@ test('hook fails closed for unknown terminal names in both harness envelopes', a
     }
   });
 });
+
+
+test('P0 built-ins are discoverable, immutable, and safely manage one file at a time', async () => {
+  await withFixture(async (fixture) => {
+    const run = (id, params = []) => {
+      const result = runRunnerWithoutHashes(fixture, fixture.alpha, [
+        'run', id, '--expected-workspace=alpha', ...params,
+      ]);
+      assert.equal(result.status, 0, result.stderr);
+      return JSON.parse(result.stdout);
+    };
+    const listed = JSON.parse(runRunner(fixture, fixture.alpha, ['list']).stdout);
+    const ids = listed.commands.map(({ id }) => id);
+    for (const id of [
+      'builtin-fs-move', 'builtin-fs-copy', 'builtin-fs-trash',
+      'builtin-fs-restore', 'builtin-fs-trash-list',
+      'builtin-git-status', 'builtin-git-diff', 'builtin-git-log',
+      'builtin-git-show', 'builtin-git-ls-files', 'builtin-git-branch-info',
+    ]) assert.ok(ids.includes(id), id);
+
+    const described = runInterface(fixture, fixture.alpha, ['describe', 'builtin-fs-move']);
+    assert.equal(described.status, 0, described.stderr);
+    const inspected = runInterface(fixture, fixture.alpha, ['inspect', 'builtin-fs-move']);
+    assert.equal(inspected.status, 0, inspected.stderr);
+    assert.equal(JSON.parse(inspected.stdout).source, 'built-in');
+    const denied = runInterface(fixture, fixture.alpha, [
+      'register', 'builtin-fs-move', 'definition=%7B%7D',
+    ]);
+    assert.equal(denied.status, 2);
+    assert.match(denied.stderr, /builtin_immutable/u);
+
+    assert.equal(run('builtin-fs-copy', [
+      'source=tests%2Fsample.test.js', 'destination=tests%2Fcopy.test.js',
+    ]).status, 'completed');
+    assert.equal(await readFile(path.join(fixture.alpha, 'tests', 'copy.test.js'), 'utf8'), 'export {};\n');
+    assert.equal(run('builtin-fs-copy', [
+      'source=tests%2Fsample.test.js', 'destination=tests%2Fcopy.test.js',
+    ]).status, 'failed');
+    assert.equal(run('builtin-fs-move', [
+      'source=tests%2Fcopy.test.js', 'destination=tests%2Frenamed.test.js',
+    ]).status, 'completed');
+
+    const moved = run('builtin-fs-trash', ['source=tests%2Frenamed.test.js']);
+    assert.equal(moved.status, 'completed');
+    const { itemId } = JSON.parse(moved.stdout);
+    assert.match(itemId, /^[0-9a-f-]{36}$/u);
+    const ignored = await readFile(path.join(fixture.alpha, '.agent-trash', '.gitignore'), 'utf8');
+    assert.equal(ignored, '*\n');
+    const items = run('builtin-fs-trash-list');
+    assert.equal(items.status, 'completed');
+    assert.equal(JSON.parse(items.stdout).items[0].itemId, itemId);
+    const restored = run('builtin-fs-restore', ['itemId=' + itemId]);
+    assert.equal(restored.status, 'completed');
+    assert.equal(await readFile(path.join(fixture.alpha, 'tests', 'renamed.test.js'), 'utf8'), 'export {};\n');
+    assert.equal(run('builtin-fs-restore', ['itemId=' + itemId]).status, 'failed');
+
+    assert.equal(run('builtin-fs-trash', ['source=.git%2Fconfig']).status, 'failed');
+    assert.equal(run('builtin-fs-copy', [
+      'source=tests%2Fsample.test.js', 'destination=..%2Foutside.js',
+    ]).status, 'failed');
+  });
+});
+
+test('P0 Git built-ins only observe a repository rooted at the workspace', async () => {
+  await withFixture(async (fixture) => {
+    const execGit = (...args) => {
+      const result = spawnSync('git', args, { cwd: fixture.alpha, encoding: 'utf8' });
+      assert.equal(result.status, 0, result.stderr);
+      return result.stdout.trim();
+    };
+    execGit('init', '-q');
+    execGit('config', 'user.name', 'Test Author');
+    execGit('config', 'user.email', 'test@example.invalid');
+    execGit('add', 'tests/sample.test.js');
+    execGit('commit', '-qm', 'initial');
+    const commit = execGit('rev-parse', 'HEAD');
+    const run = (id, params = []) => {
+      const result = runRunnerWithoutHashes(fixture, fixture.alpha, [
+        'run', id, '--expected-workspace=alpha', ...params,
+      ]);
+      assert.equal(result.status, 0, result.stderr);
+      return JSON.parse(result.stdout);
+    };
+    assert.equal(run('builtin-git-status').status, 'completed');
+    assert.equal(run('builtin-git-diff', ['scope=staged']).status, 'completed');
+    assert.equal(run('builtin-git-log', ['count=3']).status, 'completed');
+    assert.equal(run('builtin-git-show', ['commit=' + commit]).status, 'completed');
+    assert.equal(run('builtin-git-ls-files').status, 'completed');
+    assert.equal(run('builtin-git-branch-info').status, 'completed');
+    assert.equal(run('builtin-git-show', ['commit=HEAD']).status, 'failed');
+    const indexBefore = await readFile(path.join(fixture.alpha, '.git', 'index'));
+    assert.equal(run('builtin-fs-trash', ['source=tests%2Fsample.test.js']).status, 'completed');
+    const ignore = spawnSync('git', ['check-ignore', '-q', '--no-index', '.agent-trash/.gitignore'],
+      { cwd: fixture.alpha, encoding: 'utf8' });
+    assert.equal(ignore.status, 0, ignore.stderr);
+    const indexAfter = await readFile(path.join(fixture.alpha, '.git', 'index'));
+    assert.deepEqual(indexAfter, indexBefore);
+    assert.equal(execGit('status', '--porcelain').includes('?? .agent-trash'), false);
+  });
+});
