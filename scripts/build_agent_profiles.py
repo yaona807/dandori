@@ -22,26 +22,60 @@ COPILOT_MODELS = {
 }
 
 def transform(source: str, name: str, profile: str) -> str:
-    if not source.startswith("---\n"):
+    if not source.startswith("---\\n"):
         raise ValueError(f"{name}: missing frontmatter")
-    _, front, body = source.split("---\n", 2)
+    _, front, body = source.split("---\\n", 2)
     meta = yaml.safe_load(front)
     if meta.get("name") != name:
         raise ValueError(f"{name}: name mismatch")
-    if profile == "copilot":
-        meta["target"] = "github-copilot"
-        meta["model"] = COPILOT_MODELS[name]
-        meta.pop("agents", None)
-        if name in WORKERS:
-            meta["disable-model-invocation"] = False
-        if name == "Orchestrator":
-            meta["tools"] = ["agent"]
-    elif profile != "local":
-        raise ValueError(profile)
     if profile == "local":
         return source
-    body = body.replace("Use frontmatter-listed agents only.", "Use only the eligible delegated agents exposed by this harness.") if name == "Orchestrator" else body
-    return "---\n" + yaml.safe_dump(meta, allow_unicode=True, sort_keys=False, width=1000) + "---\n" + body
+    if profile != "copilot":
+        raise ValueError(profile)
+    # Retain body and frontmatter formatting; only migrate harness-specific keys.
+    import re
+    front = re.sub(r"(?m)^model:.*\\n", "", front)
+    front = re.sub(r"(?m)^reasoning-effort:.*\\n", "", front)
+    front = re.sub(r"(?m)^agents:.*\\n", "", front)
+    front = front.replace("target: vscode", "target: github-copilot")
+    if name in WORKERS:
+        front = front.replace("disable-model-invocation: true", "disable-model-invocation: false")
+    if name == "Orchestrator":
+        front = front.replace("  - task\\n", "")
+        body = body.replace(
+            "Use frontmatter-listed agents only.",
+            "Use only the eligible delegated agents exposed by this harness.",
+        )
+    # Use documented Copilot aliases rather than Local-qualified tool IDs.
+    tools = {
+        "Researcher": ("read", "search", "web"),
+        "GitHubResearcher": ("GitHub.vscode-pull-request-github/pullRequestStatusChecks", "GitHub.vscode-pull-request-github/issue_fetch"),
+        "Writer": ("read", "edit"),
+        "CommandRunner": ("execute",),
+        "Reviewer": ("read", "search"),
+        "BrowserQA": ("browser",),
+    }
+    if name in tools:
+        front = re.sub(
+            r"(?m)^tools:\\n(?:  - [^\\n]+\\n)+",
+            "tools:\\n" + "".join(f"  - {tool}\\n" for tool in tools[name]),
+            front,
+        )
+    if name == "CommandRunner":
+        original_hook = (
+            "hooks:\\n  PreToolUse:\\n    - type: command\\n"
+            "      command: node ~/.copilot/command-runner/command-runner-hook.mjs\\n"
+            "      timeout: 30\\n"
+        )
+        copilot_hook = (
+            "hooks:\\n  preToolUse:\\n    - type: command\\n"
+            "      bash: node ~/.copilot/command-runner/command-runner-hook.mjs\\n"
+            "      timeoutSec: 30\\n"
+        )
+        if original_hook not in front:
+            raise ValueError("CommandRunner: unrecognized hook configuration")
+        front = front.replace(original_hook, copilot_hook)
+    return "---\\n" + front + "---\\n" + body
 
 def generate(destination: Path) -> None:
     for profile in ("local", "copilot"):
