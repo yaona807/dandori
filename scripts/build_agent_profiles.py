@@ -22,9 +22,9 @@ COPILOT_MODELS = {
 }
 
 def transform(source: str, name: str, profile: str) -> str:
-    if not source.startswith("---\\n"):
+    if not source.startswith("---\n"):
         raise ValueError(f"{name}: missing frontmatter")
-    _, front, body = source.split("---\\n", 2)
+    _, front, body = source.split("---\n", 2)
     meta = yaml.safe_load(front)
     if meta.get("name") != name:
         raise ValueError(f"{name}: name mismatch")
@@ -34,14 +34,14 @@ def transform(source: str, name: str, profile: str) -> str:
         raise ValueError(profile)
     # Retain body and frontmatter formatting; only migrate harness-specific keys.
     import re
-    front = re.sub(r"(?m)^model:.*\\n", "", front)
-    front = re.sub(r"(?m)^reasoning-effort:.*\\n", "", front)
-    front = re.sub(r"(?m)^agents:.*\\n", "", front)
+    front = re.sub(r"(?m)^model:.*\n", "", front)
+    front = re.sub(r"(?m)^reasoning-effort:.*\n", "", front)
+    front = re.sub(r"(?m)^agents:.*\n", "", front)
     front = front.replace("target: vscode", "target: github-copilot")
     if name in WORKERS:
         front = front.replace("disable-model-invocation: true", "disable-model-invocation: false")
     if name == "Orchestrator":
-        front = front.replace("  - task\\n", "")
+        front = front.replace("  - task\n", "")
         body = body.replace(
             "Use frontmatter-listed agents only.",
             "Use only the eligible delegated agents exposed by this harness.",
@@ -57,25 +57,25 @@ def transform(source: str, name: str, profile: str) -> str:
     }
     if name in tools:
         front = re.sub(
-            r"(?m)^tools:\\n(?:  - [^\\n]+\\n)+",
-            "tools:\\n" + "".join(f"  - {tool}\\n" for tool in tools[name]),
+            r"(?m)^tools:\n(?:  - [^\n]+\n)+",
+            "tools:\n" + "".join(f"  - {tool}\n" for tool in tools[name]),
             front,
         )
     if name == "CommandRunner":
         original_hook = (
-            "hooks:\\n  PreToolUse:\\n    - type: command\\n"
-            "      command: node ~/.copilot/command-runner/command-runner-hook.mjs\\n"
-            "      timeout: 30\\n"
+            "hooks:\n  PreToolUse:\n    - type: command\n"
+            "      command: node ~/.copilot/command-runner/command-runner-hook.mjs\n"
+            "      timeout: 30\n"
         )
         copilot_hook = (
-            "hooks:\\n  preToolUse:\\n    - type: command\\n"
-            "      bash: node ~/.copilot/command-runner/command-runner-hook.mjs\\n"
-            "      timeoutSec: 30\\n"
+            "hooks:\n  preToolUse:\n    - type: command\n"
+            "      bash: node ~/.copilot/command-runner/command-runner-hook.mjs\n"
+            "      timeoutSec: 30\n"
         )
         if original_hook not in front:
             raise ValueError("CommandRunner: unrecognized hook configuration")
         front = front.replace(original_hook, copilot_hook)
-    return "---\\n" + front + "---\\n" + body
+    return "---\n" + front + "---\n" + body
 
 def generate(destination: Path) -> None:
     for profile in ("local", "copilot"):
