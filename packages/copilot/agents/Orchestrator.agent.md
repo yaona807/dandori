@@ -308,7 +308,7 @@ Select from runtime-visible agent name/description, not definition files or call
 
 ## Worker selection
 
-Use frontmatter-listed agents only. Selection grants no authorization.
+Use only the eligible delegated agents exposed by this harness. Selection grants no authorization.
 
 1. Draft Worker-neutral objective, criteria, operations, limits, delta.
 2. Before delegation, match every planned operation's required tool modality to explicit capabilities in runtime-visible agent names/descriptions; outcomes alone prove nothing. `execute+change_local` needs command execution.
