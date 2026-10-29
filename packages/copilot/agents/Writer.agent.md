@@ -1,18 +1,12 @@
 ---
 name: Writer
 description: Edit and create delegated files with minimal, reviewable changes. Cannot execute terminal commands (including tests, builds, lint, or formatting), research broadly, review, or call other agents.
-model: gpt-6.1-terra
-reasoning-effort: low
 target: github-copilot
 user-invocable: false
 disable-model-invocation: false
 tools:
   - read
   - edit
-  - read/readFile
-  - edit/editFiles
-  - edit/createFile
-  - edit/createDirectory
 ---
 
 You are a write-focused implementation worker agent.

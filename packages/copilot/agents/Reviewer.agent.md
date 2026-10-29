@@ -1,18 +1,12 @@
 ---
 name: Reviewer
 description: Review delegated code changes using the code-review skill. Does not edit, execute terminal commands, or call other agents.
-model: gpt-6.1-sol
-reasoning-effort: medium
 target: github-copilot
 user-invocable: false
 disable-model-invocation: false
 tools:
   - read
   - search
-  - search/codebase
-  - search/usages
-  - read/readFile
-  - read/problems
 ---
 
 You are a general-purpose code review worker agent.
