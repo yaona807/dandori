@@ -451,3 +451,7 @@ DANDORI is not:
 ## License
 
 MIT. See [LICENSE](./LICENSE).
+
+## Prebuilt harness bundles
+
+The GitHub source ZIP includes `packages/local/` and `packages/copilot/` with seven agents, shared skills, and the fixed command runner. Choose **one** profile, then copy its `agents/` and `skills/` into the appropriate VS Code agent discovery location; install `command-runner/` under `~/.copilot/command-runner/`. Do not install both profiles simultaneously with duplicate agent names. Run `python scripts/build_agent_profiles.py --check` to verify generated files or `--write` to regenerate them. Copilot runtime delegation, model IDs and hook behavior still require verification in the target VS Code environment.
