@@ -730,11 +730,15 @@ class ValidatorMutationTests(unittest.TestCase):
             path.write_text(path.read_text().replace("model: GPT-6 Luna (copilot)\n", "", 1))
             self.assert_invalid(repo, "bundled agent frontmatter is missing required keys")
 
-    def test_bundled_agents_require_selected_models_and_medium_effort(self) -> None:
+    def test_bundled_agents_require_role_specific_models_and_effort(self) -> None:
         cases = (
             ("Orchestrator", "model: GPT-6.1 Sol (copilot)", "model: Auto (copilot)", "must use model"),
-            ("Writer", "model: GPT-6 Luna (copilot)", "model: Auto (copilot)", "must use model"),
-            ("Researcher", "reasoning-effort: medium", "reasoning-effort: high", "must use reasoning-effort"),
+            ("Writer", "model: GPT-6.1 Terra (copilot)", "model: Auto (copilot)", "must use model"),
+            ("Reviewer", "model: GPT-6.1 Sol (copilot)", "model: Auto (copilot)", "must use model"),
+            ("BrowserQA", "model: GPT-6.1 Terra (copilot)", "model: Auto (copilot)", "must use model"),
+            ("Researcher", "reasoning-effort: low", "reasoning-effort: high", "must use reasoning-effort"),
+            ("CommandRunner", "reasoning-effort: low", "reasoning-effort: high", "must use reasoning-effort"),
+            ("Orchestrator", "reasoning-effort: medium", "reasoning-effort: high", "must use reasoning-effort"),
         )
         for name, previous, replacement, message in cases:
             with self.subTest(name=name):

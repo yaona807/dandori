@@ -297,9 +297,15 @@ COMMAND_RUNNER_REQUIRED_MARKERS = tuple(
 )
 BUNDLED_WORKER_NAMES = frozenset({*BUNDLED_WORKER_TOOLS, COMMAND_RUNNER_NAME})
 BUNDLED_AGENT_NAMES = frozenset({"Orchestrator", *BUNDLED_WORKER_NAMES})
-BUNDLED_ORCHESTRATOR_MODEL = "GPT-6.1 Sol (copilot)"
-BUNDLED_WORKER_MODEL = "GPT-6 Luna (copilot)"
-BUNDLED_REASONING_EFFORT = "medium"
+BUNDLED_AGENT_MODEL_SETTINGS = {
+    "Orchestrator": ("GPT-6.1 Sol (copilot)", "medium"),
+    "Researcher": ("GPT-6 Luna (copilot)", "low"),
+    "GitHubResearcher": ("GPT-6 Luna (copilot)", "low"),
+    "Writer": ("GPT-6.1 Terra (copilot)", "low"),
+    "CommandRunner": ("GPT-6 Luna (copilot)", "low"),
+    "Reviewer": ("GPT-6.1 Sol (copilot)", "medium"),
+    "BrowserQA": ("GPT-6.1 Terra (copilot)", "low"),
+}
 BUNDLED_AGENT_MIN_BODY_CHARS = {
     "Orchestrator": 20_000,
     "BrowserQA": 1_000,
@@ -1677,18 +1683,15 @@ def validate_repository(root: Path) -> ValidationResult:
     for definition in definitions.values():
         if definition.meta.get("target") != "vscode":
             result.errors.append(f"{relative(definition.path, root)}: agent must set target: vscode")
-        required_model = (
-            BUNDLED_ORCHESTRATOR_MODEL if definition.meta.get("name") == "Orchestrator"
-            else BUNDLED_WORKER_MODEL
-        )
         if definition.meta.get("name") in BUNDLED_AGENT_NAMES:
+            required_model, required_effort = BUNDLED_AGENT_MODEL_SETTINGS[definition.meta["name"]]
             if definition.meta.get("model") != required_model:
                 result.errors.append(
                     f"{relative(definition.path, root)}: bundled agent must use model: {required_model}"
                 )
-            if definition.meta.get("reasoning-effort") != BUNDLED_REASONING_EFFORT:
+            if definition.meta.get("reasoning-effort") != required_effort:
                 result.errors.append(
-                    f"{relative(definition.path, root)}: bundled agent must use reasoning-effort: medium"
+                    f"{relative(definition.path, root)}: bundled agent must use reasoning-effort: {required_effort}"
                 )
     if orchestrator.meta.get("user-invocable") is not True:
         result.errors.append(f"{relative(orchestrator.path, root)}: Orchestrator must set user-invocable: true")

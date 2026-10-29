@@ -316,7 +316,7 @@ DANDORI は、Orchestratorへ推論能力の高いモデルを使用すること
 
 Orchestrator は、実行方法の曖昧さと権限の曖昧さを区別し、契約を広げずに正規化し、最小Task Cardを作り、Worker結果を監査し、矛盾を処理し、包含関係を確認できない場合に停止する必要があります。
 
-同梱のAgent定義では、**Orchestratorは GPT-6.1 Sol (copilot)**、**6種類のWorkerはすべて GPT-6 Luna (copilot)** に固定し、7定義とも`reasoning-effort: medium`を指定します。`reasoning-effort`はCopilot harness向けのフィールドであり、モデルの実際の認識・選択はVS Codeで確認が必要です。追加した外部Workerのモデルは別途選択できます。
+同梱のAgent定義では、**OrchestratorとReviewerに GPT-6.1 Sol (copilot)**（`medium`）、**WriterとBrowserQAに GPT-6.1 Terra (copilot)**（`low`）、**Researcher・GitHubResearcher・CommandRunnerに GPT-6 Luna (copilot)**（`low`）を指定します。`reasoning-effort`はCopilot harness向けのフィールドであり、モデルの実際の認識・選択はVS Codeで確認が必要です。追加した外部Workerのモデルは別途選択できます。
 
 ## インストール
 
