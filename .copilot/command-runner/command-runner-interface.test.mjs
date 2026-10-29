@@ -104,7 +104,6 @@ async function makeFixture(commandCount = 3) {
   await mkdir(alpha);
   await mkdir(beta);
   await writeFile(path.join(commandRunner, 'builtin-commands.mjs'), await readFile(BUILTIN_SOURCE));
-  await writeFile(path.join(commandRunner, 'builtin-commands.mjs'), await readFile(BUILTIN_SOURCE));
   await writeFile(path.join(commandRunner, 'command-runner-interface.mjs'), await readFile(INTERFACE_SOURCE));
   await writeFile(path.join(commandRunner, 'command-runner-hook.mjs'), await readFile(HOOK_SOURCE));
   await writeFile(path.join(commandRunner, 'command-runner.mjs'), STUB_CORE);
@@ -140,6 +139,7 @@ async function makeManagementFixture() {
   await mkdir(commandRunner, { recursive: true });
   await mkdir(alpha);
   await mkdir(beta);
+  await writeFile(path.join(commandRunner, 'builtin-commands.mjs'), await readFile(BUILTIN_SOURCE));
   await writeFile(path.join(commandRunner, 'command-runner-interface.mjs'), await readFile(INTERFACE_SOURCE));
   await writeFile(path.join(commandRunner, 'command-runner-hook.mjs'), await readFile(HOOK_SOURCE));
   await writeFile(path.join(commandRunner, 'command-runner.mjs'), await readFile(CORE_SOURCE));
