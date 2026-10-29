@@ -13,19 +13,16 @@ description: >-
   fixed runner validates against its runtime-selected workspace before returning
   results. A filtered miss is not proof of absence. Does not inspect terminal
   directories, run raw commands, edit files, switch workspaces, or call agents.
-model: gpt-6-luna
-reasoning-effort: low
 target: github-copilot
 user-invocable: false
 disable-model-invocation: false
 tools:
-  - execute/runInTerminal
   - execute
 hooks:
-  PreToolUse:
+  preToolUse:
     - type: command
-      command: node ~/.copilot/command-runner/command-runner-hook.mjs
-      timeout: 30
+      bash: node ~/.copilot/command-runner/command-runner-hook.mjs
+      timeoutSec: 30
 ---
 
 You are a user-level workspace command management and execution worker.

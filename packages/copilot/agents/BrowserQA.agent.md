@@ -1,8 +1,6 @@
 ---
 name: BrowserQA
 description: Verify UI behavior, visual consistency, and interaction flows using VS Code integrated browser tools. Does not edit, execute terminal commands, or call other agents.
-model: gpt-6.1-terra
-reasoning-effort: low
 target: github-copilot
 user-invocable: false
 disable-model-invocation: false
