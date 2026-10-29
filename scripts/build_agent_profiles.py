@@ -11,16 +11,6 @@ ROOT = Path(__file__).resolve().parents[1]
 AGENTS = ROOT / ".copilot" / "agents"
 WORKERS = ("Researcher", "GitHubResearcher", "Writer", "CommandRunner", "Reviewer", "BrowserQA")
 NAMES = ("Orchestrator", *WORKERS)
-COPILOT_MODELS = {
-    "Orchestrator": "gpt-6.1-sol",
-    "Reviewer": "gpt-6.1-sol",
-    "Writer": "gpt-6.1-terra",
-    "BrowserQA": "gpt-6.1-terra",
-    "Researcher": "gpt-6-luna",
-    "GitHubResearcher": "gpt-6-luna",
-    "CommandRunner": "gpt-6-luna",
-}
-
 def transform(source: str, name: str, profile: str) -> str:
     if not source.startswith("---\n"):
         raise ValueError(f"{name}: missing frontmatter")
@@ -69,7 +59,7 @@ def transform(source: str, name: str, profile: str) -> str:
         )
         copilot_hook = (
             "hooks:\n  preToolUse:\n    - type: command\n"
-            "      bash: node ~/.copilot/command-runner/command-runner-hook.mjs\n"
+            "      command: node ~/.copilot/command-runner/command-runner-hook.mjs\n"
             "      timeoutSec: 30\n"
         )
         if original_hook not in front:
