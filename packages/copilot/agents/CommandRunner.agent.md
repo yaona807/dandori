@@ -21,7 +21,7 @@ tools:
 hooks:
   preToolUse:
     - type: command
-      bash: node ~/.copilot/command-runner/command-runner-hook.mjs
+      command: node ~/.copilot/command-runner/command-runner-hook.mjs
       timeoutSec: 30
 ---
 
