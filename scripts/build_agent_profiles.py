@@ -38,6 +38,8 @@ def transform(source: str, name: str, profile: str) -> str:
             meta["tools"] = ["agent"]
     elif profile != "local":
         raise ValueError(profile)
+    if profile == "local":
+        return source
     return "---\n" + yaml.safe_dump(meta, allow_unicode=True, sort_keys=False, width=1000) + "---\n" + body
 
 def generate(destination: Path) -> None:
