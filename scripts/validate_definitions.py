@@ -42,6 +42,7 @@ REQUIRED_REPOSITORY_FILES = frozenset(
         "scripts/validate_definitions.py",
         "scripts/validate_release_archive.py",
         "scripts/run_tests.py",
+        "scripts/build_agent_profiles.py",
         "tests/conformance.md",
         "tests/test_validate_definitions.py",
         "tests/test_validate_release_archive.py",
@@ -50,6 +51,7 @@ REQUIRED_REPOSITORY_FILES = frozenset(
 ALLOWED_SCRIPT_INVENTORY = frozenset(
     {
         "run_tests.py",
+        "build_agent_profiles.py",
         "validate_definitions.py",
         "validate_release_archive.py",
     }
@@ -1550,6 +1552,25 @@ def validate_repository(root: Path) -> ValidationResult:
     validate_gitignore_policy(root, result)
     validate_tracked_generated_artifacts(root, result)
     validate_github_actions_inventory(root, result)
+    # Generated distribution must match the canonical agent/skill/runner sources.
+    # Check without writing, including when validating an extracted release ZIP.
+    import importlib.util
+    import tempfile
+    profile_script = root / "scripts" / "build_agent_profiles.py"
+    if profile_script.is_file():
+        spec = importlib.util.spec_from_file_location("dandori_profile_builder", profile_script)
+        if spec is None or spec.loader is None:
+            result.errors.append("unable to load profile builder")
+        else:
+            module = importlib.util.module_from_spec(spec)
+            try:
+                spec.loader.exec_module(module)
+                with tempfile.TemporaryDirectory() as directory:
+                    expected = Path(directory)
+                    module.generate(expected)
+                    result.errors.extend(module.compare(expected, root / "packages"))
+            except Exception as exc:
+                result.errors.append(f"bundle generation check failed: {exc}")
 
     readmes = (
         (root / "README.md", ("## What's included", "## Installation", "## Design principles")),
