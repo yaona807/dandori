@@ -14,7 +14,7 @@ description: >-
   results. A filtered miss is not proof of absence. Does not inspect terminal
   directories, run raw commands, edit files, switch workspaces, or call agents.
 model: GPT-6 Luna (copilot)
-reasoning-effort: medium
+reasoning-effort: low
 target: vscode
 user-invocable: false
 disable-model-invocation: true
