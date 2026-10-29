@@ -1113,7 +1113,7 @@ async function main() {
     }
     const start = offset(one(provided, 'offset'));
     const snapshot = await readStableConfiguration(expectedWorkspace);
-    const combined = { ...builtinDefinitions(), ...snapshot.workspace.commands };
+    const combined = { ...(snapshot.raw.version === 1 ? builtinDefinitions() : {}), ...snapshot.workspace.commands };
     const revision = definitionHash([snapshot.workspaceIdentity, combined]);
     const expectedRevision = one(provided, 'revision');
     if (start > 0 && expectedRevision === undefined) {
