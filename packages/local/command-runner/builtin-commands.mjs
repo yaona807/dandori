@@ -21,7 +21,7 @@ const SPECS = {
   'builtin-fs-copy': { description: 'Copy one regular workspace file without overwriting.', arguments: { source: positional(file()), destination: positional(file(false)) } },
   'builtin-fs-trash': { description: 'Move one regular workspace file to the ignored workspace trash.', arguments: { source: positional(file()) } },
   'builtin-fs-restore': { description: 'Restore one trash item without overwriting its original path.', arguments: { itemId: positional({ type: 'string', maxLength: 36 }) } },
-  'builtin-fs-trash-list': { description: 'List restorable workspace trash items.', arguments: {} },
+  'builtin-fs-trash-list': { description: 'List restorable workspace trash items with bounded pagination.', arguments: { offset: option('--offset', { type: 'integer', min: 0, max: 100000000 }), limit: option('--limit', { type: 'integer', min: 1, max: 100 }) } },
   'builtin-git-status': { description: 'Read repository status without optional index refresh.', arguments: {} },
   'builtin-git-diff': { description: 'Read scoped unstaged or staged repository diff.', arguments: { scope: option('--scope', { type: 'choice', values: ['unstaged', 'staged'] }), file: option('--file', file(false)) } },
   'builtin-git-log': { description: 'Read bounded repository history.', arguments: { count: option('--count', { type: 'integer', min: 1, max: 100 }) } },
@@ -167,8 +167,9 @@ async function trash(root, source) {
   await writeFile(path.join(itemDir, 'manifest.json'),
     JSON.stringify({ id, original, filename, createdAt: new Date().toISOString() }) + '\n',
     { flag: 'wx', mode: 0o600 });
-  await noReplaceMove(from, path.join(itemDir, filename));
-  return { itemId: id, original, trashPath: path.relative(root, path.join(itemDir, filename)) };
+  const payload = path.join(itemDir, 'payload');
+  await noReplaceMove(from, payload);
+  return { itemId: id, original, trashPath: path.relative(root, payload) };
 }
 
 async function loadItem(root, id) {
@@ -186,8 +187,8 @@ async function loadItem(root, id) {
     typeof manifest.filename !== 'string' || manifest.filename !== path.basename(manifest.original)) {
     refuse('invalid trash manifest');
   }
-  const fileInTrash = path.join(item, manifest.filename);
-  if (!inside(item, fileInTrash) || fileInTrash === item) refuse('unsafe trash item');
+  const fileInTrash = path.join(item, 'payload');
+  if (!inside(item, fileInTrash)) refuse('unsafe trash item');
   await existingRegular(fileInTrash);
   return { manifest, fileInTrash };
 }
@@ -199,19 +200,24 @@ async function restore(root, id) {
   return { itemId: id, restored: manifest.original };
 }
 
-async function trashList(root) {
+async function trashList(root, offset, limit) {
   const dir = await trashDirectory(root);
-  if (!dir) return { items: [] };
+  if (!dir) return { items: [], nextOffset: null };
   const names = (await readdir(dir)).filter((v) => UUID.test(v)).sort();
-  if (names.length > 1000) refuse('trash listing exceeds safety limit');
   const items = [];
+  let restorable = 0;
   for (const id of names) {
     try {
       const { manifest } = await loadItem(root, id);
-      items.push({ itemId: id, original: manifest.original, createdAt: manifest.createdAt });
+      if (restorable >= offset && items.length < limit) {
+        items.push({ itemId: id, original: manifest.original, createdAt: manifest.createdAt });
+      } else if (items.length === limit) {
+        return { items, nextOffset: offset + items.length };
+      }
+      restorable += 1;
     } catch { /* incomplete or restored entries are not restorable */ }
   }
-  return { items };
+  return { items, nextOffset: null };
 }
 
 function parseInput(argv) {
@@ -220,7 +226,7 @@ function parseInput(argv) {
   for (let i = 0; i < argv.length; i += 1) {
     const token = argv[i];
     if (token.startsWith('--')) {
-      if (!['--scope', '--file', '--count'].includes(token) || i + 1 >= argv.length || token in options) {
+      if (!['--scope', '--file', '--count', '--offset', '--limit'].includes(token) || i + 1 >= argv.length || token in options) {
         refuse('unsupported or duplicate builtin option');
       }
       options[token] = argv[++i];
@@ -246,7 +252,7 @@ async function gitAction(root, id, positionals, options) {
     args = ['log', '--no-show-signature', '--format=%h %s', '-n', count];
   } else if (id === 'builtin-git-show') {
     if (positionals.length !== 1 || !/^[a-f0-9]{40}$/iu.test(positionals[0])) refuse('full commit SHA required');
-    args = ['show', '--no-ext-diff', '--no-textconv', '--no-show-signature', '--ignore-submodules=all', positionals[0]];
+    args = ['show', '--format=format:%H%n%s%n%b', '--no-ext-diff', '--no-textconv', '--no-show-signature', '--ignore-submodules=all', positionals[0]];
   } else if (id === 'builtin-git-ls-files') {
     args = ['--literal-pathspecs', 'ls-files', '--cached', '-z', ...(readPath ? ['--', readPath] : [])];
   } else if (id === 'builtin-git-branch-info') args = ['branch', '--show-current'];
@@ -260,6 +266,14 @@ async function runBuiltin() {
   const root = await realpath(process.cwd());
   const { positionals, options } = parseInput(args);
   if (id.startsWith('builtin-git-')) return gitAction(root, id, positionals, options);
+  if (id === 'builtin-fs-trash-list') {
+    if (positionals.length) refuse('trash listing accepts no positional arguments');
+    const offset = Number(options['--offset'] ?? '0');
+    const limit = Number(options['--limit'] ?? '100');
+    if (!Number.isSafeInteger(offset) || offset < 0 || offset > 100000000 ||
+      !Number.isSafeInteger(limit) || limit < 1 || limit > 100) refuse('invalid trash pagination');
+    return trashList(root, offset, limit);
+  }
   if (Object.keys(options).length) refuse('filesystem builtins do not accept options');
   if (id === 'builtin-fs-move' || id === 'builtin-fs-copy') {
     if (positionals.length !== 2) refuse('source and destination required');
@@ -276,10 +290,6 @@ async function runBuiltin() {
   if (id === 'builtin-fs-restore') {
     if (positionals.length !== 1) refuse('item ID required');
     return restore(root, positionals[0]);
-  }
-  if (id === 'builtin-fs-trash-list') {
-    if (positionals.length) refuse('trash listing accepts no arguments');
-    return trashList(root);
   }
   refuse('unsupported builtin');
 }
