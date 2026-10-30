@@ -26,7 +26,10 @@ function emit(data) {
 }
 function core(name, args) {
   const result = spawnSync(process.execPath, [path.join(DIR, name), ...args], {
-    cwd: process.cwd(), env: process.env, encoding: 'utf8', timeout: 370_000,
+    cwd: process.cwd(), env: process.env, encoding: 'utf8',
+    // Run Core enforces each command's configured timeout (up to one hour).
+    // Reserve extra time for process-tree termination and response persistence.
+    timeout: args[0] === 'run' ? 3_750_000 : 120_000,
     maxBuffer: 256 * 1024 * 1024, windowsHide: true,
   });
   if (result.error) throw error('runner_unavailable', result.error.message);
