@@ -1411,8 +1411,8 @@ test('v2 Hook uses interactive approval for activation and rejects arbitrary she
     });
     const accepted = invoke('node ~/.copilot/command-runner/command-runner-v2.mjs workspace.ensure');
     assert.equal(JSON.parse(accepted.stdout).permissionDecision, 'allow');
-    const proposed = invoke('node ~/.copilot/command-runner/command-runner-v2.mjs propose test');
-    assert.equal(JSON.parse(proposed.stdout).permissionDecision, 'allow');
+    const proposedHook = invoke('node ~/.copilot/command-runner/command-runner-v2.mjs propose test');
+    assert.equal(JSON.parse(proposedHook.stdout).permissionDecision, 'allow');
     await writeFile(path.join(fixture.alpha, 'package.json'), JSON.stringify({
       packageManager: 'npm@10.0.0', scripts: {'test:unit': 'node echo-args.mjs'},
     }));
