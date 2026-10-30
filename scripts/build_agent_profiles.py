@@ -44,7 +44,7 @@ def transform(source: str, name: str, profile: str) -> str:
     import re
     # Copilot expects the model label without the Local-only " (copilot)" suffix.
     # Keep the model and reasoning-effort fields themselves intact.
-    front = re.sub(r"(?m)^(model: .+?) \\(copilot\\)$", r"\\1", front)
+    front = re.sub(r"(?m)^(model: .+?) \(copilot\)$", r"\1", front)
     front = re.sub(r"(?m)^agents:.*\n", "", front)
     front = front.replace("target: vscode", "target: github-copilot")
     if name in WORKERS:
