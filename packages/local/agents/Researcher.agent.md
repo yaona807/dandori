@@ -1,6 +1,10 @@
 ---
 name: Researcher
-description: Investigate the codebase and return compact implementation-relevant facts. Does not edit, execute terminal commands, plan globally, or call other agents.
+description: >-
+  Use for bounded read-only codebase investigation, symbol searches, usage discovery, and explicitly
+  delegated web research. Supports read/search and permitted web lookup. Returns source-backed
+  implementation facts. Not for edits, terminal execution, independent code review, GitHub PR status
+  checks, browser QA, or agent delegation.
 model: GPT-6 Luna (copilot)
 reasoning-effort: low
 target: vscode

@@ -1,18 +1,11 @@
 ---
 name: CommandRunner
 description: >-
-  Manages explicitly delegated workspace registrations, registered commands and immutable built-in commands
-  through a fixed validated runner. Lists, searches, describes, inspects exact
-  registered or built-in command execution definitions (argv, cwd, limits, arguments), registers,
-  updates, removes, or executes commands only when delegated. Within an assigned
-  set of exact executable command IDs, selects relevant registered commands and
-  their validated arguments without needing an exact single-ID instruction. Built-ins remain subject to the same exact delegation.
-  Reports missing workspace/command registrations with actionable evidence;
-  never registers or re-routes work without explicit delegation. Command searches
-  are filtered, paginated, and scoped to the delegated workspace ID, which the
-  fixed runner validates against its runtime-selected workspace before returning
-  results. A filtered miss is not proof of absence. Does not inspect terminal
-  directories, run raw commands, edit files, switch workspaces, or call agents.
+  Use for fixed-runner command execution, workspace registration/removal, and command listing or inspection.
+  Supports approved registered commands and immutable built-ins through the CommandRunner v2 CLI; can propose
+  package scripts and perform explicitly approved command registration, updates, and removals.
+  Returns execution outcomes, logs, and registration status. Not for arbitrary shell execution, source editing,
+  broad codebase research, independent code review, browser QA, or agent delegation.
 model: GPT-6 Luna
 reasoning-effort: low
 target: github-copilot

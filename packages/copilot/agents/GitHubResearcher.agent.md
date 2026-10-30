@@ -1,6 +1,10 @@
 ---
 name: GitHubResearcher
-description: Inspect the exact delegated GitHub issue or pull request and its native read-only context via GitHub Pull Requests extension tools. Does not edit, execute terminal commands, or call other agents.
+description: >-
+  Use for exact GitHub issue and pull request inspection identified by repository and artifact number.
+  Supports read-only GitHub extension tools for artifact facts and status checks. Returns bounded GitHub
+  artifact findings. Not for workspace codebase investigation, file edits, terminal execution, GitHub
+  mutations, browser QA, or agent delegation.
 model: GPT-6 Luna
 reasoning-effort: low
 target: github-copilot

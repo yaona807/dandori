@@ -767,6 +767,53 @@ class ValidatorMutationTests(unittest.TestCase):
             path.write_text(text.replace("Cannot execute terminal commands", "Can execute terminal commands", 1))
             self.assert_invalid(repo, "Writer description must disclose its lack of terminal execution capability")
 
+    def test_each_worker_description_declares_positive_and_negative_routing_evidence(self) -> None:
+        for worker, markers in validator.WORKER_DESCRIPTION_ROUTING_MARKERS.items():
+            with self.subTest(worker=worker):
+                source = ROOT / ".copilot/agents" / f"{worker}.agent.md"
+                _, source_front, _ = source.read_text(encoding="utf-8").split("---\n", 2)
+                description = yaml.safe_load(source_front)["description"]
+                for marker in markers:
+                    self.assertIn(marker, description)
+                self.assertIn("Not for", description)
+                for profile in ("local", "copilot"):
+                    bundled = ROOT / "packages" / profile / "agents" / f"{worker}.agent.md"
+                    _, copied_front, _ = bundled.read_text(encoding="utf-8").split("---\n", 2)
+                    self.assertEqual(description, yaml.safe_load(copied_front)["description"])
+
+    def test_worker_routing_description_cannot_lose_capability_or_exclusion(self) -> None:
+        for worker, markers in validator.WORKER_DESCRIPTION_ROUTING_MARKERS.items():
+            for marker in (markers[0], markers[-1]):
+                with self.subTest(worker=worker, marker=marker):
+                    temp, repo = self.make_repo()
+                    with temp:
+                        path = repo / ".copilot/agents" / f"{worker}.agent.md"
+                        text = path.read_text(encoding="utf-8")
+                        front = text.split("---\n", 2)[1]
+                        description = yaml.safe_load(front)["description"]
+                        self.assertIn(marker, description)
+                        updated = description.replace(marker, "unspecified", 1)
+                        start = text.index("description:")
+                        end = text.index("\nmodel:", start)
+                        text = text[:start] + "description: >-\n  " + updated + text[end:]
+                        path.write_text(text, encoding="utf-8")
+                        self.assert_invalid(repo, "worker description missing routing capability/limit marker")
+
+    def test_orchestrator_routing_eligibility_gates_are_required(self) -> None:
+        for marker in (
+            "Apply all four eligibility gates before any invocation",
+            "Never select by the order of a listed inventory or trial-and-error invocation.",
+            "Re-delegate only to another *already positively validated* eligible Worker",
+        ):
+            with self.subTest(marker=marker):
+                temp, repo = self.make_repo()
+                with temp:
+                    path = repo / ".copilot/agents/Orchestrator.agent.md"
+                    text = path.read_text(encoding="utf-8")
+                    self.assertIn(marker, text)
+                    path.write_text(text.replace(marker, "Try any plausible worker first.", 1), encoding="utf-8")
+                    self.assert_invalid(repo, "missing required Orchestrator section marker")
+
     def test_bundled_worker_policy_must_remain_in_strict_rules(self) -> None:
         temp, repo = self.make_repo()
         with temp:

@@ -299,8 +299,9 @@ test('distributed agent is user-level, agent-scoped, and fixed-runner-only', asy
   assert.match(source, /node ~\/\.copilot\/command-runner\/command-runner-interface\.mjs list/u);
   assert.match(source, /node ~\/\.copilot\/command-runner\/command-runner-interface\.mjs output/u);
   assert.match(source, /Do not execute a raw project command\./u);
-  assert.match(source, /description: >-[\s\S]*?Command searches/u);
-  assert.match(source, /are filtered, paginated, and scoped to the delegated workspace ID/u);
+  assert.match(source, /description: >-[\s\S]*?Use for fixed-runner command execution/u);
+  assert.match(source, /Supports approved registered commands/u);
+  assert.match(source, /Not for arbitrary shell/u);
   assert.match(source, /The fixed runner rejects a workspace mismatch before disclosing command data/u);
   assert.match(source, /require evidence that it is the same directory before registration/u);
   assert.match(source, /A filtered or incomplete miss proves no absence/u);

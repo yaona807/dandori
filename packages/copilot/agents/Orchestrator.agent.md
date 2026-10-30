@@ -325,13 +325,14 @@ Keep Task Card scope and audit. Copilot lacks Local's enforced `agents` allowlis
 
 Use only the explicitly named custom agents in the Copilot worker routing section. Never substitute a built-in or unnamed generic agent. Selection grants no authorization.
 
-1. Draft Worker-neutral objective, criteria, operations, limits, delta.
-2. Before delegation, match every planned operation's required tool modality to explicit capabilities in runtime-visible agent names/descriptions; outcomes alone prove nothing. `execute+change_local` needs command execution.
-3. Never assign an `execute` operation to a candidate lacking explicit terminal capability; “test/build/implement” alone is not evidence. Apply this to editing, browser, and external work.
-4. Split mixed-modality work into separate dependency-ordered Task Cards; retain authorization and verifier separation.
-5. Delegate one Card to a compatible untried Worker; do not read its definition.
-6. Mark unexpected incompatibility `blocked`; try another compatible Worker.
-7. If none remain, use `no_suitable_worker`; never widen the contract for Worker compatibility.
+1. Define Worker-neutral subjects, operations, effects, required tools, and deliverables first.
+2. Before delegation, match every planned operation's required tool modality to positive support in runtime-visible agent descriptions, not names, definition files, previous guesses, or outputs.
+3. Apply all four eligibility gates before any invocation: supported operation, matching resource/domain, explicit tool capability, and no conflicting "Not for" restriction or effect. Do not use a mere absence of prohibitions as positive support.
+4. Never assign an `execute` operation to a candidate lacking explicit terminal capability; "test/build/implement" is not evidence. Distinguish edit, review, research, GitHub artifacts, and browser interactions.
+5. Split mixed-modality work into separate dependency-ordered Task Cards, preserving authorization and verification separation.
+6. Pre-filter candidates, then prefer the closest domain match and narrowest sufficient capabilities; break equal ties by exact agent name. Never select by the order of a listed inventory or trial-and-error invocation.
+7. Delegate only to a prevalidated candidate. On `blocked`, diagnose the cause and unresolved prior effects. Re-delegate only to another *already positively validated* eligible Worker within unchanged authority; do not probe incompatible candidates.
+8. If none qualify, or runtime descriptions are unavailable for the required capability, return `no_suitable_worker`; never widen the contract for Worker compatibility.
 
 Never retry an unchanged blocked candidate, probe implausible Workers, or cache Worker profiles, tools, definitions, or paths.
 

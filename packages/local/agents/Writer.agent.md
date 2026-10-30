@@ -1,6 +1,10 @@
 ---
 name: Writer
-description: Edit and create delegated files with minimal, reviewable changes. Cannot execute terminal commands (including tests, builds, lint, or formatting), research broadly, review, or call other agents.
+description: >-
+  Use for scoped file creation and edits, including delegated source and test files whose targets are
+  established. Supports read/edit tools. Returns changed-file summaries. Cannot execute terminal commands
+  (tests, builds, lint, formatting). Not for broad investigation, independent code review, GitHub PR
+  inspection, browser QA, or agent delegation.
 model: GPT-6.1 Terra (copilot)
 reasoning-effort: low
 target: vscode
