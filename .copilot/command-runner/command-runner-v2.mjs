@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
-import { scriptFingerprint } from './script-guard.mjs';
+import { scriptFingerprint, scriptRunArgs } from './script-guard.mjs';
 
 const DIR = path.dirname(fileURLToPath(import.meta.url));
 const HOME = path.join(process.env.COPILOT_HOME ? path.resolve(process.env.COPILOT_HOME) : path.join(os.homedir(), '.copilot'), 'command-runner');
@@ -127,7 +127,7 @@ async function readProposal(id) {
   const record = JSON.parse(await readFile(file, 'utf8'));
   if (record.id !== id || record.version !== 1 || !COMMAND.test(record.commandId)
     || !Number.isFinite(record.expiresAt) || Date.now() > record.expiresAt
-    || record.approvalDigest !== digest([record.workspaceIdentity, record.commandId, record.definition, record.expectedHash ?? null])) {
+    || record.approvalDigest !== digest([record.workspaceIdentity, record.commandId, record.definition, record.scriptPreview, record.expectedHash ?? null])) {
     throw error('stale_proposal', 'proposal is expired or was modified');
   }
   return record;
@@ -152,23 +152,28 @@ async function propose(commandId, params) {
   if (!selectedScript) throw error('script_not_discoverable', 'unable to identify a unique package script/manager');
   const definition = {
     description: 'Approved ' + selectedScript.manager + ' script: ' + commandId,
-    run: [selectedScript.manager, 'run', scriptName, '--'],
+    run: scriptRunArgs(selectedScript.manager, scriptName),
     cwd: path.relative(root, dir) || '.', arguments: {},
     scriptGuard: {manager: selectedScript.manager, script: scriptName, fingerprint: selectedScript.fingerprint},
     timeoutMs: 300000, maxOutputBytes: 1048576,
   };
   const original = workspace.commands[commandId] ?? null;
   const id = 'prop-' + randomUUID().replaceAll('-', '');
+  const scriptPreview = Object.fromEntries(
+    [`pre${scriptName}`, scriptName, `post${scriptName}`]
+      .filter(name => Object.hasOwn(selectedScript.scripts, name))
+      .map(name => [name, selectedScript.scripts[name]]),
+  );
   const record = { version: 1, id, commandId, workspaceIdentity: selected.workspaceIdentity,
-    definition, expectedHash: original ? digest(original) : null,
+    definition, scriptPreview, expectedHash: original ? digest(original) : null,
     expiresAt: Date.now() + MAX_AGE,
   };
-  record.approvalDigest = digest([record.workspaceIdentity, record.commandId, record.definition, record.expectedHash]);
+  record.approvalDigest = digest([record.workspaceIdentity, record.commandId, record.definition, record.scriptPreview, record.expectedHash]);
   await mkdir(PROPOSALS, { recursive: true, mode: 0o700 });
   await writeFile(path.join(PROPOSALS, id + '.json'), JSON.stringify(record) + '\n', {flag: 'wx', mode: 0o600});
   return {status: 'pending_approval', proposalId: id, commandId, argv: definition.run, cwd: definition.cwd,
     arguments: definition.arguments, timeoutMs: definition.timeoutMs, scriptGuard: definition.scriptGuard,
-    scripts: selectedScript.scripts, approvalDigest: record.approvalDigest,
+    scripts: selectedScript.scripts, scriptPreview, approvalDigest: record.approvalDigest,
     action: original ? 'update' : 'register'};
 }
 async function activate(id) {

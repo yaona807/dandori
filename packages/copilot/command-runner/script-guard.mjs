@@ -7,6 +7,12 @@ const HASH = /^sha256-[0-9a-f]{64}$/u;
 const NAME = /^[a-zA-Z0-9][a-zA-Z0-9:_./-]{0,127}$/u;
 const MANAGERS = new Set(['npm', 'pnpm', 'yarn', 'bun']);
 
+// npm consumes the "--" separator; pnpm/yarn/bun pass it on to scripts.
+export function scriptRunArgs(manager, script) {
+  if (!MANAGERS.has(manager) || !NAME.test(script)) throw new Error('unsupported script invocation');
+  return manager === 'npm' ? [manager, 'run', script, '--'] : [manager, 'run', script];
+}
+
 export function validateScriptGuard(guard, command, location = 'scriptGuard') {
   if (!guard || typeof guard !== 'object' || Array.isArray(guard)
     || Object.keys(guard).sort().join(',') !== 'fingerprint,manager,script') {
@@ -17,7 +23,7 @@ export function validateScriptGuard(guard, command, location = 'scriptGuard') {
     || !HASH.test(guard.fingerprint)) {
     throw new Error(location + ' contains an invalid manager, script or fingerprint');
   }
-  if (JSON.stringify(command.run) !== JSON.stringify([guard.manager, 'run', guard.script, '--'])
+  if (JSON.stringify(command.run) !== JSON.stringify(scriptRunArgs(guard.manager, guard.script))
     || Object.keys(command.arguments ?? {}).length !== 0) {
     throw new Error(location + ' must bind an exact npm-family argv without forwarded arguments');
   }

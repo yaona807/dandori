@@ -2,7 +2,7 @@
 
 import path from 'node:path';
 import os from 'node:os';
-import { lstatSync, readFileSync } from 'node:fs';
+import { lstatSync, readFileSync, realpathSync } from 'node:fs';
 import process from 'node:process';
 
 const TERMINAL_TOOL_NAMES = new Set([
@@ -34,6 +34,8 @@ const PROTECTED_SUFFIXES = new Set([
   '.copilot/command-runner/command-runner-hook.mjs',
   '.copilot/command-runner/command-runner.mjs',
   '.copilot/command-runner/command-runner-interface.mjs',
+  '.copilot/command-runner/command-runner-v2.mjs',
+  '.copilot/command-runner/script-guard.mjs',
   '.copilot/command-runner/workspaces.json',
 ]);
 const WRITE_TOOL_NAME_PATTERN = /(?:^|[/._-])(?:edit|write|create|delete|remove|move|rename|patch)(?:$|[/._-])/iu;
@@ -72,9 +74,54 @@ function activationReview(id) {
     argv: item.definition.run,
     cwd: item.definition.cwd,
     scriptGuard: item.definition.scriptGuard,
+    scriptPreview: item.scriptPreview,
   });
   if (display.length > 2000) throw new Error('approval details exceed bounded preview');
   return 'Human approval is required for this exact command definition: ' + display;
+}
+
+// A first-time workspace registration is confirmed once, not on every run.
+function workspaceEnsureReview(input) {
+  const callerCwd = realpathSync(process.cwd());
+  if (input.cwd !== undefined) {
+    if (typeof input.cwd !== 'string' || !path.isAbsolute(input.cwd)
+      || realpathSync(input.cwd) !== callerCwd) {
+      throw new Error('host workspace differs from hook current directory');
+    }
+  }
+  const home = process.env.COPILOT_HOME ? path.resolve(process.env.COPILOT_HOME) : path.join(os.homedir(), '.copilot');
+  const configFile = path.join(home, 'command-runner', 'workspaces.json');
+  let registry;
+  try {
+    const st = lstatSync(configFile);
+    if (!st.isFile() || st.isSymbolicLink()) throw new Error('unsafe workspace registry');
+    registry = JSON.parse(readFileSync(configFile, 'utf8'));
+    if (!Array.isArray(registry.workspaces)) throw new Error('invalid workspace registry');
+  } catch (e) {
+    if (e?.code === 'ENOENT') registry = {workspaces: []};
+    else throw e;
+  }
+  const existing = registry.workspaces.some(ws => {
+    if (typeof ws.root !== 'string') throw new Error('invalid workspace root');
+    let root;
+    try { root = realpathSync(ws.root); }
+    catch { return false; }
+    const relative = path.relative(root, callerCwd);
+    return relative === '' || (relative !== '..' && !relative.startsWith('..' + path.sep) && !path.isAbsolute(relative));
+  });
+  if (existing) return null;
+  // No automatic parent-directory selection. Show the exact cwd to the human.
+  const rootMarker = ['.git', 'package.json'].some(name => {
+    try {
+      const entry = lstatSync(path.join(callerCwd, name));
+      return !entry.isSymbolicLink() && (entry.isFile() || entry.isDirectory());
+    } catch (e) {
+      if (e?.code !== 'ENOENT') throw e;
+      return false;
+    }
+  });
+  if (!rootMarker) throw new Error('new workspace root is not verifiable from this directory');
+  return 'Register this exact project directory as a workspace? ' + callerCwd;
 }
 
 function ask(reason) {
@@ -150,7 +197,7 @@ function validateV2Invocation(tokens) {
   }
   if (operation === 'propose') {
     if (!COMMAND_ID_PATTERN.test(tokens[3] ?? '')) throw new Error('invalid command ID');
-    for (const t of tokens.slice(4)) if (validateEncodedParameter(t) !== 'packageDir') throw new Error('unsupported proposal argument');
+    for (const t of tokens.slice(4)) if (!['packageDir', 'script'].includes(validateEncodedParameter(t))) throw new Error('unsupported proposal argument');
     return 'allow';
   }
   if (operation === 'describe' || operation === 'inspect') {
@@ -342,7 +389,7 @@ function validateTerminalInput(toolInput) {
   const words = parseCommand(toolInput.command);
   if (V2_PREFIX.every((s, i) => words[i] === s)) return validateV2Invocation(words);
   validateRunnerInvocation(words);
-  return ['register', 'update', 'unregister', 'workspace-unregister'].includes(words[2]) ? 'ask' : 'allow';
+  return ['register', 'update', 'unregister', 'workspace-register', 'workspace-unregister'].includes(words[2]) ? 'ask' : 'allow';
 }
 
 async function readInput() {
@@ -380,12 +427,16 @@ try {
     }
   } else {
     const decision = validateTerminalInput(toolInput);
-    if (decision === 'ask') {
-      const tokens = parseCommand(toolInput.command);
-      const isActivation = V2_PREFIX.every((s, i) => tokens[i] === s) && tokens[2] === 'activate';
-      ask(isActivation ? activationReview(tokens[3]) : 'Review the exact definition and current command before approving registry mutation.');
-    }
-    else allow('Only the fixed user-level command runner interface is permitted.');
+    const tokens = parseCommand(toolInput.command);
+    const isV2 = V2_PREFIX.every((s, i) => tokens[i] === s);
+    if (isV2 && tokens[2] === 'workspace.ensure') {
+      const reason = workspaceEnsureReview(input);
+      if (reason) ask(reason);
+      else allow('Workspace is already registered and bound to this directory.');
+    } else if (decision === 'ask') {
+      const isActivation = isV2 && tokens[2] === 'activate';
+      ask(isActivation ? activationReview(tokens[3]) : 'Human approval required for registry mutation; review the exact command definition.');
+    } else allow('Only the fixed user-level command runner interface is permitted.');
   }
 } catch (error) {
   deny(error instanceof Error ? error.message : String(error));

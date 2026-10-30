@@ -304,3 +304,5 @@ node ~/.copilot/command-runner/command-runner-v2.mjs run test
 `propose` は実行せず候補のみを保存します。コマンドIDと実際のスクリプト名が違う場合は `script=<URLエンコード済み名>` を指定します。登録に伴う権限追加はCopilot/Localの `PreToolUse` の `ask` により人間が確認してください。**Hookの許可判断は永続的な承認署名ではありません**。Hookが無効、タイムアウト、または手動でバイパスされる環境での強制的承認保証はありません。未承認候補を暗黙に登録しないため、提案と有効化を分離しています。非対話セッションでの承認は失敗として処理します。
 
 v2が登録したnpm系コマンドはすべてのpackage script定義とpackageManager/lockfile種別を実行直前に再照合し、変更時は `stale_script_definition` で停止します。既存のv1登録は互換性のため監視対象外です。スクリプト本文に呼び出される任意のJSや依存パッケージの挙動は保護しません。npm等の任意スクリプトはSandboxではありません。
+
+新しいWorkspaceの初回登録はHookがrootの実体パスを表示して確認し、登録済みrootは再確認しません。npmのみ末尾の `--` を使用し、pnpm/Yarn/Bunでは引数として渡さないようにします。
