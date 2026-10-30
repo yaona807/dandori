@@ -50,6 +50,38 @@ class ValidatorMutationTests(unittest.TestCase):
         )
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
 
+    def test_copilot_profiles_preserve_model_and_effort(self) -> None:
+        for name in ("Orchestrator", "Researcher", "GitHubResearcher", "Writer",
+                     "CommandRunner", "Reviewer", "BrowserQA"):
+            source = ROOT / ".copilot/agents" / f"{name}.agent.md"
+            bundled = ROOT / "packages/copilot/agents" / f"{name}.agent.md"
+            _, source_front, _ = source.read_text().split("---\n", 2)
+            _, bundled_front, _ = bundled.read_text().split("---\n", 2)
+            a, b = yaml.safe_load(source_front), yaml.safe_load(bundled_front)
+            self.assertEqual(a["model"], b["model"], name)
+            self.assertEqual(a["reasoning-effort"], b["reasoning-effort"], name)
+            self.assertEqual("github-copilot", b["target"])
+            self.assertNotIn("agents", b)
+
+    def test_copilot_orchestrator_uses_named_custom_workers(self) -> None:
+        profile = ROOT / "packages/copilot/agents/Orchestrator.agent.md"
+        _, front, body = profile.read_text().split("---\n", 2)
+        meta = yaml.safe_load(front)
+        self.assertEqual(["task"], meta["tools"])
+        for name in ("Researcher", "GitHubResearcher", "Writer",
+                     "CommandRunner", "Reviewer", "BrowserQA"):
+            self.assertIn("- " + chr(96) + name + chr(96), body)
+        self.assertIn("Never use a default or general-purpose subagent", body)
+        self.assertIn("do not substitute any built-in or unlisted agent", body)
+
+    def test_copilot_browser_uses_qualified_tools(self) -> None:
+        profile = ROOT / "packages/copilot/agents/BrowserQA.agent.md"
+        _, front, _ = profile.read_text().split("---\n", 2)
+        meta = yaml.safe_load(front)
+        self.assertTrue(meta["tools"])
+        self.assertTrue(all(t.startswith("browser/") for t in meta["tools"]))
+        self.assertNotIn("browser", meta["tools"])
+
     def test_copilot_bundle_drift_is_rejected(self) -> None:
         temp, repo = self.make_repo()
         with temp:
