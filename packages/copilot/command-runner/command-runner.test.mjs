@@ -19,6 +19,8 @@ import { fileURLToPath } from 'node:url';
 const SOURCE_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
 const RUNNER_SOURCE = path.join(SOURCE_DIRECTORY, 'command-runner.mjs');
 const BUILTIN_SOURCE = path.join(SOURCE_DIRECTORY, 'builtin-commands.mjs');
+const SCRIPT_GUARD_SOURCE = path.join(SOURCE_DIRECTORY, 'script-guard.mjs');
+const V2_SOURCE = path.join(SOURCE_DIRECTORY, 'command-runner-v2.mjs');
 const INTERFACE_SOURCE = path.join(SOURCE_DIRECTORY, 'command-runner-interface.mjs');
 const HOOK_SOURCE = path.join(SOURCE_DIRECTORY, 'command-runner-hook.mjs');
 const AGENT_SOURCE = path.join(SOURCE_DIRECTORY, '..', 'agents', 'CommandRunner.agent.md');
@@ -42,6 +44,8 @@ async function makeFixture(configure = (configuration) => configuration) {
     path.join(home, 'command-runner', 'builtin-commands.mjs'),
     await readFile(BUILTIN_SOURCE),
   );
+  await writeFile(path.join(home, 'command-runner', 'script-guard.mjs'), await readFile(SCRIPT_GUARD_SOURCE));
+  await writeFile(path.join(home, 'command-runner', 'command-runner-v2.mjs'), await readFile(V2_SOURCE));
   await writeFile(
     path.join(home, 'command-runner', 'command-runner-interface.mjs'),
     await readFile(INTERFACE_SOURCE),
@@ -269,6 +273,7 @@ function runHook(fixture, input) {
     {
       cwd: fixture.alpha,
       encoding: 'utf8',
+      env: {...process.env, COPILOT_HOME: fixture.home},
       input: JSON.stringify(input),
     },
   );
@@ -1332,4 +1337,208 @@ test('P0 Git built-ins only observe a repository rooted at the workspace', async
     assert.deepEqual(indexAfter, indexBefore);
     assert.equal(execGit('status', '--porcelain').includes('?? .agent-trash'), false);
   });
+});
+
+
+function runV2(fixture, cwd, args) {
+  return spawnSync(process.execPath,
+    [path.join(fixture.home, 'command-runner', 'command-runner-v2.mjs'), ...args],
+    {cwd, encoding: 'utf8', env: {...process.env, COPILOT_HOME: fixture.home}});
+}
+
+test('v2 self-onboarding registers only a project root, without caller-supplied workspace ID', async () => {
+  await withFixture(async (fixture) => {
+    const gamma = path.join(fixture.root, 'gamma');
+    await mkdir(gamma);
+    await writeFile(path.join(gamma, 'package.json'), JSON.stringify({
+      packageManager: 'npm@10.0.0', scripts: {test: 'node -e "process.stdout.write(1)"'},
+    }));
+    let response = runV2(fixture, gamma, ['workspace.ensure']);
+    assert.equal(response.status, 0, response.stderr);
+    assert.equal(JSON.parse(response.stdout).registered, true);
+    response = runV2(fixture, gamma, ['workspace.ensure']);
+    assert.equal(response.status, 0, response.stderr);
+    assert.equal(JSON.parse(response.stdout).registered, false);
+    const config = JSON.parse(await readFile(path.join(fixture.home, 'command-runner', 'workspaces.json'), 'utf8'));
+    assert.equal(config.workspaces.length, 3);
+    assert.ok(config.workspaces.some(ws => ws.root === gamma && /^ws-[0-9a-f]{24}$/u.test(ws.id)));
+
+    const unrelated = path.join(fixture.root, 'unrelated');
+    await mkdir(unrelated);
+    response = runV2(fixture, unrelated, ['workspace.ensure']);
+    assert.equal(response.status, 2);
+    assert.match(response.stderr, /workspace_root_unverified/u);
+  });
+});
+
+test('v2 proposes inert npm scripts, activates exact candidate, and detects changed script definitions', async () => {
+  await withFixture(async (fixture) => {
+    await writeFile(path.join(fixture.alpha, 'package.json'), JSON.stringify({
+      packageManager: 'npm@10.0.0', scripts: {test: 'node echo-args.mjs', pretest: 'node --version'},
+    }));
+    const original = await readFile(path.join(fixture.home, 'command-runner', 'workspaces.json'), 'utf8');
+    const proposed = runV2(fixture, fixture.alpha, ['propose', 'test']);
+    assert.equal(proposed.status, 0, proposed.stderr);
+    const candidate = JSON.parse(proposed.stdout);
+    assert.equal(candidate.status, 'pending_approval');
+    assert.deepEqual(candidate.argv, ['npm', 'run', 'test', '--']);
+    assert.equal(candidate.scriptPreview.test, 'node echo-args.mjs');
+    assert.equal(await readFile(path.join(fixture.home, 'command-runner', 'workspaces.json'), 'utf8'), original);
+
+    const accepted = runV2(fixture, fixture.alpha, ['activate', candidate.proposalId]);
+    assert.equal(accepted.status, 0, accepted.stderr);
+    assert.equal(JSON.parse(accepted.stdout).commandId, 'test');
+    const executed = runV2(fixture, fixture.alpha, ['run', 'test']);
+    assert.equal(executed.status, 0, executed.stderr);
+    assert.equal(JSON.parse(executed.stdout).status, 'completed');
+    await writeFile(path.join(fixture.alpha, 'package.json'), JSON.stringify({
+      packageManager: 'npm@10.0.0', scripts: {test: 'node echo-args.mjs', pretest: 'npm publish'},
+    }));
+    const stopped = runV2(fixture, fixture.alpha, ['run', 'test']);
+    assert.equal(stopped.status, 2);
+    assert.match(stopped.stderr, /stale_script_definition/u);
+    const copy = runRunnerWithoutHashes(fixture, fixture.alpha,
+      ['run', 'test', '--expected-workspace=alpha']);
+    assert.equal(copy.status, 2);
+    assert.match(copy.stderr, /stale_script_definition/u);
+  });
+});
+
+test('v2 Hook uses interactive approval for activation and rejects arbitrary shell', async () => {
+  await withFixture(async (fixture) => {
+    const invoke = (command) => runHook(fixture, {
+      hook_event_name: 'PreToolUse', tool_name: 'execute/runInTerminal', tool_input: {command},
+    });
+    const accepted = invoke('node ~/.copilot/command-runner/command-runner-v2.mjs workspace.ensure');
+    assert.equal(JSON.parse(accepted.stdout).permissionDecision, 'allow');
+    const proposedHook = invoke('node ~/.copilot/command-runner/command-runner-v2.mjs propose test');
+    assert.equal(JSON.parse(proposedHook.stdout).permissionDecision, 'allow');
+    await writeFile(path.join(fixture.alpha, 'package.json'), JSON.stringify({
+      packageManager: 'npm@10.0.0', scripts: {'test:unit': 'node echo-args.mjs'},
+    }));
+    const proposed = runV2(fixture, fixture.alpha, ['propose', 'unit', 'script=test%3Aunit']);
+    assert.equal(proposed.status, 0, proposed.stderr);
+    const candidate = JSON.parse(proposed.stdout);
+    assert.deepEqual(candidate.argv, ['npm', 'run', 'test:unit', '--']);
+    const proposalHook = invoke('node ~/.copilot/command-runner/command-runner-v2.mjs propose unit script=test%3Aunit');
+    assert.equal(JSON.parse(proposalHook.stdout).permissionDecision, 'allow');
+    const activate = invoke('node ~/.copilot/command-runner/command-runner-v2.mjs activate ' + candidate.proposalId);
+    assert.equal(JSON.parse(activate.stdout).permissionDecision, 'ask');
+    assert.match(JSON.parse(activate.stdout).permissionDecisionReason, /test:unit/u);
+    assert.match(JSON.parse(activate.stdout).permissionDecisionReason, /node echo-args\.mjs/u);
+    const rejected = invoke('node ~/.copilot/command-runner/command-runner-v2.mjs run test && npm publish');
+    assert.equal(JSON.parse(rejected.stdout).permissionDecision, 'deny');
+    const legacy = invoke('node ~/.copilot/command-runner/command-runner-interface.mjs register test --expected-workspace=alpha definition=%7B%7D');
+    assert.equal(JSON.parse(legacy.stdout).permissionDecision, 'ask');
+    const legacyWorkspace = invoke('node ~/.copilot/command-runner/command-runner-interface.mjs workspace-register alpha');
+    assert.equal(JSON.parse(legacyWorkspace.stdout).permissionDecision, 'ask');
+  });
+});
+
+
+test('v2 Hook requests one-time approval for an unregistered exact project root', async () => {
+  await withFixture(async (fixture) => {
+    const gamma = path.join(fixture.root, 'new-project');
+    await mkdir(gamma);
+    await writeFile(path.join(gamma, 'package.json'), JSON.stringify({
+      packageManager: 'npm@10.0.0', scripts: {test: 'node --version'},
+    }));
+    const check = (cwd, reportedCwd = cwd) => spawnSync(process.execPath,
+      [path.join(fixture.home, 'command-runner', 'command-runner-hook.mjs')], {
+        cwd, encoding: 'utf8', env: {...process.env, COPILOT_HOME: fixture.home},
+        input: JSON.stringify({
+          hook_event_name: 'PreToolUse', tool_name: 'execute/runInTerminal',
+          cwd: reportedCwd,
+          tool_input: {command: 'node ~/.copilot/command-runner/command-runner-v2.mjs workspace.ensure'},
+        }),
+      });
+    const first = JSON.parse(check(gamma).stdout);
+    assert.equal(first.permissionDecision, 'ask');
+    assert.match(first.permissionDecisionReason, /new-project/u);
+    const mismatch = JSON.parse(check(gamma, fixture.alpha).stdout);
+    assert.equal(mismatch.permissionDecision, 'deny');
+    const registered = runV2(fixture, gamma, ['workspace.ensure']);
+    assert.equal(registered.status, 0, registered.stderr);
+    const again = JSON.parse(check(gamma).stdout);
+    assert.equal(again.permissionDecision, 'allow');
+  });
+});
+
+test('v2 pnpm script candidates do not pass npm-only double-dash to the underlying script', async () => {
+  await withFixture(async (fixture) => {
+    await writeFile(path.join(fixture.alpha, 'package.json'), JSON.stringify({
+      packageManager: 'pnpm@10.28.1', scripts: {check: 'tsc --noEmit --project tsconfig.json'},
+    }));
+    const proposed = runV2(fixture, fixture.alpha, ['propose', 'check']);
+    assert.equal(proposed.status, 0, proposed.stderr);
+    const candidate = JSON.parse(proposed.stdout);
+    assert.deepEqual(candidate.argv, ['pnpm', 'run', 'check']);
+    const activated = runV2(fixture, fixture.alpha, ['activate', candidate.proposalId]);
+    assert.equal(activated.status, 0, activated.stderr);
+    const config = JSON.parse(await readFile(path.join(fixture.home, 'command-runner', 'workspaces.json'), 'utf8'));
+    assert.deepEqual(config.workspaces[0].commands.check.run, ['pnpm', 'run', 'check']);
+    const guarded = runRunnerWithoutHashes(fixture, fixture.alpha, ['describe', 'check']);
+    assert.equal(guarded.status, 0, guarded.stderr);
+  });
+});
+
+
+test('v2 bounded proposal succeeds with a large unrelated script catalog', async () => {
+  await withFixture(async (fixture) => {
+    const scripts = { test: 'node --version' };
+    for (let index = 0; index < 150; index += 1) {
+      scripts['unrelated-' + index] = 'echo ' + 'x'.repeat(80);
+    }
+    await writeFile(path.join(fixture.alpha, 'package.json'),
+      JSON.stringify({ packageManager: 'npm@10.0.0', scripts }));
+    const result = runV2(fixture, fixture.alpha, ['propose', 'test']);
+    assert.equal(result.status, 0, result.stderr);
+    const response = JSON.parse(result.stdout);
+    assert.equal(response.status, 'pending_approval');
+    assert.equal(response.scriptPreview.test, 'node --version');
+    assert.equal(response.scripts, undefined);
+    const updated = { ...scripts, 'unrelated-149': 'echo changed' };
+    await writeFile(path.join(fixture.alpha, 'package.json'),
+      JSON.stringify({ packageManager: 'npm@10.0.0', scripts: updated }));
+    const blocked = runV2(fixture, fixture.alpha, ['activate', response.proposalId]);
+    assert.equal(blocked.status, 2);
+    assert.match(blocked.stderr, /stale_script_definition/u);
+  });
+});
+
+test('v2 nested package inherits registered-root manager and detects parent changes', async () => {
+  await withFixture(async (fixture) => {
+    const nested = path.join(fixture.alpha, 'packages', 'lib');
+    await mkdir(nested, { recursive: true });
+    await writeFile(path.join(fixture.alpha, 'package.json'),
+      JSON.stringify({ packageManager: 'npm@10.0.0', workspaces: ['packages/*'] }));
+    await writeFile(path.join(nested, 'package.json'),
+      JSON.stringify({ name: 'workspace-lib', scripts: { check: 'node --version' } }));
+    const proposed = runV2(fixture, fixture.alpha, ['propose', 'check', 'packageDir=packages%2Flib']);
+    assert.equal(proposed.status, 0, proposed.stderr);
+    const candidate = JSON.parse(proposed.stdout);
+    assert.deepEqual(candidate.argv, ['npm', 'run', 'check', '--']);
+    assert.equal(candidate.cwd, path.join('packages', 'lib'));
+    const registered = runV2(fixture, fixture.alpha, ['activate', candidate.proposalId]);
+    assert.equal(registered.status, 0, registered.stderr);
+    const executed = runV2(fixture, fixture.alpha, ['run', 'check']);
+    assert.equal(executed.status, 0, executed.stderr);
+    assert.equal(JSON.parse(executed.stdout).status, 'completed');
+    await writeFile(path.join(fixture.alpha, 'package.json'),
+      JSON.stringify({ packageManager: 'npm@11.0.0', workspaces: ['packages/*'] }));
+    const stopped = runV2(fixture, fixture.alpha, ['run', 'check']);
+    assert.equal(stopped.status, 2);
+    assert.match(stopped.stderr, /stale_script_definition/u);
+  });
+});
+
+test('documented installation copies all runtime-dependent runner modules', async () => {
+  for (const doc of ['README.md', 'README_ja.md']) {
+    const readme = await readFile(path.join(SOURCE_DIRECTORY, doc), 'utf8');
+    for (const file of ['command-runner.mjs', 'command-runner-interface.mjs',
+      'command-runner-hook.mjs', 'script-guard.mjs', 'command-runner-v2.mjs', 'builtin-commands.mjs']) {
+      assert.ok(readme.includes('cp .copilot/command-runner/' + file + ' ~/.copilot/command-runner/'),
+        doc + ' does not install ' + file);
+    }
+  }
 });

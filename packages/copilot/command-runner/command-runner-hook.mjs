@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
 import path from 'node:path';
+import os from 'node:os';
+import { lstatSync, readFileSync, realpathSync } from 'node:fs';
 import process from 'node:process';
 
 const TERMINAL_TOOL_NAMES = new Set([
@@ -23,6 +25,8 @@ const COMMAND_ID_PATTERN = /^[a-z][a-z0-9_-]{0,63}$/;
 const EXECUTION_ID_PATTERN = /^\d{8}T\d{6}\.\d{3}Z_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const PARAMETER_TOKEN_PATTERN = /^[a-z][a-zA-Z0-9_-]{0,63}=[A-Za-z0-9._~%/-]*$/;
 const FIXED_PREFIX = ['node', '~/.copilot/command-runner/command-runner-interface.mjs'];
+const V2_PREFIX = ['node', '~/.copilot/command-runner/command-runner-v2.mjs'];
+const PROPOSAL_ID = /^prop-[a-f0-9]{32}$/u;
 const FORBIDDEN_CHARACTER_PATTERN = /[\u0000-\u001f\u007f'"`$&|;<>()[\]{}\\]/u;
 const MAX_COMMAND_LENGTH = 65_536;
 const PROTECTED_SUFFIXES = new Set([
@@ -30,6 +34,8 @@ const PROTECTED_SUFFIXES = new Set([
   '.copilot/command-runner/command-runner-hook.mjs',
   '.copilot/command-runner/command-runner.mjs',
   '.copilot/command-runner/command-runner-interface.mjs',
+  '.copilot/command-runner/command-runner-v2.mjs',
+  '.copilot/command-runner/script-guard.mjs',
   '.copilot/command-runner/workspaces.json',
 ]);
 const WRITE_TOOL_NAME_PATTERN = /(?:^|[/._-])(?:edit|write|create|delete|remove|move|rename|patch)(?:$|[/._-])/iu;
@@ -49,6 +55,78 @@ function allow(reason) {
       permissionDecisionReason: reason,
     },
   });
+}
+
+function activationReview(id) {
+  const home = process.env.COPILOT_HOME ? path.resolve(process.env.COPILOT_HOME) : path.join(os.homedir(), '.copilot');
+  const file = path.join(home, 'command-runner', 'proposals', id + '.json');
+  const stat = lstatSync(file);
+  if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 32768) throw new Error('unreadable approval proposal');
+  const item = JSON.parse(readFileSync(file, 'utf8'));
+  if (item.id !== id || !item.definition || !Array.isArray(item.definition.run)
+    || typeof item.definition.cwd !== 'string' || !item.definition.scriptGuard
+    || !Number.isFinite(item.expiresAt) || Date.now() > item.expiresAt) {
+    throw new Error('invalid or expired approval proposal');
+  }
+  const display = JSON.stringify({
+    action: item.expectedHash ? 'update' : 'register',
+    commandId: item.commandId,
+    argv: item.definition.run,
+    cwd: item.definition.cwd,
+    scriptGuard: item.definition.scriptGuard,
+    scriptPreview: item.scriptPreview,
+  });
+  if (display.length > 2000) throw new Error('approval details exceed bounded preview');
+  return 'Human approval is required for this exact command definition: ' + display;
+}
+
+// A first-time workspace registration is confirmed once, not on every run.
+function workspaceEnsureReview(input) {
+  const callerCwd = realpathSync(process.cwd());
+  if (input.cwd !== undefined) {
+    if (typeof input.cwd !== 'string' || !path.isAbsolute(input.cwd)
+      || realpathSync(input.cwd) !== callerCwd) {
+      throw new Error('host workspace differs from hook current directory');
+    }
+  }
+  const home = process.env.COPILOT_HOME ? path.resolve(process.env.COPILOT_HOME) : path.join(os.homedir(), '.copilot');
+  const configFile = path.join(home, 'command-runner', 'workspaces.json');
+  let registry;
+  try {
+    const st = lstatSync(configFile);
+    if (!st.isFile() || st.isSymbolicLink()) throw new Error('unsafe workspace registry');
+    registry = JSON.parse(readFileSync(configFile, 'utf8'));
+    if (!Array.isArray(registry.workspaces)) throw new Error('invalid workspace registry');
+  } catch (e) {
+    if (e?.code === 'ENOENT') registry = {workspaces: []};
+    else throw e;
+  }
+  const existing = registry.workspaces.some(ws => {
+    if (typeof ws.root !== 'string') throw new Error('invalid workspace root');
+    let root;
+    try { root = realpathSync(ws.root); }
+    catch { return false; }
+    const relative = path.relative(root, callerCwd);
+    return relative === '' || (relative !== '..' && !relative.startsWith('..' + path.sep) && !path.isAbsolute(relative));
+  });
+  if (existing) return null;
+  // No automatic parent-directory selection. Show the exact cwd to the human.
+  const rootMarker = ['.git', 'package.json'].some(name => {
+    try {
+      const entry = lstatSync(path.join(callerCwd, name));
+      return !entry.isSymbolicLink() && (entry.isFile() || entry.isDirectory());
+    } catch (e) {
+      if (e?.code !== 'ENOENT') throw e;
+      return false;
+    }
+  });
+  if (!rootMarker) throw new Error('new workspace root is not verifiable from this directory');
+  return 'Register this exact project directory as a workspace? ' + callerCwd;
+}
+
+function ask(reason) {
+  output({permissionDecision: 'ask', permissionDecisionReason: reason,
+    hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'ask', permissionDecisionReason: reason }});
 }
 
 function deny(reason) {
@@ -100,6 +178,43 @@ function validateWorkspaceGuard(token) {
     || !COMMAND_ID_PATTERN.test(token.slice(prefix.length))) {
     throw new Error('scoped operations require --expected-workspace=<id> first');
   }
+}
+
+function validateV2Invocation(tokens) {
+  if (!V2_PREFIX.every((s, i) => s === tokens[i])) throw new Error('unknown runner prefix');
+  const operation = tokens[2];
+  if (operation === 'workspace.ensure' || operation === 'context') {
+    if (tokens.length !== 3) throw new Error('unexpected parameters');
+    return 'allow';
+  }
+  if (operation === 'list') {
+    for (const t of tokens.slice(3)) validateEncodedParameter(t);
+    return 'allow';
+  }
+  if (operation === 'activate') {
+    if (tokens.length !== 4 || !PROPOSAL_ID.test(tokens[3])) throw new Error('invalid proposal');
+    return 'ask';
+  }
+  if (operation === 'propose') {
+    if (!COMMAND_ID_PATTERN.test(tokens[3] ?? '')) throw new Error('invalid command ID');
+    for (const t of tokens.slice(4)) if (!['packageDir', 'script'].includes(validateEncodedParameter(t))) throw new Error('unsupported proposal argument');
+    return 'allow';
+  }
+  if (operation === 'describe' || operation === 'inspect') {
+    if (!COMMAND_ID_PATTERN.test(tokens[3] ?? '') || tokens.length !== 4) throw new Error('invalid command request');
+    return 'allow';
+  }
+  if (operation === 'run') {
+    if (!COMMAND_ID_PATTERN.test(tokens[3] ?? '')) throw new Error('invalid command ID');
+    for (const t of tokens.slice(4)) validateEncodedParameter(t);
+    return 'allow';
+  }
+  if (operation === 'output') {
+    if (tokens.length < 5 || !EXECUTION_ID_PATTERN.test(tokens[3] ?? '')) throw new Error('invalid execution ID');
+    for (const t of tokens.slice(4)) validateEncodedParameter(t);
+    return 'allow';
+  }
+  throw new Error('unsupported v2 command-runner operation');
 }
 
 function validateRunnerInvocation(tokens) {
@@ -271,7 +386,10 @@ function validateTerminalInput(toolInput) {
     || (toolInput.timeout !== undefined && toolInput.timeout !== 0)) {
     throw new Error('asynchronous or timed background terminal execution is not allowed');
   }
-  validateRunnerInvocation(parseCommand(toolInput.command));
+  const words = parseCommand(toolInput.command);
+  if (V2_PREFIX.every((s, i) => words[i] === s)) return validateV2Invocation(words);
+  validateRunnerInvocation(words);
+  return ['register', 'update', 'unregister', 'workspace-register', 'workspace-unregister'].includes(words[2]) ? 'ask' : 'allow';
 }
 
 async function readInput() {
@@ -308,8 +426,17 @@ try {
       deny('CommandRunner permits only fixed-runner terminal calls and explicitly read-only tools.');
     }
   } else {
-    validateTerminalInput(toolInput);
-    allow('Only the fixed user-level command runner interface is permitted.');
+    const decision = validateTerminalInput(toolInput);
+    const tokens = parseCommand(toolInput.command);
+    const isV2 = V2_PREFIX.every((s, i) => tokens[i] === s);
+    if (isV2 && tokens[2] === 'workspace.ensure') {
+      const reason = workspaceEnsureReview(input);
+      if (reason) ask(reason);
+      else allow('Workspace is already registered and bound to this directory.');
+    } else if (decision === 'ask') {
+      const isActivation = isV2 && tokens[2] === 'activate';
+      ask(isActivation ? activationReview(tokens[3]) : 'Human approval required for registry mutation; review the exact command definition.');
+    } else allow('Only the fixed user-level command runner interface is permitted.');
   }
 } catch (error) {
   deny(error instanceof Error ? error.message : String(error));

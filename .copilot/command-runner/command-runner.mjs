@@ -2,6 +2,7 @@
 
 import { spawn } from 'node:child_process';
 import { builtinDefinitions, isBuiltinId } from './builtin-commands.mjs';
+import { validateScriptGuard, scriptFingerprint } from './script-guard.mjs';
 import { createHash } from 'node:crypto';
 import { constants as fsConstants } from 'node:fs';
 import { access, readFile, realpath, stat } from 'node:fs/promises';
@@ -357,7 +358,7 @@ function validateCommands(rawCommands, defaults, location) {
     requireObject(command, `${location}.${id}`);
     requireKeys(
       command,
-      ['description', 'run', 'cwd', 'arguments', 'timeoutMs', 'maxOutputBytes'],
+      ['description', 'run', 'cwd', 'arguments', 'timeoutMs', 'maxOutputBytes', 'scriptGuard'],
       `${location}.${id}`,
     );
     if (
@@ -393,7 +394,12 @@ function validateCommands(rawCommands, defaults, location) {
         `${location}.${id} connects dynamic arguments to an inline-code execution form`,
       );
     }
+    if (command.scriptGuard !== undefined) {
+      try { validateScriptGuard(command.scriptGuard, command, `${location}.${id}.scriptGuard`); }
+      catch (error) { throw new RunnerError('invalid_config', error.message); }
+    }
     commands[id] = {
+      ...(command.scriptGuard === undefined ? {} : { scriptGuard: command.scriptGuard }),
       description: requireString(command.description, `${location}.${id}.description`, 500),
       run: [...command.run],
       cwd,
@@ -813,6 +819,14 @@ async function execute(workspace, id, command, provided) {
   );
   const cwd = await commandDirectory(workspace, command);
   const relativeCwd = path.relative(workspace.root, cwd) || '.';
+  if (command.scriptGuard) {
+    let current;
+    try { current = await scriptFingerprint(cwd, command.scriptGuard.manager, command.scriptGuard.script, workspace.root); }
+    catch (error) { throw new RunnerError('stale_script_definition', String(error.message)); }
+    if (current.fingerprint !== command.scriptGuard.fingerprint) {
+      throw new RunnerError('stale_script_definition', 'approved package scripts or manager changed');
+    }
+  }
 
   return new Promise((resolve, reject) => {
     const child = spawn(argv[0], argv.slice(1), {

@@ -23,11 +23,13 @@ cp .copilot/command-runner/command-runner.mjs ~/.copilot/command-runner/
 cp .copilot/command-runner/builtin-commands.mjs ~/.copilot/command-runner/
 cp .copilot/command-runner/command-runner-interface.mjs ~/.copilot/command-runner/
 cp .copilot/command-runner/command-runner-hook.mjs ~/.copilot/command-runner/
+cp .copilot/command-runner/script-guard.mjs ~/.copilot/command-runner/
+cp .copilot/command-runner/command-runner-v2.mjs ~/.copilot/command-runner/
 test -f ~/.copilot/command-runner/workspaces.json \
   || cp .copilot/command-runner/workspaces.example.json ~/.copilot/command-runner/workspaces.json
 ```
 
-The copied configuration starts with an empty workspace registry. From the root directory that should become a workspace, register an explicit ID through `workspace-register <id>`. The runner derives and stores the canonical root from the actual current working directory, so no manual `workspaces.json` edit or root argument is required. This personal file is not part of the DANDORI repository.
+The copied configuration starts with an empty workspace registry. Run `node ~/.copilot/command-runner/command-runner-v2.mjs workspace.ensure` from the exact project root (containing `.git` or `package.json`) to auto-register the workspace after the hook's first-use confirmation. The runner chooses an internal ID and canonical root; no manual `workspaces.json` edit or workspace ID is required. Legacy manual `workspace-register <id>` remains available for migration. This personal file is not part of the DANDORI repository.
 
 Set `chat.useCustomAgentHooks` to `true` in VS Code because agent-scoped hooks are a preview feature. Confirm in Chat Diagnostics that `CommandRunner` is loaded from `~/.copilot/agents/CommandRunner.agent.md`.
 
@@ -288,3 +290,13 @@ node --test \
   .copilot/command-runner/command-runner-interface.test.mjs
 COPILOT_HOME=/path/to/test-home node .copilot/command-runner/command-runner-interface.mjs list --expected-workspace=example
 ```
+
+## CommandRunner v2: self-onboarding and human-approved project commands
+
+Use `node ~/.copilot/command-runner/command-runner-v2.mjs` for the Worker-facing API. It accepts `context`, `workspace.ensure`, `list`, `describe`, `inspect`, `propose <id> [packageDir=<relative>] [script=<name>]`, `activate <proposal-id>`, `run <id> [name=value]`, and `output <execution-id> stream=stdout|stderr [offset=<n>]`.
+
+The worker does not send a workspace ID. The existing core selects the registered root from actual cwd and the v2 facade supplies internal workspace assertions. Hook requests first-time confirmation of the exact cwd root (already-registered roots are not prompted again). New roots are registered only when cwd is the exact directory containing `.git` or `package.json`; no parent-root inference. New command candidates are persisted but do not become executable until activation. A `PreToolUse` `ask` confirmation is requested for activation; user approval must be explicit. Unattended and untrusted hook environments do not provide a reliable human-approval attestation; **this is a prompt-level host permission, not a cryptographically enforced approval record**. The existing privileged v1 API is kept for migration and requests an interactive confirmation for registry mutations.
+
+The generated argv is manager-sensitive: npm uses a terminal `--` separator, pnpm/Yarn/Bun do not. New npm/pnpm/Yarn/Bun registrations carry a `scriptGuard` fingerprint checked by the core before every execution, including through v1. All package scripts and declared package manager are hashed conservatively; this does not sandbox script contents or dependencies. Legacy entries without a guard remain supported. Do not auto-approve new candidates.
+
+For monorepos, `propose <id> packageDir=<workspace-relative-package>` inherits the closest package-manager declaration or lockfile from that package through the **registered workspace root only**. The execution guard repeats the identical resolution. The proposal response contains only the selected-script preview, never the full script catalog; the internal fingerprint still covers all package scripts.
