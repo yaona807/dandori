@@ -13,7 +13,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{1
 const CURRENT = fileURLToPath(import.meta.url);
 const file = (mustExist = true) => ({ type: 'workspace-file', mustExist });
 const positional = (value) => ({ kind: 'positional', required: true, value });
-const option = (token, value) => ({ kind: 'option', value });
+const option = (token, value) => ({ kind: 'option', token, value });
 
 const SPECS = {
   'builtin-fs-move': { description: 'Move or rename one regular workspace file without overwriting.', arguments: { source: positional(file()), destination: positional(file(false)) } },
