@@ -20,6 +20,7 @@ Agentは他のDANDORI Agentと一緒に配置し、固定RunnerとHookを追加�
 mkdir -p ~/.copilot/agents ~/.copilot/command-runner
 cp .copilot/agents/CommandRunner.agent.md ~/.copilot/agents/
 cp .copilot/command-runner/command-runner.mjs ~/.copilot/command-runner/
+cp .copilot/command-runner/builtin-commands.mjs ~/.copilot/command-runner/
 cp .copilot/command-runner/command-runner-interface.mjs ~/.copilot/command-runner/
 cp .copilot/command-runner/command-runner-hook.mjs ~/.copilot/command-runner/
 test -f ~/.copilot/command-runner/workspaces.json \
@@ -31,6 +32,19 @@ test -f ~/.copilot/command-runner/workspaces.json \
 Agent固有HookはPreview機能のため、VS Codeの `chat.useCustomAgentHooks` を `true` にします。Chat Diagnosticsで、`CommandRunner`が `~/.copilot/agents/CommandRunner.agent.md` から読み込まれていることを確認してください。
 
 `COPILOT_HOME`を設定した場合、Runnerの設定・データ参照先だけが変わります。Runnerは `$COPILOT_HOME/command-runner/workspaces.json` を読み、実行出力を `$COPILOT_HOME/command-runner/executions/` 配下へ保存します。Agent・Runner・Hook本体のインストール先は引き続き `~/.copilot/` です。
+
+## Built-inコマンド（個別登録不要）
+Workspace登録後、次の固定コマンドを利用できます。
+
+- ファイル操作：`builtin-fs-move`、`builtin-fs-copy`、`builtin-fs-trash`、`builtin-fs-restore`、`builtin-fs-trash-list`。
+- Git読み取り：`builtin-git-status`、`builtin-git-diff`、`builtin-git-log`、`builtin-git-show`、`builtin-git-ls-files`、`builtin-git-branch-info`。
+
+**登録不要は権限不要という意味ではありません。** exactなCommand IDと全Effectを含む承認済みTask Cardが必要です。Built-in IDは予約され、登録・更新・削除できません。
+通常ファイルのみ扱い、既存ファイルの上書き、symlinkの経由、再帰的な物理削除は行いません。ゴミ箱はWorkspace直下の `.agent-trash/`。内部の `.gitignore` は `*` に固定され、通常のGit追跡から除外します。既にGit追跡済みのゴミ箱は拒否します。退避済みファイルはIDで復元可能です。**物理削除コマンドはありません。** 異なるファイルシステム間の移動は拒否します。
+Git読み取りはリポジトリrootとWorkspace rootが一致する場合に限定します。`builtin-git-show` は40桁の完全SHAを要求します。ステージング・コミット・ブランチ変更・リモート操作は人間の管理対象です。
+npm/pnpm/Yarn/Bun等のプロジェクト固有コマンドは、従来どおり人間がホワイトリスト登録したコマンドのみ実行できます。
+
+例：`node ~/.copilot/command-runner/command-runner-interface.mjs run builtin-fs-trash --expected-workspace=example source=src%2Fold.ts`
 
 ## Workspaceの選択
 
