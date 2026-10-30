@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { createHash, randomUUID } from 'node:crypto';
+import { builtinDefinitions, isBuiltinId } from './builtin-commands.mjs';
 import { spawn } from 'node:child_process';
 import {
   lstat,
@@ -672,7 +673,7 @@ async function withConfigurationLock(callback) {
 
 async function describeConfiguredCommand(id, expectedWorkspace) {
   const snapshot = await readStableConfiguration(expectedWorkspace);
-  const command = snapshot.workspace.commands?.[id];
+  const command = builtinDefinitions()[id] ?? snapshot.workspace.commands?.[id];
   if (!command) {
     throw new InterfaceError(
       'command_not_registered',
@@ -691,7 +692,7 @@ async function describeConfiguredCommand(id, expectedWorkspace) {
 
 async function inspectConfiguredCommand(id, expectedWorkspace) {
   const snapshot = await readStableConfiguration(expectedWorkspace);
-  const command = snapshot.workspace.commands?.[id];
+  const command = builtinDefinitions()[id] ?? snapshot.workspace.commands?.[id];
   if (!command) {
     throw new InterfaceError(
       'command_not_registered',
@@ -709,7 +710,7 @@ async function inspectConfiguredCommand(id, expectedWorkspace) {
   return {
     workspaceId: snapshot.workspaceId,
     commandId: id,
-    source: 'local-registry',
+    source: isBuiltinId(id) ? 'built-in' : 'local-registry',
     execution: {
       argv: [...command.run],
       cwd: command.cwd ?? '.',
@@ -733,6 +734,7 @@ function parseCommandDefinition(id, definitionSource) {
 }
 
 async function registerConfiguredCommand(id, definitionSource, expectedWorkspace) {
+  if (isBuiltinId(id)) throw new InterfaceError('builtin_immutable', 'built-in command IDs cannot be registered, updated, or removed');
   return withConfigurationLock(async () => {
     const snapshot = await readStableConfiguration(expectedWorkspace);
     if (snapshot.workspace.commands?.[id]) {
@@ -757,6 +759,7 @@ async function registerConfiguredCommand(id, definitionSource, expectedWorkspace
 }
 
 async function updateConfiguredCommand(id, expectedHash, definitionSource, expectedWorkspace) {
+  if (isBuiltinId(id)) throw new InterfaceError('builtin_immutable', 'built-in command IDs cannot be registered, updated, or removed');
   if (!DEFINITION_HASH_RE.test(expectedHash)) {
     throw new InterfaceError('invalid_argument', 'expected must be a sha256 definition hash returned by describe');
   }
@@ -790,6 +793,7 @@ async function updateConfiguredCommand(id, expectedHash, definitionSource, expec
 }
 
 async function unregisterConfiguredCommand(id, expectedHash, expectedWorkspace) {
+  if (isBuiltinId(id)) throw new InterfaceError('builtin_immutable', 'built-in command IDs cannot be registered, updated, or removed');
   if (!DEFINITION_HASH_RE.test(expectedHash)) {
     throw new InterfaceError('invalid_argument', 'expected must be a sha256 definition hash returned by describe');
   }
@@ -1109,7 +1113,8 @@ async function main() {
     }
     const start = offset(one(provided, 'offset'));
     const snapshot = await readStableConfiguration(expectedWorkspace);
-    const revision = definitionHash([snapshot.workspaceIdentity, snapshot.workspace.commands]);
+    const combined = { ...(snapshot.raw.version === 1 ? builtinDefinitions() : {}), ...snapshot.workspace.commands };
+    const revision = definitionHash([snapshot.workspaceIdentity, combined]);
     const expectedRevision = one(provided, 'revision');
     if (start > 0 && expectedRevision === undefined) {
       throw new InterfaceError('invalid_argument', 'list pagination requires revision from the first page');
@@ -1121,7 +1126,7 @@ async function main() {
       throw new InterfaceError('stale_listing', 'command registration changed during pagination');
     }
     const normalizedQuery = query?.toLowerCase();
-    const ids = Object.entries(snapshot.workspace.commands)
+    const ids = Object.entries(combined)
       .filter(([id, command]) => COMMAND_ID_RE.test(id)
         && (normalizedQuery === undefined
           || id.toLowerCase().includes(normalizedQuery)

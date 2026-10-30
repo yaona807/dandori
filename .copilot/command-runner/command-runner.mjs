@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { spawn } from 'node:child_process';
+import { builtinDefinitions, isBuiltinId } from './builtin-commands.mjs';
 import { createHash } from 'node:crypto';
 import { constants as fsConstants } from 'node:fs';
 import { access, readFile, realpath, stat } from 'node:fs/promises';
@@ -446,6 +447,9 @@ async function validateConfig(raw, { allowMissingRoots = false } = {}) {
       'configuration.workspaces must be an array',
     );
   }
+  const builtins = builtinDefinitions();
+  const builtinCommands = validateCommands(builtins, defaults, 'builtins');
+  const builtinHashes = Object.fromEntries(Object.entries(builtins).map(([id, cmd]) => [id, executionHash(cmd, defaults)]));
   const ids = new Set();
   const roots = new Set();
   const workspaces = [];
@@ -474,12 +478,15 @@ async function validateConfig(raw, { allowMissingRoots = false } = {}) {
     }
     roots.add(rootKey);
     const commands = validateCommands(workspace.commands, defaults, `${location}.commands`);
+    if (Object.keys(commands).some(isBuiltinId)) {
+      throw new RunnerError('invalid_config', 'built-in command IDs are reserved and immutable');
+    }
     workspaces.push({
       id: workspace.id,
       root,
       workspaceIdentity: identityHash([workspace.id, root, workspace.registrationId ?? null]),
-      commandHashes: Object.fromEntries(Object.entries(workspace.commands).map(([id, cmd]) => [id, executionHash(cmd, defaults)])),
-      commands,
+      commandHashes: { ...builtinHashes, ...Object.fromEntries(Object.entries(workspace.commands).map(([id, cmd]) => [id, executionHash(cmd, defaults)])) },
+      commands: { ...builtinCommands, ...commands },
     });
   }
   return workspaces;

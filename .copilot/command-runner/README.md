@@ -20,6 +20,7 @@ Install the agent with the other DANDORI agents, then install the fixed runner a
 mkdir -p ~/.copilot/agents ~/.copilot/command-runner
 cp .copilot/agents/CommandRunner.agent.md ~/.copilot/agents/
 cp .copilot/command-runner/command-runner.mjs ~/.copilot/command-runner/
+cp .copilot/command-runner/builtin-commands.mjs ~/.copilot/command-runner/
 cp .copilot/command-runner/command-runner-interface.mjs ~/.copilot/command-runner/
 cp .copilot/command-runner/command-runner-hook.mjs ~/.copilot/command-runner/
 test -f ~/.copilot/command-runner/workspaces.json \
@@ -31,6 +32,19 @@ The copied configuration starts with an empty workspace registry. From the root 
 Set `chat.useCustomAgentHooks` to `true` in VS Code because agent-scoped hooks are a preview feature. Confirm in Chat Diagnostics that `CommandRunner` is loaded from `~/.copilot/agents/CommandRunner.agent.md`.
 
 If `COPILOT_HOME` is set, only the runner data/configuration lookup changes. The runner reads `$COPILOT_HOME/command-runner/workspaces.json` and stores execution output below `$COPILOT_HOME/command-runner/executions/`. The installed Agent, runner, and hook paths remain under `~/.copilot/`.
+
+## Immutable built-in commands
+After workspace registration, the following fixed commands are available without per-workspace registration:
+
+- File operations: `builtin-fs-move`, `builtin-fs-copy`, `builtin-fs-trash`, `builtin-fs-restore`, `builtin-fs-trash-list`.
+- Read-only Git: `builtin-git-status`, `builtin-git-diff`, `builtin-git-log`, `builtin-git-show`, `builtin-git-ls-files`, `builtin-git-branch-info`.
+
+Availability never implies authority: every run still needs an exact delegated ID and approved effects. Built-in IDs are reserved and immutable.
+Only regular files are moved/copied, without overwrites or symlink traversal. Trash uses the workspace-local `.agent-trash/` with an internal `.gitignore` containing `*`, and rejects already Git-tracked trash directories. Items can be restored by ID. No physical deletion command exists. Cross-filesystem moves fail.
+Git reads require the repository root to match the selected workspace. `builtin-git-show` accepts a full 40-hex SHA only. Git staging, commits, branch changes and remote changes remain human-managed.
+npm/pnpm/Yarn/Bun scripts and all project-owned commands continue to require individually human-approved allowlist registration. They are never inferred as executable from project scripts.
+
+Example: `node ~/.copilot/command-runner/command-runner-interface.mjs run builtin-fs-trash --expected-workspace=example source=src%2Fold.ts`
 
 ## Workspace selection
 

@@ -17,6 +17,7 @@ import { fileURLToPath } from 'node:url';
 
 const SOURCE_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
 const CORE_SOURCE = path.join(SOURCE_DIRECTORY, 'command-runner.mjs');
+const BUILTIN_SOURCE = path.join(SOURCE_DIRECTORY, 'builtin-commands.mjs');
 const INTERFACE_SOURCE = path.join(SOURCE_DIRECTORY, 'command-runner-interface.mjs');
 const HOOK_SOURCE = path.join(SOURCE_DIRECTORY, 'command-runner-hook.mjs');
 const AGENT_SOURCE = path.join(SOURCE_DIRECTORY, '..', 'agents', 'CommandRunner.agent.md');
@@ -102,6 +103,7 @@ async function makeFixture(commandCount = 3) {
   await mkdir(commandRunner, { recursive: true });
   await mkdir(alpha);
   await mkdir(beta);
+  await writeFile(path.join(commandRunner, 'builtin-commands.mjs'), await readFile(BUILTIN_SOURCE));
   await writeFile(path.join(commandRunner, 'command-runner-interface.mjs'), await readFile(INTERFACE_SOURCE));
   await writeFile(path.join(commandRunner, 'command-runner-hook.mjs'), await readFile(HOOK_SOURCE));
   await writeFile(path.join(commandRunner, 'command-runner.mjs'), STUB_CORE);
@@ -137,6 +139,7 @@ async function makeManagementFixture() {
   await mkdir(commandRunner, { recursive: true });
   await mkdir(alpha);
   await mkdir(beta);
+  await writeFile(path.join(commandRunner, 'builtin-commands.mjs'), await readFile(BUILTIN_SOURCE));
   await writeFile(path.join(commandRunner, 'command-runner-interface.mjs'), await readFile(INTERFACE_SOURCE));
   await writeFile(path.join(commandRunner, 'command-runner-hook.mjs'), await readFile(HOOK_SOURCE));
   await writeFile(path.join(commandRunner, 'command-runner.mjs'), await readFile(CORE_SOURCE));
@@ -488,7 +491,7 @@ test('workspace scope mismatch blocks listing, describing, and all command-map m
       assert.equal(await readFile(configuration, 'utf8'), before);
     }
     const allowed = parseSuccess(runInterface(fixture, fixture.beta, ['list', '--expected-workspace=beta']));
-    assert.deepEqual(allowed.commandIds, ['beta']);
+    assert.deepEqual(allowed.commandIds.filter((id) => !id.startsWith('builtin-')), ['beta']);
   });
 });
 
@@ -792,7 +795,7 @@ test('unregister uses definition-hash CAS and can leave an empty command map', a
     const after = JSON.parse(await readFile(configPath, 'utf8'));
     assert.deepEqual(after.workspaces[0].commands, {});
     const listed = parseSuccess(runInterface(fixture, fixture.alpha, ['list']));
-    assert.deepEqual(listed.commandIds, []);
+    assert.deepEqual(listed.commandIds.filter((id) => !id.startsWith('builtin-')), []);
   });
 });
 
@@ -918,7 +921,7 @@ test('stale workspace can be described and removed without runtime selection', a
     assert.equal(removed.previousStatus, 'stale');
 
     const listed = parseSuccess(runInterface(fixture, fixture.alpha, ['list']));
-    assert.deepEqual(listed.commandIds.sort(), ['keep', 'remove']);
+    assert.deepEqual(listed.commandIds.filter((id) => !id.startsWith('builtin-')).sort(), ['keep', 'remove']);
   });
 });
 
