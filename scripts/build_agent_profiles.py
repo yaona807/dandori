@@ -42,7 +42,9 @@ def transform(source: str, name: str, profile: str) -> str:
         raise ValueError(profile)
     # Retain body and frontmatter formatting; only migrate harness-specific keys.
     import re
-    # Preserve both model and reasoning-effort in Copilot as well as Local.
+    # Copilot expects the model label without the Local-only " (copilot)" suffix.
+    # Keep the model and reasoning-effort fields themselves intact.
+    front = re.sub(r"(?m)^(model: .+?) \\(copilot\\)$", r"\\1", front)
     front = re.sub(r"(?m)^agents:.*\n", "", front)
     front = front.replace("target: vscode", "target: github-copilot")
     if name in WORKERS:

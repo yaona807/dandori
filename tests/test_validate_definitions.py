@@ -50,7 +50,7 @@ class ValidatorMutationTests(unittest.TestCase):
         )
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
 
-    def test_copilot_profiles_preserve_model_and_effort(self) -> None:
+    def test_copilot_profiles_normalize_model_and_preserve_effort(self) -> None:
         for name in ("Orchestrator", "Researcher", "GitHubResearcher", "Writer",
                      "CommandRunner", "Reviewer", "BrowserQA"):
             source = ROOT / ".copilot/agents" / f"{name}.agent.md"
@@ -58,7 +58,8 @@ class ValidatorMutationTests(unittest.TestCase):
             _, source_front, _ = source.read_text().split("---\n", 2)
             _, bundled_front, _ = bundled.read_text().split("---\n", 2)
             a, b = yaml.safe_load(source_front), yaml.safe_load(bundled_front)
-            self.assertEqual(a["model"], b["model"], name)
+            self.assertEqual(a["model"].removesuffix(" (copilot)"), b["model"], name)
+            self.assertFalse(b["model"].endswith(" (copilot)"), name)
             self.assertEqual(a["reasoning-effort"], b["reasoning-effort"], name)
             self.assertEqual("github-copilot", b["target"])
             self.assertNotIn("agents", b)

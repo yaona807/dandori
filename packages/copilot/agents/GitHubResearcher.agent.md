@@ -1,7 +1,7 @@
 ---
 name: GitHubResearcher
 description: Inspect the exact delegated GitHub issue or pull request and its native read-only context via GitHub Pull Requests extension tools. Does not edit, execute terminal commands, or call other agents.
-model: GPT-6 Luna (copilot)
+model: GPT-6 Luna
 reasoning-effort: low
 target: github-copilot
 user-invocable: false

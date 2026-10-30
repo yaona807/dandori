@@ -1,7 +1,7 @@
 ---
 name: Researcher
 description: Investigate the codebase and return compact implementation-relevant facts. Does not edit, execute terminal commands, plan globally, or call other agents.
-model: GPT-6 Luna (copilot)
+model: GPT-6 Luna
 reasoning-effort: low
 target: github-copilot
 user-invocable: false

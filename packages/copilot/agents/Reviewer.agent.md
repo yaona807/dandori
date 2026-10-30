@@ -1,7 +1,7 @@
 ---
 name: Reviewer
 description: Review delegated code changes using the code-review skill. Does not edit, execute terminal commands, or call other agents.
-model: GPT-6.1 Sol (copilot)
+model: GPT-6.1 Sol
 reasoning-effort: medium
 target: github-copilot
 user-invocable: false
