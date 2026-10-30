@@ -13,6 +13,8 @@ description: >-
   fixed runner validates against its runtime-selected workspace before returning
   results. A filtered miss is not proof of absence. Does not inspect terminal
   directories, run raw commands, edit files, switch workspaces, or call agents.
+model: GPT-6 Luna
+reasoning-effort: low
 target: github-copilot
 user-invocable: false
 disable-model-invocation: false

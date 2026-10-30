@@ -1,11 +1,22 @@
 ---
 name: BrowserQA
 description: Verify UI behavior, visual consistency, and interaction flows using VS Code integrated browser tools. Does not edit, execute terminal commands, or call other agents.
+model: GPT-6.1 Terra
+reasoning-effort: low
 target: github-copilot
 user-invocable: false
 disable-model-invocation: false
 tools:
-  - browser
+  - browser/openBrowserPage
+  - browser/navigatePage
+  - browser/readPage
+  - browser/screenshotPage
+  - browser/clickElement
+  - browser/hoverElement
+  - browser/dragElement
+  - browser/typeInPage
+  - browser/handleDialog
+  - browser/runPlaywrightCode
 ---
 
 You are a browser-based QA worker agent.

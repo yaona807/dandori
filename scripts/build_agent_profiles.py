@@ -9,6 +9,24 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 AGENTS = ROOT / ".copilot" / "agents"
+COPILOT_WORKER_ROUTING = (
+    "## Copilot worker routing (mandatory)\n"
+    "\n"
+    "Copilot uses the native `task` delegation tool. Every delegated Task Card must select one of these installed custom agents by exact, case-sensitive name:\n"
+    "\n"
+    "- `Researcher`\n"
+    "- `GitHubResearcher`\n"
+    "- `Writer`\n"
+    "- `CommandRunner`\n"
+    "- `Reviewer`\n"
+    "- `BrowserQA`\n"
+    "\n"
+    "Select the exact custom agent in each `task` call. Never use a default or general-purpose subagent, or built-in Explore, Plan, Agent or unnamed task.\n"
+    "Verify the named custom agent is available. Otherwise return `no_suitable_worker`; do not substitute any built-in or unlisted agent.\n"
+    "Keep Task Card scope and audit. Copilot lacks Local's enforced `agents` allowlist; this is instruction-level routing.\n"
+    "\n"
+)
+
 WORKERS = ("Researcher", "GitHubResearcher", "Writer", "CommandRunner", "Reviewer", "BrowserQA")
 NAMES = ("Orchestrator", *WORKERS)
 def transform(source: str, name: str, profile: str) -> str:
@@ -24,18 +42,21 @@ def transform(source: str, name: str, profile: str) -> str:
         raise ValueError(profile)
     # Retain body and frontmatter formatting; only migrate harness-specific keys.
     import re
-    front = re.sub(r"(?m)^model:.*\n", "", front)
-    front = re.sub(r"(?m)^reasoning-effort:.*\n", "", front)
+    # Copilot expects the model label without the Local-only " (copilot)" suffix.
+    # Keep the model and reasoning-effort fields themselves intact.
+    front = re.sub(r"(?m)^(model: .+?) \(copilot\)$", r"\1", front)
     front = re.sub(r"(?m)^agents:.*\n", "", front)
     front = front.replace("target: vscode", "target: github-copilot")
     if name in WORKERS:
         front = front.replace("disable-model-invocation: true", "disable-model-invocation: false")
     if name == "Orchestrator":
-        front = front.replace("  - task\n", "")
+        # Copilot invokes a named custom worker via its native task tool.
+        front = re.sub(r"(?m)^tools:\n(?:  - [^\n]+\n)+", "tools:\n  - task\n", front)
         body = body.replace(
             "Use frontmatter-listed agents only.",
-            "Use only the eligible delegated agents exposed by this harness.",
+            "Use only the explicitly named custom agents in the Copilot worker routing section.",
         )
+        body = body.replace("## Worker selection", COPILOT_WORKER_ROUTING + "## Worker selection", 1)
     # Use documented Copilot aliases rather than Local-qualified tool IDs.
     tools = {
         "Researcher": ("read", "search", "web"),
@@ -43,7 +64,7 @@ def transform(source: str, name: str, profile: str) -> str:
         "Writer": ("read", "edit"),
         "CommandRunner": ("execute",),
         "Reviewer": ("read", "search"),
-        "BrowserQA": ("browser",),
+        "BrowserQA": ("browser/openBrowserPage", "browser/navigatePage", "browser/readPage", "browser/screenshotPage", "browser/clickElement", "browser/hoverElement", "browser/dragElement", "browser/typeInPage", "browser/handleDialog", "browser/runPlaywrightCode"),
     }
     if name in tools:
         front = re.sub(
