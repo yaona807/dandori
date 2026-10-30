@@ -1038,7 +1038,7 @@ test('hook permits only bounded execution and management interface shapes', asyn
       'node ~/.copilot/command-runner/command-runner-interface.mjs output 20260829T010203.004Z_00000000-0000-4000-8000-000000000000 --expected-workspace=alpha stream=stdout',
     ]) {
       const result = runHook(fixture, { command });
-      const isMutation = /command-runner-interface\.mjs (?:register|update|unregister|workspace-unregister) /u.test(command);
+      const isMutation = /command-runner-interface\.mjs (?:register|update|unregister|workspace-register|workspace-unregister) /u.test(command);
       assert.equal(JSON.parse(result.stdout).hookSpecificOutput.permissionDecision, isMutation ? 'ask' : 'allow');
     }
 
