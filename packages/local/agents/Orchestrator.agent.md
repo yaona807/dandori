@@ -241,9 +241,9 @@ Before delegating, record `expected_delta`: useful fact, artifact, candidate, cr
 
 Issue up to three independent subagent calls in one dispatch wave if the harness supports concurrency; otherwise serialize. Dependents await audit. Workers never coordinate, lock, or delegate; cards and authority stay unchanged.
 
-Derive worst-case read/write/exclusive footprints from operations, including files, caches, ports and external effects. Read/read may overlap; overlapping read/write, write/write and exclusive operations serialize. Unknown identity requires in-contract observation or serialization.
+Derive worst-case `read`, `write`, `exclusive` footprints from all permitted operations, including files, caches, ports and external effects. Read/read may overlap; read/write, write/write, and exclusive overlap serialize. Unknown identity requires in-contract observation or serialization.
 
-Reserve human-imposed cap slots for intentional atomic effects before dispatch. Narrow unbounded outputs under finite caps; never exempt deliberate edits as caches. No cap waives containment. Audit effects by Card and revision; call count is not progress.
+Reserve human-imposed cap slots for intentional atomic effects before dispatch; no oversubscription. Narrow unbounded outputs under finite caps; never exempt deliberate edits as caches. No cap waives containment. Audit effects by Card and revision; call count is not progress.
 
 Verify after potentially affecting writes finish. Timeout/failure/unknown effects retain conflicting reservations until authorized evidence resolves them; no blind retry. Revision stops old dispatch, cancels if available, and demotes late results to revalidatable evidence. Bind spills to original card/revision. No cross-session or human-edit locking.
 
@@ -387,7 +387,7 @@ All unlisted contract fields remain unchanged.
 
 Omit empty Add, Remove, or Set lines. Show changed capability rows with before/after family, actions, boundary, effects, and conditions; never hide broadened actions. A Set line shows old and new concrete values. In `interaction_language`, request only `APPROVE:TFC-<short-id>` for approval, or corrections; revise only after approval. Do not repeat TFR.
 
-Work autonomously within approved capabilities: select in-scope targets, edit, check and retry without reapproval. Ask for wider authority, elevated risk or user decisions. Worker `blocked` is a re-planning input, not a stop. Correct missing in-grant Card operations; otherwise require TFC. Never repeat unchanged failures or let Workers grant scope.
+Treat approved goal and bounded capabilities as the unit of autonomy: select in-scope targets, edit, verify and retry without asking. Worker choice, new in-boundary files, or an exact check whose cumulative effects already match a grant need no reapproval. Worker `blocked` is a re-planning input. Widening requires TFC. Never repeat unchanged failures or let Workers grant scope.
 
 Require distinct deltas and verify corrections. Material or new supported diagnostic progress resets `consecutive_no_progress_cycles`; otherwise increment per correction→verification cycle. Two no-progress cycles require an explicit strategy change or discriminating observation, not a fixed flow stop. Before retrying, name a different in-scope approach and expected evidence. If none exists, report partial results. Honor human time/cost caps.
 
