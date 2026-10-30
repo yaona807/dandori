@@ -146,7 +146,7 @@ async function propose(commandId, params) {
   const scriptName = params.get('script') ?? commandId;
   let selectedScript;
   for (const manager of ['npm', 'pnpm', 'yarn', 'bun']) {
-    try { selectedScript = { manager, ...(await scriptFingerprint(dir, manager, scriptName)) }; break; }
+    try { selectedScript = { manager, ...(await scriptFingerprint(dir, manager, scriptName, root)) }; break; }
     catch { /* try known package-manager candidates; do not execute anything */ }
   }
   if (!selectedScript) throw error('script_not_discoverable', 'unable to identify a unique package script/manager');
@@ -173,7 +173,7 @@ async function propose(commandId, params) {
   await writeFile(path.join(PROPOSALS, id + '.json'), JSON.stringify(record) + '\n', {flag: 'wx', mode: 0o600});
   return {status: 'pending_approval', proposalId: id, commandId, argv: definition.run, cwd: definition.cwd,
     arguments: definition.arguments, timeoutMs: definition.timeoutMs, scriptGuard: definition.scriptGuard,
-    scripts: selectedScript.scripts, scriptPreview, approvalDigest: record.approvalDigest,
+    scriptPreview, approvalDigest: record.approvalDigest,
     action: original ? 'update' : 'register'};
 }
 async function activate(id) {
@@ -182,7 +182,7 @@ async function activate(id) {
   if (selected.workspaceIdentity !== record.workspaceIdentity) throw error('workspace_identity_changed', 'proposal workspace has changed');
   const cwd = await realpath(path.join(workspace.root, record.definition.cwd));
   if (!within(await realpath(workspace.root), cwd)) throw error('path_escape', 'candidate script directory escaped workspace');
-  const currentFingerprint = await scriptFingerprint(cwd, record.definition.scriptGuard.manager, record.definition.scriptGuard.script);
+  const currentFingerprint = await scriptFingerprint(cwd, record.definition.scriptGuard.manager, record.definition.scriptGuard.script, workspace.root);
   if (currentFingerprint.fingerprint !== record.definition.scriptGuard.fingerprint) {
     throw error('stale_script_definition', 'package scripts changed before activation');
   }

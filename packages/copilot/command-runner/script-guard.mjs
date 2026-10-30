@@ -1,6 +1,6 @@
 // Shared, read-only npm-family script fingerprinting for approved command definitions.
 import { createHash } from 'node:crypto';
-import { lstat, readFile, access } from 'node:fs/promises';
+import { lstat, readFile, realpath } from 'node:fs/promises';
 import path from 'node:path';
 
 const HASH = /^sha256-[0-9a-f]{64}$/u;
@@ -29,55 +29,89 @@ export function validateScriptGuard(guard, command, location = 'scriptGuard') {
   }
 }
 
-async function exists(full) {
-  try { await access(full); return true; }
-  catch (error) { if (error?.code === 'ENOENT') return false; throw error; }
+const inside = (root, target) => {
+  const relative = path.relative(root, target);
+  return relative === '' || (relative !== '..' && !relative.startsWith('..' + path.sep) && !path.isAbsolute(relative));
+};
+
+async function optionalFile(full) {
+  let state;
+  try { state = await lstat(full); }
+  catch (error) {
+    if (error?.code === 'ENOENT') return null;
+    throw error;
+  }
+  if (!state.isFile() || state.isSymbolicLink() || state.size > 1_048_576) {
+    throw new Error('invalid package manager metadata path: ' + path.basename(full));
+  }
+  return await readFile(full, 'utf8');
 }
 
-export async function scriptFingerprint(directory, manager, script) {
+async function resolveManager(directory, workspaceRoot) {
+  const base = await realpath(workspaceRoot);
+  const target = await realpath(directory);
+  if (!inside(base, target)) throw new Error('package directory escapes registered workspace');
+
+  // Monorepo packages inherit packageManager / lockfile metadata only from
+  // ancestors *inside the selected workspace*. Never inspect outside roots.
+  const lockfiles = {
+    npm: ['package-lock.json', 'npm-shrinkwrap.json'],
+    pnpm: ['pnpm-lock.yaml'],
+    yarn: ['yarn.lock'],
+    bun: ['bun.lock', 'bun.lockb'],
+  };
+  for (let cursor = target;; cursor = path.dirname(cursor)) {
+    const manifestSource = await optionalFile(path.join(cursor, 'package.json'));
+    if (manifestSource !== null) {
+      const manifest = JSON.parse(manifestSource);
+      const declared = manifest?.packageManager;
+      if (declared !== undefined) {
+        const match = typeof declared === 'string' && /^(npm|pnpm|yarn|bun)@/u.exec(declared);
+        if (!match) throw new Error('unsupported packageManager declaration');
+        return {chosen: match[1], declared, metadataDir: path.relative(base, cursor) || '.'};
+      }
+    }
+    const found = [];
+    for (const [manager, files] of Object.entries(lockfiles)) {
+      let present = false;
+      for (const lock of files) {
+        if (await optionalFile(path.join(cursor, lock)) !== null) present = true;
+      }
+      if (present) found.push(manager);
+    }
+    if (found.length > 1) throw new Error('ambiguous package manager: competing lockfile families');
+    if (found.length === 1) {
+      return {chosen: found[0], declared: null, metadataDir: path.relative(base, cursor) || '.'};
+    }
+    if (cursor === base) break;
+  }
+  throw new Error('ambiguous package manager: no declaration or lockfile inside workspace');
+}
+
+export async function scriptFingerprint(directory, manager, script, workspaceRoot = directory) {
   if (!MANAGERS.has(manager) || typeof script !== 'string' || !NAME.test(script)) {
     throw new Error('unsupported package manager or script name');
   }
   const file = path.join(directory, 'package.json');
-  const state = await lstat(file);
-  if (!state.isFile() || state.isSymbolicLink() || state.size > 1_048_576) {
-    throw new Error('package.json must be a regular, bounded, non-symlink file');
-  }
-  const pkg = JSON.parse(await readFile(file, 'utf8'));
+  const source = await optionalFile(file);
+  if (source === null) throw new Error('package.json is missing');
+  const pkg = JSON.parse(source);
   if (!pkg || typeof pkg !== 'object' || Array.isArray(pkg)
     || !pkg.scripts || typeof pkg.scripts !== 'object' || Array.isArray(pkg.scripts)
     || typeof pkg.scripts[script] !== 'string') {
     throw new Error('the requested package script is unavailable');
   }
-  const scripts = Object.fromEntries(Object.entries(pkg.scripts).sort(([a],[b]) => a.localeCompare(b)));
+  const scripts = Object.fromEntries(Object.entries(pkg.scripts).sort(([a], [b]) => a.localeCompare(b)));
   if (Object.values(scripts).some(v => typeof v !== 'string')) {
     throw new Error('package scripts contain non-string definitions');
   }
-  const declared = typeof pkg.packageManager === 'string' ? pkg.packageManager : null;
-  let chosen;
-  if (declared !== null) {
-    chosen = declared.match(/^(npm|pnpm|yarn|bun)@/u)?.[1];
-    if (!chosen) throw new Error('unsupported packageManager declaration');
-  } else {
-    const locks = {
-      npm: ['package-lock.json', 'npm-shrinkwrap.json'],
-      pnpm: ['pnpm-lock.yaml'],
-      yarn: ['yarn.lock'],
-      bun: ['bun.lock', 'bun.lockb'],
-    };
-    const found = [];
-    for (const [name, files] of Object.entries(locks)) {
-      if ((await Promise.all(files.map(f => exists(path.join(directory, f))))).some(Boolean)) found.push(name);
-    }
-    if (found.length !== 1) throw new Error('ambiguous package manager: specify packageManager or one lockfile family');
-    chosen = found[0];
-  }
+  const {chosen, declared, metadataDir} = await resolveManager(directory, workspaceRoot);
   if (chosen !== manager) throw new Error('package manager changed since command approval');
-  // All package scripts are intentionally included: nested scripts can be invoked
-  // dynamically, and tracking only test/pretest/posttest misses those references.
-  const source = JSON.stringify({version: 1, manager, declared, scripts});
+  // Track all package scripts, including any dynamic nested npm run invocations,
+  // but send only a bounded selected-script preview to the worker.
+  const snapshot = JSON.stringify({version: 2, manager, declared, metadataDir, scripts});
   return {
-    fingerprint: 'sha256-' + createHash('sha256').update(source).digest('hex'),
+    fingerprint: 'sha256-' + createHash('sha256').update(snapshot).digest('hex'),
     scripts,
     packageManager: declared,
   };

@@ -23,11 +23,13 @@ cp .copilot/command-runner/command-runner.mjs ~/.copilot/command-runner/
 cp .copilot/command-runner/builtin-commands.mjs ~/.copilot/command-runner/
 cp .copilot/command-runner/command-runner-interface.mjs ~/.copilot/command-runner/
 cp .copilot/command-runner/command-runner-hook.mjs ~/.copilot/command-runner/
+cp .copilot/command-runner/script-guard.mjs ~/.copilot/command-runner/
+cp .copilot/command-runner/command-runner-v2.mjs ~/.copilot/command-runner/
 test -f ~/.copilot/command-runner/workspaces.json \
   || cp .copilot/command-runner/workspaces.example.json ~/.copilot/command-runner/workspaces.json
 ```
 
-コピーされる初期設定は空のWorkspace registryです。Workspaceにしたいrootディレクトリで `workspace-register <id>` を実行すると、Runnerが実際のカレントディレクトリからcanonical rootを取得して登録します。root引数や `workspaces.json` の手編集は不要です。この個人用ファイルはDANDORIリポジトリへコミットしません。
+コピーされる初期設定は空のWorkspace registryです。対象プロジェクトのroot（`.git` または `package.json` があるディレクトリ）で `node ~/.copilot/command-runner/command-runner-v2.mjs workspace.ensure` を実行すると、Hookの初回確認後に内部IDが自動生成され登録されます。Workspace IDや `workspaces.json` の手編集は不要です。旧 `workspace-register <id>` は移行用に残します。この個人用ファイルはDANDORIリポジトリへコミットしません。
 
 Agent固有HookはPreview機能のため、VS Codeの `chat.useCustomAgentHooks` を `true` にします。Chat Diagnosticsで、`CommandRunner`が `~/.copilot/agents/CommandRunner.agent.md` から読み込まれていることを確認してください。
 
@@ -306,3 +308,5 @@ node ~/.copilot/command-runner/command-runner-v2.mjs run test
 v2が登録したnpm系コマンドはすべてのpackage script定義とpackageManager/lockfile種別を実行直前に再照合し、変更時は `stale_script_definition` で停止します。既存のv1登録は互換性のため監視対象外です。スクリプト本文に呼び出される任意のJSや依存パッケージの挙動は保護しません。npm等の任意スクリプトはSandboxではありません。
 
 新しいWorkspaceの初回登録はHookがrootの実体パスを表示して確認し、登録済みrootは再確認しません。npmのみ末尾の `--` を使用し、pnpm/Yarn/Bunでは引数として渡さないようにします。
+
+モノレポの `propose <id> packageDir=<Workspace相対のパッケージ>` は、対象packageから登録済みWorkspace rootまでの範囲だけで、最も近い `packageManager` またはlockfileを参照します。実行時も同じ検証を行います。コマンド候補の応答は対象スクリプトの抜粋に限定し、ハッシュには全スクリプトを含めます。

@@ -821,7 +821,7 @@ async function execute(workspace, id, command, provided) {
   const relativeCwd = path.relative(workspace.root, cwd) || '.';
   if (command.scriptGuard) {
     let current;
-    try { current = await scriptFingerprint(cwd, command.scriptGuard.manager, command.scriptGuard.script); }
+    try { current = await scriptFingerprint(cwd, command.scriptGuard.manager, command.scriptGuard.script, workspace.root); }
     catch (error) { throw new RunnerError('stale_script_definition', String(error.message)); }
     if (current.fingerprint !== command.scriptGuard.fingerprint) {
       throw new RunnerError('stale_script_definition', 'approved package scripts or manager changed');

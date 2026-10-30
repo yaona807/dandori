@@ -1382,7 +1382,7 @@ test('v2 proposes inert npm scripts, activates exact candidate, and detects chan
     const candidate = JSON.parse(proposed.stdout);
     assert.equal(candidate.status, 'pending_approval');
     assert.deepEqual(candidate.argv, ['npm', 'run', 'test', '--']);
-    assert.equal(candidate.scripts.test, 'node echo-args.mjs');
+    assert.equal(candidate.scriptPreview.test, 'node echo-args.mjs');
     assert.equal(await readFile(path.join(fixture.home, 'command-runner', 'workspaces.json'), 'utf8'), original);
 
     const accepted = runV2(fixture, fixture.alpha, ['activate', candidate.proposalId]);
@@ -1480,4 +1480,65 @@ test('v2 pnpm script candidates do not pass npm-only double-dash to the underlyi
     const guarded = runRunnerWithoutHashes(fixture, fixture.alpha, ['describe', 'check']);
     assert.equal(guarded.status, 0, guarded.stderr);
   });
+});
+
+
+test('v2 bounded proposal succeeds with a large unrelated script catalog', async () => {
+  await withFixture(async (fixture) => {
+    const scripts = { test: 'node --version' };
+    for (let index = 0; index < 150; index += 1) {
+      scripts['unrelated-' + index] = 'echo ' + 'x'.repeat(80);
+    }
+    await writeFile(path.join(fixture.alpha, 'package.json'),
+      JSON.stringify({ packageManager: 'npm@10.0.0', scripts }));
+    const result = runV2(fixture, fixture.alpha, ['propose', 'test']);
+    assert.equal(result.status, 0, result.stderr);
+    const response = JSON.parse(result.stdout);
+    assert.equal(response.status, 'pending_approval');
+    assert.equal(response.scriptPreview.test, 'node --version');
+    assert.equal(response.scripts, undefined);
+    const updated = { ...scripts, 'unrelated-149': 'echo changed' };
+    await writeFile(path.join(fixture.alpha, 'package.json'),
+      JSON.stringify({ packageManager: 'npm@10.0.0', scripts: updated }));
+    const blocked = runV2(fixture, fixture.alpha, ['activate', response.proposalId]);
+    assert.equal(blocked.status, 2);
+    assert.match(blocked.stderr, /stale_script_definition/u);
+  });
+});
+
+test('v2 nested package inherits registered-root manager and detects parent changes', async () => {
+  await withFixture(async (fixture) => {
+    const nested = path.join(fixture.alpha, 'packages', 'lib');
+    await mkdir(nested, { recursive: true });
+    await writeFile(path.join(fixture.alpha, 'package.json'),
+      JSON.stringify({ packageManager: 'npm@10.0.0', workspaces: ['packages/*'] }));
+    await writeFile(path.join(nested, 'package.json'),
+      JSON.stringify({ name: 'workspace-lib', scripts: { check: 'node --version' } }));
+    const proposed = runV2(fixture, fixture.alpha, ['propose', 'check', 'packageDir=packages%2Flib']);
+    assert.equal(proposed.status, 0, proposed.stderr);
+    const candidate = JSON.parse(proposed.stdout);
+    assert.deepEqual(candidate.argv, ['npm', 'run', 'check', '--']);
+    assert.equal(candidate.cwd, path.join('packages', 'lib'));
+    const registered = runV2(fixture, fixture.alpha, ['activate', candidate.proposalId]);
+    assert.equal(registered.status, 0, registered.stderr);
+    const executed = runV2(fixture, fixture.alpha, ['run', 'check']);
+    assert.equal(executed.status, 0, executed.stderr);
+    assert.equal(JSON.parse(executed.stdout).status, 'completed');
+    await writeFile(path.join(fixture.alpha, 'package.json'),
+      JSON.stringify({ packageManager: 'npm@11.0.0', workspaces: ['packages/*'] }));
+    const stopped = runV2(fixture, fixture.alpha, ['run', 'check']);
+    assert.equal(stopped.status, 2);
+    assert.match(stopped.stderr, /stale_script_definition/u);
+  });
+});
+
+test('documented installation copies all runtime-dependent runner modules', async () => {
+  for (const doc of ['README.md', 'README_ja.md']) {
+    const readme = await readFile(path.join(SOURCE_DIRECTORY, doc), 'utf8');
+    for (const file of ['command-runner.mjs', 'command-runner-interface.mjs',
+      'command-runner-hook.mjs', 'script-guard.mjs', 'command-runner-v2.mjs', 'builtin-commands.mjs']) {
+      assert.ok(readme.includes('cp .copilot/command-runner/' + file + ' ~/.copilot/command-runner/'),
+        doc + ' does not install ' + file);
+    }
+  }
 });
