@@ -1269,7 +1269,24 @@ test('P0 built-ins are discoverable, immutable, and safely manage one file at a 
     assert.equal(await readFile(path.join(fixture.alpha, 'tests', 'renamed.test.js'), 'utf8'), 'export {};\n');
     assert.equal(run('builtin-fs-restore', ['itemId=' + itemId]).status, 'failed');
 
-    assert.equal(run('builtin-fs-trash', ['source=.git%2Fconfig']).status, 'failed');
+    await writeFile(path.join(fixture.alpha, 'tests', 'manifest.json'), '{"data":true}\n');
+    const special = run('builtin-fs-trash', ['source=tests%2Fmanifest.json']);
+    assert.equal(special.status, 'completed');
+    const specialId = JSON.parse(special.stdout).itemId;
+    assert.equal(run('builtin-fs-restore', ['itemId=' + specialId]).status, 'completed');
+    assert.equal(await readFile(path.join(fixture.alpha, 'tests', 'manifest.json'), 'utf8'), '{"data":true}\n');
+    await writeFile(path.join(fixture.alpha, 'tests', 'a.txt'), 'a');
+    await writeFile(path.join(fixture.alpha, 'tests', 'b.txt'), 'b');
+    assert.equal(run('builtin-fs-trash', ['source=tests%2Fa.txt']).status, 'completed');
+    assert.equal(run('builtin-fs-trash', ['source=tests%2Fb.txt']).status, 'completed');
+    const firstPage = JSON.parse(run('builtin-fs-trash-list', ['limit=1']).stdout);
+    assert.equal(firstPage.items.length, 1);
+    assert.equal(firstPage.nextOffset, 1);
+    const secondPage = JSON.parse(run('builtin-fs-trash-list', ['limit=1', 'offset=1']).stdout);
+    assert.equal(secondPage.items.length, 1);
+    assert.notEqual(secondPage.items[0].itemId, firstPage.items[0].itemId);
+
+        assert.equal(run('builtin-fs-trash', ['source=.git%2Fconfig']).status, 'failed');
     assert.equal(run('builtin-fs-copy', [
       'source=tests%2Fsample.test.js', 'destination=..%2Foutside.js',
     ]).status, 'failed');
