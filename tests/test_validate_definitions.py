@@ -771,14 +771,14 @@ class ValidatorMutationTests(unittest.TestCase):
         for worker, markers in validator.WORKER_DESCRIPTION_ROUTING_MARKERS.items():
             with self.subTest(worker=worker):
                 source = ROOT / ".copilot/agents" / f"{worker}.agent.md"
-                _, source_front, _ = source.read_text(encoding="utf-8").split("---\\n", 2)
+                _, source_front, _ = source.read_text(encoding="utf-8").split("---\n", 2)
                 description = yaml.safe_load(source_front)["description"]
                 for marker in markers:
                     self.assertIn(marker, description)
                 self.assertIn("Not for", description)
                 for profile in ("local", "copilot"):
                     bundled = ROOT / "packages" / profile / "agents" / f"{worker}.agent.md"
-                    _, copied_front, _ = bundled.read_text(encoding="utf-8").split("---\\n", 2)
+                    _, copied_front, _ = bundled.read_text(encoding="utf-8").split("---\n", 2)
                     self.assertEqual(description, yaml.safe_load(copied_front)["description"])
 
     def test_worker_routing_description_cannot_lose_capability_or_exclusion(self) -> None:
@@ -789,8 +789,14 @@ class ValidatorMutationTests(unittest.TestCase):
                     with temp:
                         path = repo / ".copilot/agents" / f"{worker}.agent.md"
                         text = path.read_text(encoding="utf-8")
-                        self.assertIn(marker, text)
-                        path.write_text(text.replace(marker, "unspecified", 1), encoding="utf-8")
+                        front = text.split("---\n", 2)[1]
+                        description = yaml.safe_load(front)["description"]
+                        self.assertIn(marker, description)
+                        updated = description.replace(marker, "unspecified", 1)
+                        start = text.index("description:")
+                        end = text.index("\nmodel:", start)
+                        text = text[:start] + "description: >-\n  " + updated + text[end:]
+                        path.write_text(text, encoding="utf-8")
                         self.assert_invalid(repo, "worker description missing routing capability/limit marker")
 
     def test_orchestrator_routing_eligibility_gates_are_required(self) -> None:
