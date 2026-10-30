@@ -11,7 +11,8 @@ import { fileURLToPath } from 'node:url';
 const TRASH = '.agent-trash';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const CURRENT = fileURLToPath(import.meta.url);
-const file = (mustExist = true) => ({ type: 'workspace-file', mustExist });
+// Preserve caller-supplied spelling so the helper can reject symlink components.
+const file = () => ({ type: 'string', maxLength: 4096 });
 const positional = (value) => ({ kind: 'positional', required: true, value });
 const option = (token, value) => ({ kind: 'option', token, value });
 
