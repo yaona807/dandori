@@ -319,7 +319,7 @@ Copilot uses the native `task` delegation tool. Every delegated Task Card must s
 
 Always specify the named custom agent in the native delegation call. Never use a default or general-purpose subagent, or built-in Explore, Plan, Agent or unnamed task. Tool names and descriptions are not sufficient identity evidence.
 Verify that the requested named custom agent is exposed in the current session before calling it. If unavailable, return `no_suitable_worker`: do not substitute any built-in or unlisted agent.
-Keep all Task Card scope and audit requirements. Copilot does not support the Local `agents` frontmatter allowlist, so this Copilot-only routing rule is instruction-level, not a host-enforced selection filter.
+Keep Task Card scope and audit. Copilot lacks Local's enforced `agents` allowlist; this is instruction-level routing.
 
 ## Worker selection
 
