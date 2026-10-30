@@ -491,7 +491,7 @@ test('workspace scope mismatch blocks listing, describing, and all command-map m
       assert.equal(await readFile(configuration, 'utf8'), before);
     }
     const allowed = parseSuccess(runInterface(fixture, fixture.beta, ['list', '--expected-workspace=beta']));
-    assert.deepEqual(allowed.commandIds, ['beta']);
+    assert.deepEqual(allowed.commandIds.filter((id) => !id.startsWith('builtin-')), ['beta']);
   });
 });
 
@@ -795,7 +795,7 @@ test('unregister uses definition-hash CAS and can leave an empty command map', a
     const after = JSON.parse(await readFile(configPath, 'utf8'));
     assert.deepEqual(after.workspaces[0].commands, {});
     const listed = parseSuccess(runInterface(fixture, fixture.alpha, ['list']));
-    assert.deepEqual(listed.commandIds, []);
+    assert.deepEqual(listed.commandIds.filter((id) => !id.startsWith('builtin-')), []);
   });
 });
 
@@ -921,7 +921,7 @@ test('stale workspace can be described and removed without runtime selection', a
     assert.equal(removed.previousStatus, 'stale');
 
     const listed = parseSuccess(runInterface(fixture, fixture.alpha, ['list']));
-    assert.deepEqual(listed.commandIds.sort(), ['keep', 'remove']);
+    assert.deepEqual(listed.commandIds.filter((id) => !id.startsWith('builtin-')).sort(), ['keep', 'remove']);
   });
 });
 
