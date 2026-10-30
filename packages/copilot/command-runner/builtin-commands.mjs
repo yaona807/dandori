@@ -136,16 +136,20 @@ async function gitRepoRoot(root) {
   const top = git(root, ['rev-parse', '--show-toplevel']);
   if ((await realpath(top.trim())) !== root) refuse('Git repository root must equal the selected workspace root');
 }
-async function trashDirectory(root) {
+async function trashDirectory(root, create = false) {
   const directory = path.join(root, TRASH);
   const existing = await infoOrNull(directory);
   if (existing && (!existing.isDirectory() || existing.isSymbolicLink())) refuse('unsafe trash directory');
   const tracked = git(root, ['ls-files', '--cached', '-z', '--', TRASH], true);
   if (tracked !== null && tracked.length) refuse('trash directory is already Git-tracked');
-  if (!existing) await mkdir(directory, { mode: 0o700 });
+  if (!existing) {
+    if (!create) return null;
+    await mkdir(directory, { mode: 0o700 });
+  }
   const ignore = path.join(directory, '.gitignore');
   const ignoreState = await infoOrNull(ignore);
-  if (!ignoreState) await writeFile(ignore, '*\n', { flag: 'wx', mode: 0o600 });
+  if (!ignoreState && create) await writeFile(ignore, '*\n', { flag: 'wx', mode: 0o600 });
+  else if (!ignoreState) refuse('trash ignore configuration is missing');
   else if (!ignoreState.isFile() || ignoreState.isSymbolicLink()
     || await readFile(ignore, 'utf8') !== '*\n') refuse('unsafe trash ignore configuration');
   return directory;
@@ -153,7 +157,7 @@ async function trashDirectory(root) {
 
 async function trash(root, source) {
   const from = await workspacePath(root, source);
-  const directory = await trashDirectory(root);
+  const directory = await trashDirectory(root, true);
   const id = randomUUID();
   const itemDir = path.join(directory, id);
   await mkdir(itemDir, { mode: 0o700 });
@@ -169,6 +173,7 @@ async function trash(root, source) {
 async function loadItem(root, id) {
   if (!UUID.test(id)) refuse('invalid trash item ID');
   const dir = await trashDirectory(root);
+  if (!dir) refuse('trash directory does not exist');
   const item = path.join(dir, id);
   const state = await infoOrNull(item);
   if (!state || !state.isDirectory() || state.isSymbolicLink()) refuse('trash item does not exist');
@@ -195,6 +200,7 @@ async function restore(root, id) {
 
 async function trashList(root) {
   const dir = await trashDirectory(root);
+  if (!dir) return { items: [] };
   const names = (await readdir(dir)).filter((v) => UUID.test(v)).sort();
   if (names.length > 1000) refuse('trash listing exceeds safety limit');
   const items = [];
