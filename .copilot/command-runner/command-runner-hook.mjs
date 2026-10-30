@@ -23,6 +23,8 @@ const COMMAND_ID_PATTERN = /^[a-z][a-z0-9_-]{0,63}$/;
 const EXECUTION_ID_PATTERN = /^\d{8}T\d{6}\.\d{3}Z_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const PARAMETER_TOKEN_PATTERN = /^[a-z][a-zA-Z0-9_-]{0,63}=[A-Za-z0-9._~%/-]*$/;
 const FIXED_PREFIX = ['node', '~/.copilot/command-runner/command-runner-interface.mjs'];
+const V2_PREFIX = ['node', '~/.copilot/command-runner/command-runner-v2.mjs'];
+const PROPOSAL_ID = /^prop-[a-f0-9]{32}$/u;
 const FORBIDDEN_CHARACTER_PATTERN = /[\u0000-\u001f\u007f'"`$&|;<>()[\]{}\\]/u;
 const MAX_COMMAND_LENGTH = 65_536;
 const PROTECTED_SUFFIXES = new Set([
@@ -49,6 +51,11 @@ function allow(reason) {
       permissionDecisionReason: reason,
     },
   });
+}
+
+function ask(reason) {
+  output({permissionDecision: 'ask', permissionDecisionReason: reason,
+    hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'ask', permissionDecisionReason: reason }});
 }
 
 function deny(reason) {
@@ -100,6 +107,43 @@ function validateWorkspaceGuard(token) {
     || !COMMAND_ID_PATTERN.test(token.slice(prefix.length))) {
     throw new Error('scoped operations require --expected-workspace=<id> first');
   }
+}
+
+function validateV2Invocation(tokens) {
+  if (!V2_PREFIX.every((s, i) => s === tokens[i])) throw new Error('unknown runner prefix');
+  const operation = tokens[2];
+  if (operation === 'workspace.ensure' || operation === 'context') {
+    if (tokens.length !== 3) throw new Error('unexpected parameters');
+    return 'allow';
+  }
+  if (operation === 'list') {
+    for (const t of tokens.slice(3)) validateEncodedParameter(t);
+    return 'allow';
+  }
+  if (operation === 'activate') {
+    if (tokens.length !== 4 || !PROPOSAL_ID.test(tokens[3])) throw new Error('invalid proposal');
+    return 'ask';
+  }
+  if (operation === 'propose') {
+    if (!COMMAND_ID_PATTERN.test(tokens[3] ?? '')) throw new Error('invalid command ID');
+    for (const t of tokens.slice(4)) if (validateEncodedParameter(t) !== 'packageDir') throw new Error('unsupported proposal argument');
+    return 'allow';
+  }
+  if (operation === 'describe' || operation === 'inspect') {
+    if (!COMMAND_ID_PATTERN.test(tokens[3] ?? '') || tokens.length !== 4) throw new Error('invalid command request');
+    return 'allow';
+  }
+  if (operation === 'run') {
+    if (!COMMAND_ID_PATTERN.test(tokens[3] ?? '')) throw new Error('invalid command ID');
+    for (const t of tokens.slice(4)) validateEncodedParameter(t);
+    return 'allow';
+  }
+  if (operation === 'output') {
+    if (tokens.length < 5 || !EXECUTION_ID_PATTERN.test(tokens[3] ?? '')) throw new Error('invalid execution ID');
+    for (const t of tokens.slice(4)) validateEncodedParameter(t);
+    return 'allow';
+  }
+  throw new Error('unsupported v2 command-runner operation');
 }
 
 function validateRunnerInvocation(tokens) {
@@ -271,7 +315,10 @@ function validateTerminalInput(toolInput) {
     || (toolInput.timeout !== undefined && toolInput.timeout !== 0)) {
     throw new Error('asynchronous or timed background terminal execution is not allowed');
   }
-  validateRunnerInvocation(parseCommand(toolInput.command));
+  const words = parseCommand(toolInput.command);
+  if (V2_PREFIX.every((s, i) => words[i] === s)) return validateV2Invocation(words);
+  validateRunnerInvocation(words);
+  return ['register', 'update', 'unregister', 'workspace-unregister'].includes(words[2]) ? 'ask' : 'allow';
 }
 
 async function readInput() {
@@ -308,8 +355,9 @@ try {
       deny('CommandRunner permits only fixed-runner terminal calls and explicitly read-only tools.');
     }
   } else {
-    validateTerminalInput(toolInput);
-    allow('Only the fixed user-level command runner interface is permitted.');
+    const decision = validateTerminalInput(toolInput);
+    if (decision === 'ask') ask('Review the exact proposed command definition before approving any command registration or mutation.');
+    else allow('Only the fixed user-level command runner interface is permitted.');
   }
 } catch (error) {
   deny(error instanceof Error ? error.message : String(error));

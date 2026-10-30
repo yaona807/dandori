@@ -19,6 +19,8 @@ import { fileURLToPath } from 'node:url';
 const SOURCE_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
 const RUNNER_SOURCE = path.join(SOURCE_DIRECTORY, 'command-runner.mjs');
 const BUILTIN_SOURCE = path.join(SOURCE_DIRECTORY, 'builtin-commands.mjs');
+const SCRIPT_GUARD_SOURCE = path.join(SOURCE_DIRECTORY, 'script-guard.mjs');
+const V2_SOURCE = path.join(SOURCE_DIRECTORY, 'command-runner-v2.mjs');
 const INTERFACE_SOURCE = path.join(SOURCE_DIRECTORY, 'command-runner-interface.mjs');
 const HOOK_SOURCE = path.join(SOURCE_DIRECTORY, 'command-runner-hook.mjs');
 const AGENT_SOURCE = path.join(SOURCE_DIRECTORY, '..', 'agents', 'CommandRunner.agent.md');
@@ -42,6 +44,8 @@ async function makeFixture(configure = (configuration) => configuration) {
     path.join(home, 'command-runner', 'builtin-commands.mjs'),
     await readFile(BUILTIN_SOURCE),
   );
+  await writeFile(path.join(home, 'command-runner', 'script-guard.mjs'), await readFile(SCRIPT_GUARD_SOURCE));
+  await writeFile(path.join(home, 'command-runner', 'command-runner-v2.mjs'), await readFile(V2_SOURCE));
   await writeFile(
     path.join(home, 'command-runner', 'command-runner-interface.mjs'),
     await readFile(INTERFACE_SOURCE),

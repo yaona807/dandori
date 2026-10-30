@@ -286,3 +286,21 @@ node --test \
   .copilot/command-runner/command-runner-interface.test.mjs
 COPILOT_HOME=/path/to/test-home node .copilot/command-runner/command-runner-interface.mjs list --expected-workspace=example
 ```
+
+## v2: Workspace ID不要の自主登録（試験導入）
+
+Workerは `node ~/.copilot/command-runner/command-runner-v2.mjs` を使用します。
+
+```bash
+node ~/.copilot/command-runner/command-runner-v2.mjs workspace.ensure
+node ~/.copilot/command-runner/command-runner-v2.mjs propose test
+# 人間に固定argvとスクリプト内容を示して承認を得る
+node ~/.copilot/command-runner/command-runner-v2.mjs activate prop-<32桁のID>
+node ~/.copilot/command-runner/command-runner-v2.mjs run test
+```
+
+未登録Workspaceは、現在のcwdそのものに `.git` または `package.json` がある場合だけ登録します。親ディレクトリを推測して登録しません。既存のWorkspace登録とホワイトリストは維持されます。
+
+`propose` は実行せず候補のみを保存します。登録に伴う権限追加はCopilot/Localの `PreToolUse` の `ask` により人間が確認してください。**Hookの許可判断は永続的な承認署名ではありません**。Hookが無効、タイムアウト、または手動でバイパスされる環境での強制的承認保証はありません。未承認候補を暗黙に登録しないため、提案と有効化を分離しています。非対話セッションでの承認は失敗として処理します。
+
+v2が登録したnpm系コマンドはすべてのpackage script定義とpackageManager/lockfile種別を実行直前に再照合し、変更時は `stale_script_definition` で停止します。既存のv1登録は互換性のため監視対象外です。スクリプト本文に呼び出される任意のJSや依存パッケージの挙動は保護しません。npm等の任意スクリプトはSandboxではありません。
