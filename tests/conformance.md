@@ -156,7 +156,7 @@ Delegate a Task Card, create a valid new contract revision before accepting the 
 **Input**
 
 Provide (a) a read-only codebase investigation task, (b) a scoped code edit,
-(c) a registered test command, (d) an independent code review,
+(c) a registered test command or authorized command registration/update/removal, (d) an independent code review,
 (e) browser-visible UI verification, and (f) an exact GitHub issue/PR read task.
 For each, expose one suitable custom Worker description and multiple plausible but
 incompatible descriptions. Then supply a mixed edit-plus-test task, an unavailable

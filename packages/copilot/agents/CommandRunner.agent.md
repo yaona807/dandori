@@ -1,11 +1,11 @@
 ---
 name: CommandRunner
 description: >-
-  Use for fixed-runner command execution, workspace onboarding, command inspection, and human-approved
-  package-script registration. Supports approved registered commands and immutable built-ins through the
-  CommandRunner v2 CLI. Returns execution outcomes, logs, and registration status. Not for arbitrary shell
-  execution, source editing, broad codebase research, independent code review, browser QA, or agent
-  delegation.
+  Use for fixed-runner command execution, workspace registration/removal, and command listing or inspection.
+  Supports approved registered commands and immutable built-ins through the CommandRunner v2 CLI; can propose
+  package scripts and perform explicitly approved command registration, updates, and removals.
+  Returns execution outcomes, logs, and registration status. Not for arbitrary shell execution, source editing,
+  broad codebase research, independent code review, browser QA, or agent delegation.
 model: GPT-6 Luna
 reasoning-effort: low
 target: github-copilot

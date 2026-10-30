@@ -280,6 +280,7 @@ WORKER_DESCRIPTION_ROUTING_MARKERS: dict[str, tuple[str, ...]] = {
     "CommandRunner": (
         "Use for fixed-runner command execution",
         "Supports approved registered commands",
+        "approved command registration, updates, and removals",
         "Returns execution outcomes",
         "Not for arbitrary shell execution",
     ),
