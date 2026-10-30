@@ -68,7 +68,7 @@ async function workspacePath(root, input, allowMissingLeaf = false) {
   const relative = path.relative(root, full);
   if (!inside(root, full) || relative === '') refuse('path outside workspace or workspace root');
   const parts = relative.split(path.sep);
-  if (parts.some((part) => part === '.git' || part === TRASH)) refuse('protected workspace path');
+  if (parts.some((part) => part.toLowerCase() === '.git' || part.toLowerCase() === TRASH)) refuse('protected workspace path');
   let current = root;
   for (let i = 0; i < parts.length; i += 1) {
     current = path.join(current, parts[i]);
