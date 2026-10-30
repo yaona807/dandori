@@ -131,7 +131,7 @@ async function readProposal(id) {
 }
 async function propose(commandId, params) {
   if (!COMMAND.test(commandId)) throw error('invalid_argument', 'invalid command ID');
-  if ([...params.keys()].some(k => k !== 'packageDir')) throw error('invalid_argument', 'only packageDir is supported');
+  if ([...params.keys()].some(k => !['packageDir', 'script'].includes(k))) throw error('invalid_argument', 'only packageDir/script are supported');
   const {selected, workspace} = await selectedConfig();
   const packageDir = params.get('packageDir') ?? '.';
   if (!packageDir || path.isAbsolute(packageDir) || packageDir.includes('..') || packageDir.includes('\\')) {
@@ -140,17 +140,18 @@ async function propose(commandId, params) {
   const dir = await realpath(path.resolve(workspace.root, packageDir));
   const root = await realpath(workspace.root);
   if (!within(root, dir)) throw error('path_escape', 'packageDir escapes workspace');
+  const scriptName = params.get('script') ?? commandId;
   let selectedScript;
   for (const manager of ['npm', 'pnpm', 'yarn', 'bun']) {
-    try { selectedScript = { manager, ...(await scriptFingerprint(dir, manager, commandId)) }; break; }
+    try { selectedScript = { manager, ...(await scriptFingerprint(dir, manager, scriptName)) }; break; }
     catch { /* try known package-manager candidates; do not execute anything */ }
   }
   if (!selectedScript) throw error('script_not_discoverable', 'unable to identify a unique package script/manager');
   const definition = {
     description: 'Approved ' + selectedScript.manager + ' script: ' + commandId,
-    run: [selectedScript.manager, 'run', commandId, '--'],
+    run: [selectedScript.manager, 'run', scriptName, '--'],
     cwd: path.relative(root, dir) || '.', arguments: {},
-    scriptGuard: {manager: selectedScript.manager, script: commandId, fingerprint: selectedScript.fingerprint},
+    scriptGuard: {manager: selectedScript.manager, script: scriptName, fingerprint: selectedScript.fingerprint},
     timeoutMs: 300000, maxOutputBytes: 1048576,
   };
   const original = workspace.commands[commandId] ?? null;
@@ -173,7 +174,7 @@ async function activate(id) {
   if (selected.workspaceIdentity !== record.workspaceIdentity) throw error('workspace_identity_changed', 'proposal workspace has changed');
   const cwd = await realpath(path.join(workspace.root, record.definition.cwd));
   if (!within(await realpath(workspace.root), cwd)) throw error('path_escape', 'candidate script directory escaped workspace');
-  const currentFingerprint = await scriptFingerprint(cwd, record.definition.scriptGuard.manager, record.commandId);
+  const currentFingerprint = await scriptFingerprint(cwd, record.definition.scriptGuard.manager, record.definition.scriptGuard.script);
   if (currentFingerprint.fingerprint !== record.definition.scriptGuard.fingerprint) {
     throw error('stale_script_definition', 'package scripts changed before activation');
   }
@@ -184,7 +185,7 @@ async function activate(id) {
   const args = [existing ? 'update' : 'register', record.commandId, '--expected-workspace=' + selected.workspaceId];
   if (existing) args.push('expected=' + encode(record.expectedHash));
   args.push('definition=' + encode(JSON.stringify(record.definition)));
-  return { ...runInterface(args), approvedBy: 'interactive-host-permission', proposalId: id };
+  return { ...runInterface(args), proposalId: id, approvalEnforcement: 'external-host-policy' };
 }
 async function main() {
   const [op, id, ...tokens] = process.argv.slice(2);

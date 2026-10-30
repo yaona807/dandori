@@ -291,7 +291,7 @@ COPILOT_HOME=/path/to/test-home node .copilot/command-runner/command-runner-inte
 
 ## CommandRunner v2: self-onboarding and human-approved project commands
 
-Use `node ~/.copilot/command-runner/command-runner-v2.mjs` for the Worker-facing API. It accepts `context`, `workspace.ensure`, `list`, `describe`, `inspect`, `propose <id> [packageDir=<relative>]`, `activate <proposal-id>`, `run <id> [name=value]`, and `output <execution-id> stream=stdout|stderr [offset=<n>]`.
+Use `node ~/.copilot/command-runner/command-runner-v2.mjs` for the Worker-facing API. It accepts `context`, `workspace.ensure`, `list`, `describe`, `inspect`, `propose <id> [packageDir=<relative>] [script=<name>]`, `activate <proposal-id>`, `run <id> [name=value]`, and `output <execution-id> stream=stdout|stderr [offset=<n>]`.
 
 The worker does not send a workspace ID. The existing core selects the registered root from actual cwd and the v2 facade supplies internal workspace assertions. New roots are registered only when cwd is the exact directory containing `.git` or `package.json`; no parent-root inference. New command candidates are persisted but do not become executable until activation. A `PreToolUse` `ask` confirmation is requested for activation; user approval must be explicit. Unattended and untrusted hook environments do not provide a reliable human-approval attestation; **this is a prompt-level host permission, not a cryptographically enforced approval record**. The existing privileged v1 API is kept for migration and requests an interactive confirmation for registry mutations.
 

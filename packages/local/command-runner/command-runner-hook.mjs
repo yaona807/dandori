@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
 import path from 'node:path';
+import os from 'node:os';
+import { lstatSync, readFileSync } from 'node:fs';
 import process from 'node:process';
 
 const TERMINAL_TOOL_NAMES = new Set([
@@ -51,6 +53,28 @@ function allow(reason) {
       permissionDecisionReason: reason,
     },
   });
+}
+
+function activationReview(id) {
+  const home = process.env.COPILOT_HOME ? path.resolve(process.env.COPILOT_HOME) : path.join(os.homedir(), '.copilot');
+  const file = path.join(home, 'command-runner', 'proposals', id + '.json');
+  const stat = lstatSync(file);
+  if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 32768) throw new Error('unreadable approval proposal');
+  const item = JSON.parse(readFileSync(file, 'utf8'));
+  if (item.id !== id || !item.definition || !Array.isArray(item.definition.run)
+    || typeof item.definition.cwd !== 'string' || !item.definition.scriptGuard
+    || !Number.isFinite(item.expiresAt) || Date.now() > item.expiresAt) {
+    throw new Error('invalid or expired approval proposal');
+  }
+  const display = JSON.stringify({
+    action: item.expectedHash ? 'update' : 'register',
+    commandId: item.commandId,
+    argv: item.definition.run,
+    cwd: item.definition.cwd,
+    scriptGuard: item.definition.scriptGuard,
+  });
+  if (display.length > 2000) throw new Error('approval details exceed bounded preview');
+  return 'Human approval is required for this exact command definition: ' + display;
 }
 
 function ask(reason) {
@@ -356,7 +380,11 @@ try {
     }
   } else {
     const decision = validateTerminalInput(toolInput);
-    if (decision === 'ask') ask('Review the exact proposed command definition before approving any command registration or mutation.');
+    if (decision === 'ask') {
+      const tokens = parseCommand(toolInput.command);
+      const isActivation = V2_PREFIX.every((s, i) => tokens[i] === s) && tokens[2] === 'activate';
+      ask(isActivation ? activationReview(tokens[3]) : 'Review the exact definition and current command before approving registry mutation.');
+    }
     else allow('Only the fixed user-level command runner interface is permitted.');
   }
 } catch (error) {

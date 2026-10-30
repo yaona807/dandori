@@ -273,6 +273,7 @@ function runHook(fixture, input) {
     {
       cwd: fixture.alpha,
       encoding: 'utf8',
+      env: {...process.env, COPILOT_HOME: fixture.home},
       input: JSON.stringify(input),
     },
   );
@@ -1412,8 +1413,16 @@ test('v2 Hook uses interactive approval for activation and rejects arbitrary she
     assert.equal(JSON.parse(accepted.stdout).permissionDecision, 'allow');
     const proposed = invoke('node ~/.copilot/command-runner/command-runner-v2.mjs propose test');
     assert.equal(JSON.parse(proposed.stdout).permissionDecision, 'allow');
-    const activate = invoke('node ~/.copilot/command-runner/command-runner-v2.mjs activate prop-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
+    await writeFile(path.join(fixture.alpha, 'package.json'), JSON.stringify({
+      packageManager: 'npm@10.0.0', scripts: {'test:unit': 'node echo-args.mjs'},
+    }));
+    const proposed = runV2(fixture, fixture.alpha, ['propose', 'unit', 'script=test%3Aunit']);
+    assert.equal(proposed.status, 0, proposed.stderr);
+    const candidate = JSON.parse(proposed.stdout);
+    assert.deepEqual(candidate.argv, ['npm', 'run', 'test:unit', '--']);
+    const activate = invoke('node ~/.copilot/command-runner/command-runner-v2.mjs activate ' + candidate.proposalId);
     assert.equal(JSON.parse(activate.stdout).permissionDecision, 'ask');
+    assert.match(JSON.parse(activate.stdout).permissionDecisionReason, /test:unit/u);
     const rejected = invoke('node ~/.copilot/command-runner/command-runner-v2.mjs run test && npm publish');
     assert.equal(JSON.parse(rejected.stdout).permissionDecision, 'deny');
     const legacy = invoke('node ~/.copilot/command-runner/command-runner-interface.mjs register test --expected-workspace=alpha definition=%7B%7D');
