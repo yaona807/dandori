@@ -1420,12 +1420,64 @@ test('v2 Hook uses interactive approval for activation and rejects arbitrary she
     assert.equal(proposed.status, 0, proposed.stderr);
     const candidate = JSON.parse(proposed.stdout);
     assert.deepEqual(candidate.argv, ['npm', 'run', 'test:unit', '--']);
+    const proposalHook = invoke('node ~/.copilot/command-runner/command-runner-v2.mjs propose unit script=test%3Aunit');
+    assert.equal(JSON.parse(proposalHook.stdout).permissionDecision, 'allow');
     const activate = invoke('node ~/.copilot/command-runner/command-runner-v2.mjs activate ' + candidate.proposalId);
     assert.equal(JSON.parse(activate.stdout).permissionDecision, 'ask');
     assert.match(JSON.parse(activate.stdout).permissionDecisionReason, /test:unit/u);
+    assert.match(JSON.parse(activate.stdout).permissionDecisionReason, /node echo-args\.mjs/u);
     const rejected = invoke('node ~/.copilot/command-runner/command-runner-v2.mjs run test && npm publish');
     assert.equal(JSON.parse(rejected.stdout).permissionDecision, 'deny');
     const legacy = invoke('node ~/.copilot/command-runner/command-runner-interface.mjs register test --expected-workspace=alpha definition=%7B%7D');
     assert.equal(JSON.parse(legacy.stdout).permissionDecision, 'ask');
+    const legacyWorkspace = invoke('node ~/.copilot/command-runner/command-runner-interface.mjs workspace-register alpha');
+    assert.equal(JSON.parse(legacyWorkspace.stdout).permissionDecision, 'ask');
+  });
+});
+
+
+test('v2 Hook requests one-time approval for an unregistered exact project root', async () => {
+  await withFixture(async (fixture) => {
+    const gamma = path.join(fixture.root, 'new-project');
+    await mkdir(gamma);
+    await writeFile(path.join(gamma, 'package.json'), JSON.stringify({
+      packageManager: 'npm@10.0.0', scripts: {test: 'node --version'},
+    }));
+    const check = (cwd, reportedCwd = cwd) => spawnSync(process.execPath,
+      [path.join(fixture.home, 'command-runner', 'command-runner-hook.mjs')], {
+        cwd, encoding: 'utf8', env: {...process.env, COPILOT_HOME: fixture.home},
+        input: JSON.stringify({
+          hook_event_name: 'PreToolUse', tool_name: 'execute/runInTerminal',
+          cwd: reportedCwd,
+          tool_input: {command: 'node ~/.copilot/command-runner/command-runner-v2.mjs workspace.ensure'},
+        }),
+      });
+    const first = JSON.parse(check(gamma).stdout);
+    assert.equal(first.permissionDecision, 'ask');
+    assert.match(first.permissionDecisionReason, /new-project/u);
+    const mismatch = JSON.parse(check(gamma, fixture.alpha).stdout);
+    assert.equal(mismatch.permissionDecision, 'deny');
+    const registered = runV2(fixture, gamma, ['workspace.ensure']);
+    assert.equal(registered.status, 0, registered.stderr);
+    const again = JSON.parse(check(gamma).stdout);
+    assert.equal(again.permissionDecision, 'allow');
+  });
+});
+
+test('v2 pnpm script candidates do not pass npm-only double-dash to the underlying script', async () => {
+  await withFixture(async (fixture) => {
+    await writeFile(path.join(fixture.alpha, 'package.json'), JSON.stringify({
+      packageManager: 'pnpm@10.28.1', scripts: {check: 'tsc --noEmit --project tsconfig.json'},
+    }));
+    const proposed = runV2(fixture, fixture.alpha, ['propose', 'check']);
+    assert.equal(proposed.status, 0, proposed.stderr);
+    const candidate = JSON.parse(proposed.stdout);
+    assert.deepEqual(candidate.argv, ['pnpm', 'run', 'check']);
+    const activated = runV2(fixture, fixture.alpha, ['activate', candidate.proposalId]);
+    assert.equal(activated.status, 0, activated.stderr);
+    const config = JSON.parse(await readFile(path.join(fixture.home, 'command-runner', 'workspaces.json'), 'utf8'));
+    assert.deepEqual(config.workspaces[0].commands.check.run, ['pnpm', 'run', 'check']);
+    const guarded = runRunnerWithoutHashes(fixture, fixture.alpha, ['describe', 'check']);
+    assert.equal(guarded.status, 0, guarded.stderr);
   });
 });
