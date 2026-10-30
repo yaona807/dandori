@@ -21,8 +21,8 @@ COPILOT_WORKER_ROUTING = (
     "- `Reviewer`\n"
     "- `BrowserQA`\n"
     "\n"
-    "Always specify the named custom agent in the native delegation call. Never use a default or general-purpose subagent, or built-in Explore, Plan, Agent or unnamed task. Tool names and descriptions are not sufficient identity evidence.\n"
-    "Verify that the requested named custom agent is exposed in the current session before calling it. If unavailable, return `no_suitable_worker`: do not substitute any built-in or unlisted agent.\n"
+    "Select the exact custom agent in each `task` call. Never use a default or general-purpose subagent, or built-in Explore, Plan, Agent or unnamed task.\n"
+    "Verify the named custom agent is available. Otherwise return `no_suitable_worker`; do not substitute any built-in or unlisted agent.\n"
     "Keep Task Card scope and audit. Copilot lacks Local's enforced `agents` allowlist; this is instruction-level routing.\n"
     "\n"
 )
