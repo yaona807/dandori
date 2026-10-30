@@ -1269,15 +1269,13 @@ test('P0 built-ins are discoverable, immutable, and safely manage one file at a 
     assert.equal(await readFile(path.join(fixture.alpha, 'tests', 'renamed.test.js'), 'utf8'), 'export {};\n');
     assert.equal(run('builtin-fs-restore', ['itemId=' + itemId]).status, 'failed');
 
-    const protectedPath = runRunnerWithoutHashes(fixture, fixture.alpha, [
-      'run', 'builtin-fs-trash', '--expected-workspace=alpha', 'source=.git%2Fconfig',
-    ]);
-    assert.equal(protectedPath.status, 2);
-    const outsidePath = runRunnerWithoutHashes(fixture, fixture.alpha, [
-      'run', 'builtin-fs-copy', '--expected-workspace=alpha',
+    assert.equal(run('builtin-fs-trash', ['source=.git%2Fconfig']).status, 'failed');
+    assert.equal(run('builtin-fs-copy', [
       'source=tests%2Fsample.test.js', 'destination=..%2Foutside.js',
-    ]);
-    assert.equal(outsidePath.status, 2);
+    ]).status, 'failed');
+    await symlink('sample.test.js', path.join(fixture.alpha, 'tests', 'alias.test.js'));
+    assert.equal(run('builtin-fs-trash', ['source=tests%2Falias.test.js']).status, 'failed');
+    assert.equal(await readFile(path.join(fixture.alpha, 'tests', 'sample.test.js'), 'utf8'), 'export {};\n');
   });
 });
 
