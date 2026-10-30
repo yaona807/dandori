@@ -236,7 +236,7 @@ function runRunnerWithoutHashes(fixture, cwd, args) {
 }
 
 function runInterface(fixture, cwd, args) {
-  const scoped = new Set(['list', 'describe', 'register', 'update', 'unregister', 'output']);
+  const scoped = new Set(['list', 'describe', 'inspect', 'register', 'update', 'unregister', 'output']);
   let scopedArgs = args;
   if (scoped.has(args[0])) {
     const index = args[0] === 'list' ? 1 : 2;
