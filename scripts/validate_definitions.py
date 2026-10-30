@@ -254,6 +254,49 @@ BUNDLED_WORKER_TOOLS: dict[str, set[str]] = {
         "edit/createDirectory",
     },
 }
+# These markers protect the runtime-visible frontmatter used by Copilot to
+# select workers. The descriptions, not this validator, remain the routing source
+# of truth; this rejects accidentally omitted positive or negative capabilities.
+WORKER_DESCRIPTION_ROUTING_MARKERS: dict[str, tuple[str, ...]] = {
+    "Researcher": (
+        "Use for bounded read-only codebase investigation",
+        "Supports read/search",
+        "Returns source-backed implementation facts",
+        "Not for edits, terminal execution",
+    ),
+    "GitHubResearcher": (
+        "Use for exact GitHub issue and pull request inspection",
+        "Supports read-only GitHub extension tools",
+        "Returns bounded GitHub artifact findings",
+        "Not for workspace codebase investigation",
+    ),
+    "Writer": (
+        "Use for scoped file creation and edits",
+        "Supports read/edit tools",
+        "Returns changed-file summaries",
+        "Cannot execute terminal commands",
+        "Not for broad investigation",
+    ),
+    "CommandRunner": (
+        "Use for fixed-runner command execution",
+        "Supports approved registered commands",
+        "Returns execution outcomes",
+        "Not for arbitrary shell execution",
+    ),
+    "Reviewer": (
+        "Use for independent read-only review",
+        "Supports read/search and code-review guidance",
+        "Returns evidence-linked actionable findings",
+        "Not for editing files",
+    ),
+    "BrowserQA": (
+        "Use for browser-visible UI verification",
+        "Supports integrated-browser navigation",
+        "Returns observed interaction evidence",
+        "Not for source editing",
+    ),
+}
+
 COMMAND_RUNNER_NAME = "CommandRunner"
 COMMAND_RUNNER_TOOLS = frozenset({"execute/runInTerminal", "execute"})
 COMMAND_RUNNER_HOOKS = {
@@ -538,8 +581,13 @@ ORCHESTRATOR_REQUIRED_SECTION_MARKERS: dict[str, tuple[str, ...]] = {
     "## Worker selection": (
         "Use frontmatter-listed agents only.",
         "Before delegation, match every planned operation's required tool modality",
+        "Apply all four eligibility gates before any invocation",
+        "Do not use a mere absence of prohibitions as positive support.",
         "Never assign an `execute` operation to a candidate",
         "Split mixed-modality work into separate dependency-ordered Task Cards",
+        "Never select by the order of a listed inventory or trial-and-error invocation.",
+        "Re-delegate only to another *already positively validated* eligible Worker",
+        "runtime descriptions are unavailable",
         "Never retry an unchanged blocked candidate",
         "never widen the contract for Worker compatibility.",
     ),
@@ -1668,6 +1716,13 @@ def validate_repository(root: Path) -> ValidationResult:
         description = meta.get("description")
         if not isinstance(description, str) or not description.strip():
             result.errors.append(f"{relative(path, root)}: missing non-empty description")
+
+        if name in WORKER_DESCRIPTION_ROUTING_MARKERS and isinstance(description, str):
+            for required in WORKER_DESCRIPTION_ROUTING_MARKERS[name]:
+                if required not in description:
+                    result.errors.append(
+                        f"{relative(path, root)}: worker description missing routing capability/limit marker {required!r}"
+                    )
 
         if len(body) > MAX_AGENT_BODY_CHARS:
             result.errors.append(

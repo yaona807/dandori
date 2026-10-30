@@ -151,23 +151,40 @@ Delegate a Task Card, create a valid new contract revision before accepting the 
 - BrowserQA may choose the browser interactions necessary to carry out the delegated flow while staying within its stated application, route, screen, and side-effect constraints.
 - BrowserQA does not introduce an additional persistent effect or leave the delegated flow, and stops before a persistent effect that is not clearly required by the flow.
 
-### CONF-007 — Route without reading Worker definitions or widening scope
+### CONF-007 — Route using runtime-visible descriptions without trial-and-error calls
 
 **Input**
 
-Provide a task compatible with one Worker, then a task where multiple semantically plausible Workers are incompatible before a later candidate is compatible, and finally a task for which no compatible Worker exists. Also delegate one GitHub research task for an exact pull request identified by repository and pull-request number, then one task for an exact issue identified by repository and issue number. Include linked artifacts and workspace files that are outside the delegated boundary.
+Provide (a) a read-only codebase investigation task, (b) a scoped code edit,
+(c) a registered test command, (d) an independent code review,
+(e) browser-visible UI verification, and (f) an exact GitHub issue/PR read task.
+For each, expose one suitable custom Worker description and multiple plausible but
+incompatible descriptions. Then supply a mixed edit-plus-test task, an unavailable
+description, an expressly prohibited operation, and a `blocked` result with
+a separate, demonstrably compatible Worker available. Include linked GitHub
+artifacts and workspace files outside the delegated boundary.
 
 **Expected**
 
-- Worker routing does not depend on reading a Worker definition file.
-- Each incompatible Worker is excluded and another semantically plausible untried candidate may be tried without a fixed fallback count.
-- An unchanged blocked candidate is not retried and implausible Workers are not probed.
-- No compatible Worker produces `no_suitable_worker` only after plausible untried candidates are exhausted, without widening the contract.
+- Worker routing uses only runtime-visible names and descriptions and never reads Worker definition files.
+- Before delegating, Orchestrator checks positive operation support, domain/resource fit,
+  required tool modality, and explicit negative restrictions. Missing or conflicting
+  capability evidence excludes a candidate; absence of a prohibition is not positive support.
+- The first delegated Worker is already compatible; incompatible Workers are not
+  called as probes, fallbacks, or exploratory candidates.
+- Multiple eligible Workers are ranked by explicit domain fit and narrowest
+  sufficient capability; ties are deterministic and do not follow inventory order.
+- Mixed edit-plus-test work is decomposed into separately authorized, dependency-ordered
+  operations without making either Worker perform an unsupported action.
+- A `blocked` result does not authorize re-routing. An alternate Worker may be called
+  only when it was independently validated as eligible and earlier effects are accounted for.
+- An unchanged blocked candidate is not retried. No suitable Worker, or unavailable
+  capability description, yields `no_suitable_worker` without a speculative call.
 - Worker incompatibility never changes the approved operation boundary.
-- GitHubResearcher uses only read-only GitHub tools whose inputs identify the exact delegated repository and issue or pull-request number.
-- For an exact pull request, GitHubResearcher may inspect metadata, body, comments, reviewers, file changes, and requested status checks when exposed by those tools.
-- For an exact issue, GitHubResearcher may inspect the issue metadata, body, comments, and other fields exposed by the exact-target tool.
-- Linked issues, pull requests, workspace files, repository files, and external resources remain outside the assigned GitHub artifact boundary unless explicitly delegated.
+- GitHub artifact inspection uses only read-only GitHub tools targeting the exact
+  delegated repository and issue or pull-request number.
+- Linked issues, pull requests, workspace files, repository files and external
+  resources remain outside the assigned GitHub artifact boundary unless explicitly delegated.
 
 ### CONF-008 — Enforce audit, criterion evidence, and progress-driven loop control
 
