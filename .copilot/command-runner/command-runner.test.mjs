@@ -1337,3 +1337,86 @@ test('P0 Git built-ins only observe a repository rooted at the workspace', async
     assert.equal(execGit('status', '--porcelain').includes('?? .agent-trash'), false);
   });
 });
+
+
+function runV2(fixture, cwd, args) {
+  return spawnSync(process.execPath,
+    [path.join(fixture.home, 'command-runner', 'command-runner-v2.mjs'), ...args],
+    {cwd, encoding: 'utf8', env: {...process.env, COPILOT_HOME: fixture.home}});
+}
+
+test('v2 self-onboarding registers only a project root, without caller-supplied workspace ID', async () => {
+  await withFixture(async (fixture) => {
+    const gamma = path.join(fixture.root, 'gamma');
+    await mkdir(gamma);
+    await writeFile(path.join(gamma, 'package.json'), JSON.stringify({
+      packageManager: 'npm@10.0.0', scripts: {test: 'node -e "process.stdout.write(1)"'},
+    }));
+    let response = runV2(fixture, gamma, ['workspace.ensure']);
+    assert.equal(response.status, 0, response.stderr);
+    assert.equal(JSON.parse(response.stdout).registered, true);
+    response = runV2(fixture, gamma, ['workspace.ensure']);
+    assert.equal(response.status, 0, response.stderr);
+    assert.equal(JSON.parse(response.stdout).registered, false);
+    const config = JSON.parse(await readFile(path.join(fixture.home, 'command-runner', 'workspaces.json'), 'utf8'));
+    assert.equal(config.workspaces.length, 3);
+    assert.ok(config.workspaces.some(ws => ws.root === gamma && /^ws-[0-9a-f]{24}$/u.test(ws.id)));
+
+    const unrelated = path.join(fixture.root, 'unrelated');
+    await mkdir(unrelated);
+    response = runV2(fixture, unrelated, ['workspace.ensure']);
+    assert.equal(response.status, 2);
+    assert.match(response.stderr, /workspace_root_unverified/u);
+  });
+});
+
+test('v2 proposes inert npm scripts, activates exact candidate, and detects changed script definitions', async () => {
+  await withFixture(async (fixture) => {
+    await writeFile(path.join(fixture.alpha, 'package.json'), JSON.stringify({
+      packageManager: 'npm@10.0.0', scripts: {test: 'node echo-args.mjs', pretest: 'node --version'},
+    }));
+    const original = await readFile(path.join(fixture.home, 'command-runner', 'workspaces.json'), 'utf8');
+    const proposed = runV2(fixture, fixture.alpha, ['propose', 'test']);
+    assert.equal(proposed.status, 0, proposed.stderr);
+    const candidate = JSON.parse(proposed.stdout);
+    assert.equal(candidate.status, 'pending_approval');
+    assert.deepEqual(candidate.argv, ['npm', 'run', 'test', '--']);
+    assert.equal(candidate.scripts.test, 'node echo-args.mjs');
+    assert.equal(await readFile(path.join(fixture.home, 'command-runner', 'workspaces.json'), 'utf8'), original);
+
+    const accepted = runV2(fixture, fixture.alpha, ['activate', candidate.proposalId]);
+    assert.equal(accepted.status, 0, accepted.stderr);
+    assert.equal(JSON.parse(accepted.stdout).commandId, 'test');
+    const executed = runV2(fixture, fixture.alpha, ['run', 'test']);
+    assert.equal(executed.status, 0, executed.stderr);
+    assert.equal(JSON.parse(executed.stdout).status, 'completed');
+    await writeFile(path.join(fixture.alpha, 'package.json'), JSON.stringify({
+      packageManager: 'npm@10.0.0', scripts: {test: 'node echo-args.mjs', pretest: 'npm publish'},
+    }));
+    const stopped = runV2(fixture, fixture.alpha, ['run', 'test']);
+    assert.equal(stopped.status, 2);
+    assert.match(stopped.stderr, /stale_script_definition/u);
+    const copy = runRunnerWithoutHashes(fixture, fixture.alpha,
+      ['run', 'test', '--expected-workspace=alpha']);
+    assert.equal(copy.status, 2);
+    assert.match(copy.stderr, /stale_script_definition/u);
+  });
+});
+
+test('v2 Hook uses interactive approval for activation and rejects arbitrary shell', async () => {
+  await withFixture(async (fixture) => {
+    const invoke = (command) => runHook(fixture, {
+      hook_event_name: 'PreToolUse', tool_name: 'execute/runInTerminal', tool_input: {command},
+    });
+    const accepted = invoke('node ~/.copilot/command-runner/command-runner-v2.mjs workspace.ensure');
+    assert.equal(JSON.parse(accepted.stdout).permissionDecision, 'allow');
+    const proposed = invoke('node ~/.copilot/command-runner/command-runner-v2.mjs propose test');
+    assert.equal(JSON.parse(proposed.stdout).permissionDecision, 'allow');
+    const activate = invoke('node ~/.copilot/command-runner/command-runner-v2.mjs activate prop-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
+    assert.equal(JSON.parse(activate.stdout).permissionDecision, 'ask');
+    const rejected = invoke('node ~/.copilot/command-runner/command-runner-v2.mjs run test && npm publish');
+    assert.equal(JSON.parse(rejected.stdout).permissionDecision, 'deny');
+    const legacy = invoke('node ~/.copilot/command-runner/command-runner-interface.mjs register test --expected-workspace=alpha definition=%7B%7D');
+    assert.equal(JSON.parse(legacy.stdout).permissionDecision, 'ask');
+  });
+});
