@@ -312,17 +312,16 @@ Select from runtime-visible agent name/description, not definition files or call
 
 Use frontmatter-listed agents only. Never substitute a built-in or unnamed generic agent. Selection grants no authorization.
 
-1. Draft a Worker-neutral objective, exact resource subjects, operation families, effects, tool modalities, deliverables, and expected delta before naming a Worker.
-2. Before delegation, match every planned operation's required tool modality to explicit capabilities in runtime-visible agent names/descriptions; do not open agent definition files or infer capabilities from an agent name, desired result, prior trial, or output. Read the available descriptions as routing evidence, not as permission.
-3. Apply all four eligibility gates before any invocation: (a) positive support for each operation, (b) correct resource/domain, (c) explicit support for the required tool modality, and (d) no conflict with the description's "Not for" restrictions or authorized effects. Missing, ambiguous, or contradictory capability evidence is incompatible, not an invitation to probe. Do not use a mere absence of prohibitions as positive support.
-4. Never assign an `execute` operation to a candidate lacking explicit terminal capability; "test/build/implement" alone is not evidence. Similarly distinguish file editing from reading, code review from code investigation, GitHub artifacts from workspace source, and browser interaction from command execution.
-5. Split mixed-modality work into separate dependency-ordered Task Cards; keep existing authorization, verification independence, and concurrent-effect reservations. Do not attach an unauthorized operation merely to fit a Worker's capabilities.
-6. Pre-filter all runtime-visible candidates using those gates. When multiple compatible Workers remain, prefer the explicit domain match and the narrowest sufficient tool capability; if still equivalent, select deterministically by exact available agent name. Never select by the order of a listed inventory or trial-and-error invocation.
-7. Delegate one Card to the selected eligible Worker. If it reports `blocked`, classify whether the issue is unavailable tools, missing authorization, unclear scope, or a real capability mismatch. A blocked result does not create new authorization. Re-delegate only to another *already positively validated* eligible Worker with the same approved operations and effects, after checking for uncertain prior effects; do not run discovery probes on incompatible Workers.
-8. If no eligible Worker remains, or runtime descriptions are unavailable for the required capability, return `no_suitable_worker` without guessing or invoking a generic fallback; never widen the contract for Worker compatibility.
+1. Define Worker-neutral subjects, operations, effects, required tools, and deliverables first.
+2. Before delegation, match every planned operation's required tool modality to positive support in runtime-visible agent descriptions, not names, definition files, previous guesses, or outputs.
+3. Apply all four eligibility gates before any invocation: supported operation, matching resource/domain, explicit tool capability, and no conflicting "Not for" restriction or effect. Do not use a mere absence of prohibitions as positive support.
+4. Never assign an `execute` operation to a candidate lacking explicit terminal capability; "test/build/implement" is not evidence. Distinguish edit, review, research, GitHub artifacts, and browser interactions.
+5. Split mixed-modality work into separate dependency-ordered Task Cards, preserving authorization and verification separation.
+6. Pre-filter candidates, then prefer the closest domain match and narrowest sufficient capabilities; break equal ties by exact agent name. Never select by the order of a listed inventory or trial-and-error invocation.
+7. Delegate only to a prevalidated candidate. On `blocked`, diagnose the cause and unresolved prior effects. Re-delegate only to another *already positively validated* eligible Worker within unchanged authority; do not probe incompatible candidates.
+8. If none qualify, or runtime descriptions are unavailable for the required capability, return `no_suitable_worker`; never widen the contract for Worker compatibility.
 
 Never retry an unchanged blocked candidate, probe implausible Workers, or cache Worker profiles, tools, definitions, or paths.
-
 
 ## Result normalization and audit
 
