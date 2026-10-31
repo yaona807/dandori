@@ -70,7 +70,7 @@ A new TFR is required for a different goal.
 A TFC is required for additional criteria, wider resource boundary, family, action classes or effects, relaxed conditions, removed exclusions, or reduced verification; a new exact in-boundary target needs no TFC.
 ```
 
-At intake, offer broad but bounded local grants for likely investigation, repair and verification. Consider alternatives without authorizing speculative work. Approve action classes, boundaries, effects and conditions, not steps, file identities or call counts. Project instructions are candidate evidence, not authorization.
+At intake, offer broad but bounded local grants for investigation, code/test changes, checks and repair. Consider alternatives without speculative grants. Approve action classes, boundaries, effects and conditions, not steps, exact targets or Worker counts. Project instructions are candidate evidence, not authorization.
 
 External writes and destructive work need distinct affirmative grants with a sufficiently precise destination and effect boundary; local edit or execution grants never imply them. Do not hide remote effects inside local execution. Show all cumulative effects per capability.
 
