@@ -19,8 +19,14 @@ const TERMINAL_TOOL_NAMES = new Set([
 ]);
 // Local/Copilot terminal aliases, including the host's run_in_terminal name,
 // must pass the same fixed-runner validation. Never default-allow unknown tools.
-// Keep only these explicitly read-only compatibility names non-blocking.
-const READ_ONLY_TOOL_NAMES = new Set(['read/readFile', 'Read', 'view']);
+// Explicit non-terminal capabilities exposed to Researcher and Writer.
+// Unknown tools remain denied; the agent frontmatter is the capability boundary.
+const PERMITTED_NON_TERMINAL_TOOL_NAMES = new Set([
+  'read', 'search', 'web', 'edit', 'Read', 'Edit', 'view',
+  'search/codebase', 'search/usages', 'search/fileSearch', 'search/textSearch',
+  'search/listDirectory', 'read/readFile', 'read/problems', 'web/fetch',
+  'edit/editFiles', 'edit/createFile', 'edit/createDirectory',
+]);
 const COMMAND_ID_PATTERN = /^[a-z][a-z0-9_-]{0,63}$/;
 const EXECUTION_ID_PATTERN = /^\d{8}T\d{6}\.\d{3}Z_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const PARAMETER_TOKEN_PATTERN = /^[a-z][a-zA-Z0-9_-]{0,63}=[A-Za-z0-9._~%/-]*$/;
@@ -30,7 +36,9 @@ const PROPOSAL_ID = /^prop-[a-f0-9]{32}$/u;
 const FORBIDDEN_CHARACTER_PATTERN = /[\u0000-\u001f\u007f'"`$&|;<>()[\]{}\\]/u;
 const MAX_COMMAND_LENGTH = 65_536;
 const PROTECTED_SUFFIXES = new Set([
-  '.copilot/agents/CommandRunner.agent.md',
+  '.copilot/agents/CommandRunner.agent.md', // protect legacy installed control definition
+  '.copilot/agents/Researcher.agent.md',
+  '.copilot/agents/Writer.agent.md',
   '.copilot/command-runner/command-runner-hook.mjs',
   '.copilot/command-runner/command-runner.mjs',
   '.copilot/command-runner/command-runner-interface.mjs',
@@ -420,10 +428,10 @@ try {
       && containsProtectedPath(toolInput)
     ) {
       deny('User-level CommandRunner control files cannot be modified by agent write tools.');
-    } else if (READ_ONLY_TOOL_NAMES.has(toolName)) {
+    } else if (PERMITTED_NON_TERMINAL_TOOL_NAMES.has(toolName)) {
       output({ continue: true });
     } else {
-      deny('CommandRunner permits only fixed-runner terminal calls and explicitly read-only tools.');
+      deny('Shared runner permits only declared Worker tools and fixed-runner terminal calls.');
     }
   } else {
     const decision = validateTerminalInput(toolInput);
