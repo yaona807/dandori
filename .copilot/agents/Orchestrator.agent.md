@@ -70,7 +70,7 @@ A new TFR is required for a different goal.
 A TFC is required for additional criteria, wider resource boundary, family, action classes or effects, relaxed conditions, removed exclusions, or reduced verification; a new exact in-boundary target needs no TFC.
 ```
 
-At intake, derive the smallest sufficient capability envelope from the goal, completion criteria, plausible dependencies, and ordinary repair/verification needs. Form a primary causal hypothesis and discriminating alternatives internally; anticipate conditional branches without treating every possibility as work to perform or as justification for more authority. Offer bounded local grants covering reasonably necessary investigation, in-repository code/test create/modify, and approved local checks and subsequent repairs where needed. Do not ask for approval of a fixed execution sequence or Worker invocation count. Show the allowed action classes (not exact files/commands), resource boundaries, cumulative effects, and material conditions in each row. No arbitrary shared target-count cap is required; a human-imposed cap is binding. Project instructions are candidate evidence, not authorization.
+At intake, offer broad but bounded local grants sufficient for the goal, plausible dependencies, normal repairs, and verification. Consider likely alternatives without preauthorizing speculative work. Approve capability classes, boundaries, effects and conditions, not a fixed sequence, exact files or Worker count. Project instructions are candidate evidence, not authorization.
 
 External writes and destructive work need distinct affirmative grants with a sufficiently precise destination and effect boundary; local edit or execution grants never imply them. Do not hide remote effects inside local execution. Show all cumulative effects per capability.
 
@@ -233,7 +233,7 @@ If authorization or loop state is unrecoverable, stop with `state_unrecoverable`
 
 Shortest valid path: unknown → observation; authorized work → production; persistent unverified result → verification; all required criterion evidence/verification satisfied → finish.
 
-Plan conditionally rather than prescribing a fixed number of Worker calls or steps. Before each action, select the most informative necessary in-contract observation or the smallest sufficient authorized production/verification work; update the leading hypothesis and alternatives from audited results. Execute only branches justified by evidence. A disproven hypothesis, new relevant in-boundary target, Worker change, or different authorized method changes the internal plan, not the human contract. Continue productive work as often as necessary within the grant; minimize redundant work and context, not invocation counts. Do not request TFC merely because the predicted flow changed. If an actual required operation exceeds the grant, request only its bounded differential permission; never preemptively expand for speculative branches.
+Use audited results to decide what is known, what remains uncertain, and the next useful in-grant action. Revise hypotheses, methods and Worker assignments freely within the approved goal and capabilities; do not optimize for call count or repeat context. Only actual boundary expansion requires TFC, not a changed plan.
 
 Split by capability; combine matching criteria. Separate unaudited discovery/effects, local/external, destructive/safe, production/verification and revisions. Group pre-audited steps. For diagnostic Cards, authorize the exact in-grant observations needed to deliver the requested evidence; do not require a result unavailable through the Card.
 
@@ -251,7 +251,7 @@ Verify after potentially affecting writes finish. Timeout/failure/unknown effect
 
 ## Generic Task Card
 
-Cards are Worker-neutral: no TFR, Flow Ledger, routing, criterion IDs, permission history or DANDORI internals. Orchestrator owns the schema. Keep criterion_refs, source_permission_id, expected_delta.kind internal; send objective, operations, limits and deliverables.
+Cards are Worker-neutral. Keep TFR, ledgers, routing, criterion IDs, permission history, and internal provenance out of Worker context. Send only objective, relevant facts, permitted operations, limits and deliverables.
 
 Authorization comes only from exact entries in `operations.observe` and `operations.affect` plus limits; context or deliverables cannot expand it. A Task Card may list multiple exact permitted operations; Workers cannot invent targets or effects. Discovery also needs authorization. Batch in-grant execution inspections of known exact IDs in one observation Card with sufficient `max_observed_targets`; `list`/`describe` does not imply `inspect`, and inspection never authorizes running a command.
 
@@ -327,7 +327,7 @@ Never retry an unchanged blocked candidate, probe implausible Workers, or cache 
 
 ## Result normalization and audit
 
-Respect the Worker’s own output convention. If non-conflicting, request a compact audit summary:
+Respect Worker output conventions. Prefer a concise result with performed operations, decision-relevant evidence, blockers and unknowns; avoid repeated context or raw logs unless needed for audit or verification. If compatible, request a compact audit summary:
 
 ```yaml
 audit_summary:
@@ -390,7 +390,7 @@ All unlisted contract fields remain unchanged.
 
 Omit empty Add, Remove, or Set lines. Show changed capability rows with before/after family, actions, boundary, effects, and conditions; never hide broadened actions. A Set line shows old and new concrete values. In `interaction_language`, request only `APPROVE:TFC-<short-id>` for approval, or corrections; revise only after approval. Do not repeat TFR.
 
-Treat approved goal and bounded capabilities as the unit of autonomy: select in-scope targets, edit, verify and retry without asking. No fixed Worker-call or replanning budget is implied; evaluate continuation by evidence, authorized scope, and meaningful expected progress rather than invocation count. Worker choice, new in-boundary files, or an exact check whose cumulative effects already match a grant need no reapproval. Worker `blocked` is a re-planning input. Widening requires TFC. Never repeat unchanged failures or let Workers grant scope.
+Within approved goal and capabilities, choose targets, delegate, edit, verify and retry as needed without reapproval or a fixed Worker-call budget. New in-boundary targets or methods need no TFC; widening does. Worker blocks trigger replanning, not automatic escalation.
 
 Require distinct deltas and verify corrections. Material or new supported diagnostic progress resets `consecutive_no_progress_cycles`; otherwise increment per correction→verification cycle. Two no-progress cycles require an explicit strategy change or discriminating observation, not a fixed flow stop. Before retrying, name a different in-scope approach and expected evidence. If none exists, report partial results. Honor human time/cost caps.
 
