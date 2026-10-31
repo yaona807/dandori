@@ -1144,22 +1144,31 @@ test('shared hook allows ordinary read, search and edit tools while protecting r
       assert.deepEqual(JSON.parse(read.stdout), { continue: true });
     }
 
-    const protectedWrite = runHook(fixture, {
-      hook_event_name: 'PreToolUse',
-      tool_name: 'edit/editFiles',
-      tool_input: {
-        files: [
-          {
-            path: '~/.copilot/command-runner/workspaces.json',
-            replacement: '{}',
-          },
-        ],
-      },
-    });
-    assert.equal(
-      JSON.parse(protectedWrite.stdout).hookSpecificOutput.permissionDecision,
-      'deny',
-    );
+    for (const protectedPath of [
+      '~/.copilot/command-runner/workspaces.json',
+      '~/.copilot/command-runner/builtin-commands.mjs',
+    ]) {
+      const localWrite = runHook(fixture, {
+        hook_event_name: 'PreToolUse',
+        tool_name: 'edit/editFiles',
+        tool_input: { files: [{ path: protectedPath, replacement: 'unsafe' }] },
+      });
+      assert.equal(
+        JSON.parse(localWrite.stdout).hookSpecificOutput.permissionDecision,
+        'deny',
+        protectedPath,
+      );
+      const copilotWrite = runHook(fixture, {
+        sessionId: 'copilot-session',
+        toolName: 'Edit',
+        toolArgs: { path: protectedPath, content: 'unsafe' },
+      });
+      assert.equal(
+        JSON.parse(copilotWrite.stdout).permissionDecision,
+        'deny',
+        protectedPath,
+      );
+    }
 
     const unrelated = runHook(fixture, {
       hook_event_name: 'PreToolUse',

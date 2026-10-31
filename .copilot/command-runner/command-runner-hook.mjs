@@ -44,6 +44,7 @@ const PROTECTED_SUFFIXES = new Set([
   '.copilot/command-runner/command-runner-interface.mjs',
   '.copilot/command-runner/command-runner-v2.mjs',
   '.copilot/command-runner/script-guard.mjs',
+  '.copilot/command-runner/builtin-commands.mjs',
   '.copilot/command-runner/workspaces.json',
 ]);
 const WRITE_TOOL_NAME_PATTERN = /(?:^|[/._-])(?:edit|write|create|delete|remove|move|rename|patch)(?:$|[/._-])/iu;
