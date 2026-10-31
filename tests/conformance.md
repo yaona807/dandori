@@ -74,7 +74,7 @@ Request a repository-local bug fix with cause investigation, code/test changes, 
 **Expected**
 
 - The initial TFR authorizes reasonably necessary local investigation, changes, checks, and repair by action/effect class and repository boundary without requiring a fixed Worker sequence, exact file names, or invocation budget.
-- Orchestrator maintains an evidence-driven primary hypothesis and alternatives; only justified branches are delegated, and a disproved hypothesis triggers in-contract replanning.
+- Orchestrator uses available evidence to choose useful work; a disproved hypothesis triggers in-contract replanning without requiring a fixed hypothesis ledger.
 - Newly discovered in-boundary files are instantiated as exact audited Task Card operations in a subsequent invocation; discovery does not authorize an effect in the same invocation.
 - Productive Worker calls and replanning continue without a fixed total count or extra TFR/TFC while every operation remains within the approved contract.
 - Unchanged failures and duplicate evidence do not justify repeated delegation; required separate-context verification is still performed.
