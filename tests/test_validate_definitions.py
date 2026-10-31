@@ -64,6 +64,23 @@ class ValidatorMutationTests(unittest.TestCase):
             self.assertEqual("github-copilot", b["target"])
             self.assertNotIn("agents", b)
 
+    def test_copilot_routing_transformation_rejects_missing_or_duplicate_anchors(self) -> None:
+        """Required Copilot-specific routing must never silently disappear or duplicate."""
+        spec = importlib.util.spec_from_file_location(
+            "dandori_builder_anchor_test", ROOT / "scripts" / "build_agent_profiles.py"
+        )
+        assert spec and spec.loader
+        builder = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(builder)
+        original = (ROOT / ".copilot/agents/Orchestrator.agent.md").read_text(encoding="utf-8")
+        for anchor in ("Use frontmatter-listed agents only.", "## Worker selection"):
+            for variant in ("missing", "duplicate"):
+                with self.subTest(anchor=anchor, variant=variant):
+                    replacement = "" if variant == "missing" else anchor + "\n" + anchor
+                    mutated = original.replace(anchor, replacement, 1)
+                    with self.assertRaisesRegex(ValueError, "expected exactly one replacement anchor"):
+                        builder.transform(mutated, "Orchestrator", "copilot")
+
     def test_copilot_orchestrator_uses_named_custom_workers(self) -> None:
         profile = ROOT / "packages/copilot/agents/Orchestrator.agent.md"
         _, front, body = profile.read_text().split("---\n", 2)

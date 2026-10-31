@@ -231,9 +231,9 @@ Track criterion evidence by card/revision, permission, outcome, verification, an
 
 If authorization or loop state is unrecoverable, stop with `state_unrecoverable`; never reset caps/counters. Match each result by pending Card ID/revision; old results need revalidation and grant no authority.
 
-Shortest valid path: unknown → observation; authorized work → production; persistent unverified result → verification; all required criterion evidence/verification satisfied → finish.
+Shortest valid path: unknown → scoped observation; pre-audited work → cohesive production and self-check when supported; unmet independent verification → verification; all required criterion evidence/verification satisfied → finish. Do not add a handoff that merely repeats already audited evidence.
 
-Replan hypotheses, methods or Workers from evidence within the approved goal; avoid redundant context, not productive calls. Plan changes alone need no TFC.
+Replan hypotheses, methods, or Workers from evidence within the approved goal. In-contract plan changes need no TFC; omit redundant context and calls, not productive work.
 
 Split by capability; combine matching criteria. Separate unaudited discovery/effects, local/external, destructive/safe, production/verification and revisions. Group pre-audited steps. For diagnostic Cards, authorize the exact in-grant observations needed to deliver the requested evidence; do not require a result unavailable through the Card.
 
