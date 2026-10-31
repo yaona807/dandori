@@ -261,7 +261,6 @@ If the current session's authorization or cumulative loop-control state cannot b
     Researcher.agent.md
     GitHubResearcher.agent.md
     Writer.agent.md
-    CommandRunner.agent.md
     Reviewer.agent.md
     BrowserQA.agent.md
   command-runner/
@@ -291,19 +290,18 @@ assets/
 | --- | --- |
 | `Orchestrator` | Control-plane agent for intake, compact approval, contract management, Task Card creation, worker selection, audit, loop control, and synthesis |
 | Reference workers | Optional workers for investigation, exact GitHub issue/pull-request inspection, implementation, review, and browser-based verification |
-| `CommandRunner` | Optional execution worker that exposes registered commands through a fixed bounded interface and keeps large command output in its own temporary execution cache |
 | `code-review` skill | Focused review guidance used by the reference review worker |
 
 ## Compatibility and prerequisites
 
 - DANDORI agents explicitly target VS Code.
-- Bundled agents declare both VS Code Local and Copilot harness tool aliases where supported (`agent`/`task` for delegation and `execute/runInTerminal`/`execute` for CommandRunner). These declarations are compatibility candidates, not proof of runtime availability. Verify the active harness and loaded tools using the [conformance cases](./tests/conformance.md), especially `CONF-024`.
+- Bundled agents declare both VS Code Local and Copilot harness tool aliases where supported (`agent`/`task` for delegation and `execute/runInTerminal`/`execute` for Researcher and Writer). These declarations are compatibility candidates, not proof of runtime availability. Verify the active harness and loaded tools using the [conformance cases](./tests/conformance.md), especially `CONF-024`.
 - Subagent restriction uses the `agents` allowlist, which is currently an experimental VS Code feature.
 - `GitHubResearcher` requires the GitHub Pull Requests extension and its exposed tools.
 - `BrowserQA` requires the configured browser tool set.
 - Unavailable or unrecognized tool names can be ignored by the runtime; verify actual tool availability before use.
 - A bundled Worker calls a tool only when the tool arguments and runtime behavior can enforce the delegated boundary. If the available tool can operate only on a broader scope, the Worker returns `blocked` and identifies the narrower capability required.
-- `CommandRunner` is included as an optional terminal-command Worker. Its agent definition is discovered with the other agents, but its fixed user-level runner must also be installed from `.copilot/command-runner/`. See [the CommandRunner setup](./.copilot/command-runner/README.md). Agent-scoped hooks require `chat.useCustomAgentHooks` to be enabled.
+- Researcher and Writer call the shared fixed runner CLI directly. Install the user-level runner from `.copilot/command-runner/` and enable agent-scoped hooks with `chat.useCustomAgentHooks`.
 - External workers must accept a self-contained request, avoid sub-delegation, use no broader tools than necessary, and describe their role and effect boundary accurately.
 - Confirm the loaded source for every agent and skill with VS Code Chat Diagnostics.
 
@@ -313,7 +311,7 @@ DANDORI works best with a capable reasoning model for the Orchestrator.
 
 The Orchestrator must distinguish execution-method ambiguity from authorization ambiguity, normalize contracts without widening them, create minimal Task Cards, audit worker results, resolve conflicts, and stop when containment cannot be established.
 
-The bundled agents pin **GPT-6.1 Sol (copilot)** with `medium` effort for Orchestrator and Reviewer, **GPT-6.1 Terra (copilot)** with `low` effort for Writer and BrowserQA, and **GPT-6 Luna (copilot)** with `low` effort for Researcher, GitHubResearcher, and CommandRunner. The `reasoning-effort` frontmatter field is applied by the Copilot harness; model availability and actual model selection still require runtime verification. Custom or external Workers may select their own models.
+The bundled agents pin **GPT-6.1 Sol (copilot)** with `medium` effort for Orchestrator and Reviewer, **GPT-6.1 Terra (copilot)** with `low` effort for Writer and BrowserQA, and **GPT-6 Luna (copilot)** with `low` effort for Researcher and GitHubResearcher. The `reasoning-effort` frontmatter field is applied by the Copilot harness; model availability and actual model selection still require runtime verification. Custom or external Workers may select their own models.
 
 ## Installation
 
@@ -329,7 +327,7 @@ cp .copilot/agents/*.agent.md ~/.copilot/agents/
 cp -R .copilot/skills/* ~/.copilot/skills/
 ```
 
-If you use `CommandRunner`, also complete the separate [CommandRunner installation](./.copilot/command-runner/README.md), which installs the fixed runner under `~/.copilot/command-runner/`.
+For Researcher and Writer command execution, complete the [shared runner installation](./.copilot/command-runner/README.md) to install the fixed CLI and hook under `~/.copilot/command-runner/`.
 
 ### Standard workspace installation
 
@@ -341,7 +339,7 @@ cp .copilot/agents/*.agent.md .github/agents/
 cp -R .copilot/skills/* .github/skills/
 ```
 
-A workspace-level `CommandRunner.agent.md` still uses the fixed user-level runner under `~/.copilot/command-runner/`; install that runner separately before using the worker.
+Researcher and Writer use the user-level runner under `~/.copilot/command-runner/`; no separate workspace-level runner agent is needed.
 
 ### Custom `.copilot` workspace installation
 

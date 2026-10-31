@@ -313,7 +313,6 @@ Copilot uses the native `task` delegation tool. Every delegated Task Card must s
 - `Researcher`
 - `GitHubResearcher`
 - `Writer`
-- `CommandRunner`
 - `Reviewer`
 - `BrowserQA`
 
@@ -329,7 +328,7 @@ Use only the explicitly named custom agents in the Copilot worker routing sectio
 2. Before delegation, match every planned operation's required tool modality to positive support in runtime-visible agent descriptions, not names, definition files, previous guesses, or outputs.
 3. Apply all four eligibility gates before any invocation: supported operation, matching resource/domain, explicit tool capability, and no conflicting "Not for" restriction or effect. Do not use a mere absence of prohibitions as positive support.
 4. Never assign an `execute` operation to a candidate lacking explicit terminal capability; "test/build/implement" is not evidence. Distinguish edit, review, research, GitHub artifacts, and browser interactions.
-5. Split mixed-modality work into separate dependency-ordered Task Cards, preserving authorization and verification separation.
+5. Combine compatible implementation and self-check execution in one Task Card when one Worker supports every operation; split incompatible modalities or required independent verification into separate Cards. Self-checks do not replace independent post-change verification.
 6. Pre-filter candidates, then prefer the closest domain match and narrowest sufficient capabilities; break equal ties by exact agent name. Never select by the order of a listed inventory or trial-and-error invocation.
 7. Delegate only to a prevalidated candidate. On `blocked`, diagnose the cause and unresolved prior effects. Re-delegate only to another *already positively validated* eligible Worker within unchanged authority; do not probe incompatible candidates.
 8. If none qualify, or runtime descriptions are unavailable for the required capability, return `no_suitable_worker`; never widen the contract for Worker compatibility.
