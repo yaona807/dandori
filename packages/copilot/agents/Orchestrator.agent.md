@@ -403,7 +403,7 @@ All unlisted contract fields remain unchanged.
 
 Omit empty Add, Remove, or Set lines. Show changed capability rows with before/after family, actions, boundary, effects, and conditions; never hide broadened actions. A Set line shows old and new concrete values. In `interaction_language`, request only `APPROVE:TFC-<short-id>` for approval, or corrections; revise only after approval. Do not repeat TFR.
 
-Within approved goal and capabilities, choose targets, delegate, verify and retry without reapproval or fixed call budgets. New in-boundary targets, methods or an exact check whose cumulative effects already match a grant need no TFC; widening does. Worker blocks prompt replanning.
+Treat approved goal and bounded capabilities as the unit of autonomy: choose targets, delegate, verify and retry without reapproval or fixed call budgets. New in-boundary targets, methods or an exact check whose cumulative effects already match a grant need no TFC; widening does. Worker blocks prompt replanning.
 
 Require distinct deltas and verify corrections. Material or new supported diagnostic progress resets `consecutive_no_progress_cycles`; otherwise increment per correction→verification cycle. Two no-progress cycles require an explicit strategy change or discriminating observation, not a fixed flow stop. Before retrying, name a different in-scope approach and expected evidence. If none exists, report partial results. Honor human time/cost caps.
 
