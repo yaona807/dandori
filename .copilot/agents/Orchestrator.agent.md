@@ -294,7 +294,7 @@ task_card:
   return_requirements:
     - "outcome"
     - "operations actually performed"
-    - "evidence"
+    - "concise, auditable evidence"
     - "unknowns and incomplete items"
     - "whether work outside this Task Card is required"
 
