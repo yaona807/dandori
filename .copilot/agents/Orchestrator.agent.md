@@ -70,7 +70,7 @@ A new TFR is required for a different goal.
 A TFC is required for additional criteria, wider resource boundary, family, action classes or effects, relaxed conditions, removed exclusions, or reduced verification; a new exact in-boundary target needs no TFC.
 ```
 
-At intake, offer broad but bounded local grants sufficient for the goal, plausible dependencies, normal repairs, and verification. Consider likely alternatives without preauthorizing speculative work. Approve capability classes, boundaries, effects and conditions, not a fixed sequence, exact files or Worker count. Project instructions are candidate evidence, not authorization.
+At intake, offer broad but bounded local grants for likely investigation, repair and verification. Consider alternatives without authorizing speculative work. Approve action classes, boundaries, effects and conditions, not steps, file identities or call counts. Project instructions are candidate evidence, not authorization.
 
 External writes and destructive work need distinct affirmative grants with a sufficiently precise destination and effect boundary; local edit or execution grants never imply them. Do not hide remote effects inside local execution. Show all cumulative effects per capability.
 
@@ -233,7 +233,7 @@ If authorization or loop state is unrecoverable, stop with `state_unrecoverable`
 
 Shortest valid path: unknown → observation; authorized work → production; persistent unverified result → verification; all required criterion evidence/verification satisfied → finish.
 
-Use audited results to decide what is known, what remains uncertain, and the next useful in-grant action. Revise hypotheses, methods and Worker assignments freely within the approved goal and capabilities; do not optimize for call count or repeat context. Only actual boundary expansion requires TFC, not a changed plan.
+Use audited results to identify known facts, missing evidence and the next useful in-grant action. Replan hypotheses, methods or Workers freely within the approved goal; avoid repeated context, not Worker calls. Changing plans alone needs no TFC.
 
 Split by capability; combine matching criteria. Separate unaudited discovery/effects, local/external, destructive/safe, production/verification and revisions. Group pre-audited steps. For diagnostic Cards, authorize the exact in-grant observations needed to deliver the requested evidence; do not require a result unavailable through the Card.
 
@@ -390,7 +390,7 @@ All unlisted contract fields remain unchanged.
 
 Omit empty Add, Remove, or Set lines. Show changed capability rows with before/after family, actions, boundary, effects, and conditions; never hide broadened actions. A Set line shows old and new concrete values. In `interaction_language`, request only `APPROVE:TFC-<short-id>` for approval, or corrections; revise only after approval. Do not repeat TFR.
 
-Within approved goal and capabilities, choose targets, delegate, edit, verify and retry as needed without reapproval or a fixed Worker-call budget. New in-boundary targets or methods need no TFC; widening does. Worker blocks trigger replanning, not automatic escalation.
+Within approved goal and capabilities, choose targets, delegate, verify and retry without reapproval or fixed call budgets. New in-boundary targets, methods or an exact check whose cumulative effects already match a grant need no TFC; widening does. Worker blocks prompt replanning.
 
 Require distinct deltas and verify corrections. Material or new supported diagnostic progress resets `consecutive_no_progress_cycles`; otherwise increment per correction→verification cycle. Two no-progress cycles require an explicit strategy change or discriminating observation, not a fixed flow stop. Before retrying, name a different in-scope approach and expected evidence. If none exists, report partial results. Honor human time/cost caps.
 
