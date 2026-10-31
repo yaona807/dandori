@@ -318,7 +318,7 @@ BUNDLED_AGENT_MIN_BODY_CHARS = {
     "GitHubResearcher": 1_200,
     "Researcher": 1_100,
     "Reviewer": 1_000,
-    "Writer": 1_200,
+    "Writer": 2_000,
 }
 BUNDLED_AGENT_FRONTMATTER_KEYS = frozenset(
     {

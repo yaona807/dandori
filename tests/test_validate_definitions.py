@@ -774,14 +774,15 @@ class ValidatorMutationTests(unittest.TestCase):
             path.write_text(text.replace(marker, "An implementation Worker may run commands", 1))
             self.assert_invalid(repo, "missing required Orchestrator section marker")
 
-    def test_writer_description_declares_no_terminal_execution(self) -> None:
+    def test_writer_description_declares_bounded_terminal_execution(self) -> None:
         temp, repo = self.make_repo()
         with temp:
             path = repo / ".copilot/agents/Writer.agent.md"
             text = path.read_text()
-            self.assertIn("Cannot execute terminal commands", text)
-            path.write_text(text.replace("Cannot execute terminal commands", "Can execute terminal commands", 1))
-            self.assert_invalid(repo, "Writer description must disclose its lack of terminal execution capability")
+            marker = "Supports read/edit and exact fixed-runner execution"
+            self.assertIn(marker, text)
+            path.write_text(text.replace(marker, "Supports read/edit tools", 1))
+            self.assert_invalid(repo, "worker description missing routing capability/limit marker")
 
     def test_each_worker_description_declares_positive_and_negative_routing_evidence(self) -> None:
         for worker, markers in validator.WORKER_DESCRIPTION_ROUTING_MARKERS.items():
