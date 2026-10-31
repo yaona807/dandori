@@ -125,7 +125,7 @@ REQUIRED_MUTATION_TEST_METHODS = frozenset(
         "test_dandori_coupling_format_variants_are_rejected",
         "test_orchestrator_invariant_must_remain_in_its_required_section",
         "test_worker_selection_requires_positive_execution_capability",
-        "test_writer_description_declares_no_terminal_execution",
+        "test_writer_description_declares_bounded_terminal_execution",
         "test_bundled_worker_policy_must_remain_in_strict_rules",
         "test_workflow_actions_require_full_commit_sha",
         "test_inline_workflow_action_requires_full_commit_sha",
