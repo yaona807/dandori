@@ -11,18 +11,15 @@ ROOT = Path(__file__).resolve().parents[1]
 AGENTS = ROOT / ".copilot" / "agents"
 COPILOT_WORKER_ROUTING = (
     "## Copilot worker routing (mandatory)\n"
-    "\n"
-    "Copilot uses the native `task` delegation tool. Every delegated Task Card must select one of these installed custom agents by exact, case-sensitive name:\n"
-    "\n"
+    "Native `task`: pick an installed, available exact-name custom agent:\n"
     "- `Researcher`\n"
     "- `GitHubResearcher`\n"
     "- `Writer`\n"
     "- `Reviewer`\n"
     "- `BrowserQA`\n"
-    "\n"
-    "Select the exact custom agent in each `task` call. Never use a default or general-purpose subagent, or built-in Explore, Plan, Agent or unnamed task.\n"
-    "Verify the named custom agent is available. Otherwise return `no_suitable_worker`; do not substitute any built-in or unlisted agent.\n"
-    "Keep Task Card scope and audit. Copilot lacks Local's enforced `agents` allowlist; this is instruction-level routing.\n"
+    "Never use a default or general-purpose subagent (built-in Explore/Plan/Agent or unnamed).\n"
+    "If none, return `no_suitable_worker`; do not substitute any built-in or unlisted agent.\n"
+    "Keep Card scope/audit. Copilot routing is instruction-only; Local enforces `agents`.\n"
     "\n"
 )
 

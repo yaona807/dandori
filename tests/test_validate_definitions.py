@@ -86,6 +86,7 @@ class ValidatorMutationTests(unittest.TestCase):
         _, front, body = profile.read_text().split("---\n", 2)
         meta = yaml.safe_load(front)
         self.assertEqual(["task"], meta["tools"])
+        self.assertLessEqual(len(body), validator.MAX_AGENT_BODY_CHARS)
         for name in ("Researcher", "GitHubResearcher", "Writer",
                      "Reviewer", "BrowserQA"):
             self.assertIn("- " + chr(96) + name + chr(96), body)
