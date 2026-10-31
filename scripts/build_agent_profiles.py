@@ -26,6 +26,13 @@ COPILOT_WORKER_ROUTING = (
     "\n"
 )
 
+def replace_exactly_once(text: str, old: str, new: str, label: str) -> str:
+    """Reject missing or ambiguous Copilot-specific body transformations."""
+    if text.count(old) != 1:
+        raise ValueError(f"{label}: expected exactly one replacement anchor {old!r}")
+    return text.replace(old, new, 1)
+
+
 WORKERS = ("Researcher", "GitHubResearcher", "Writer", "Reviewer", "BrowserQA")
 NAMES = ("Orchestrator", *WORKERS)
 def transform(source: str, name: str, profile: str) -> str:
@@ -51,11 +58,16 @@ def transform(source: str, name: str, profile: str) -> str:
     if name == "Orchestrator":
         # Copilot invokes a named custom worker via its native task tool.
         front = re.sub(r"(?m)^tools:\n(?:  - [^\n]+\n)+", "tools:\n  - task\n", front)
-        body = body.replace(
+        body = replace_exactly_once(
+            body,
             "Use frontmatter-listed agents only.",
             "Use only the explicitly named custom agents in the Copilot worker routing section.",
+            "Orchestrator worker routing policy",
         )
-        body = body.replace("## Worker selection", COPILOT_WORKER_ROUTING + "## Worker selection", 1)
+        body = replace_exactly_once(
+            body, "## Worker selection", COPILOT_WORKER_ROUTING + "## Worker selection",
+            "Orchestrator worker-selection section",
+        )
     # Use documented Copilot aliases rather than Local-qualified tool IDs.
     tools = {
         "Researcher": ("read", "search", "web", "execute"),
