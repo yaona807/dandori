@@ -2,7 +2,7 @@
 
 [English](./README.md)
 
-このディレクトリには、固定Node.jsコマンド本体、boundedな管理・実行interface、Agent固有の `PreToolUse` Hook、個人用Workspace設定のサンプルを格納します。`CommandRunner` Agent定義は、他のDANDORI Agentと同じ `../agents/CommandRunner.agent.md` に配置します。
+このディレクトリには、固定Node.jsコマンド本体、boundedな管理・実行interface、Agent固有の `PreToolUse` Hook、個人用Workspace設定のサンプルを格納します。Researcher・WriterのAgentが同じCLIとHookを利用し、実行専用Agentは不要です。
 
 実際の利用ファイルは `~/.copilot/` 配下へインストールします。CommandRunnerの制御ファイルや個人用の許可コマンド設定を、対象プロジェクトのリポジトリへ追加する必要はありません。
 
@@ -18,7 +18,7 @@ Agentは他のDANDORI Agentと一緒に配置し、固定RunnerとHookを追加�
 
 ```bash
 mkdir -p ~/.copilot/agents ~/.copilot/command-runner
-cp .copilot/agents/CommandRunner.agent.md ~/.copilot/agents/
+cp .copilot/agents/{Researcher,Writer}.agent.md ~/.copilot/agents/
 cp .copilot/command-runner/command-runner.mjs ~/.copilot/command-runner/
 cp .copilot/command-runner/builtin-commands.mjs ~/.copilot/command-runner/
 cp .copilot/command-runner/command-runner-interface.mjs ~/.copilot/command-runner/
@@ -31,7 +31,7 @@ test -f ~/.copilot/command-runner/workspaces.json \
 
 コピーされる初期設定は空のWorkspace registryです。対象プロジェクトのroot（`.git` または `package.json` があるディレクトリ）で `node ~/.copilot/command-runner/command-runner-v2.mjs workspace.ensure` を実行すると、Hookの初回確認後に内部IDが自動生成され登録されます。Workspace IDや `workspaces.json` の手編集は不要です。旧 `workspace-register <id>` は移行用に残します。この個人用ファイルはDANDORIリポジトリへコミットしません。
 
-Agent固有HookはPreview機能のため、VS Codeの `chat.useCustomAgentHooks` を `true` にします。Chat Diagnosticsで、`CommandRunner`が `~/.copilot/agents/CommandRunner.agent.md` から読み込まれていることを確認してください。
+Agent固有HookはPreview機能のため、VS Codeの `chat.useCustomAgentHooks` を `true` にします。Chat DiagnosticsでResearcher・WriterのHookを確認してください。旧 `CommandRunner.agent.md` はユーザー／WorkspaceのAgentディレクトリから削除してください。
 
 `COPILOT_HOME`を設定した場合、Runnerの設定・データ参照先だけが変わります。Runnerは `$COPILOT_HOME/command-runner/workspaces.json` を読み、実行出力を `$COPILOT_HOME/command-runner/executions/` 配下へ保存します。Agent・Runner・Hook本体のインストール先は引き続き `~/.copilot/` です。
 
@@ -132,7 +132,7 @@ AgentとHookが直接呼べるのは `command-runner-interface.mjs` だけです
 
 Runnerがターミナルに返すレスポンスにはサイズ上限があります。`list`は設定リビジョン`revision`を返し、2ページ目以降はその値を渡します。途中でコマンド一覧やWorkspaceが変わると`stale_listing`となり、その結果から未登録と断定できません。`list`は**実際のカレントディレクトリから選ばれたWorkspace内**のcommand IDを1回最大100件返し、`total`と、続きがある場合の`nextOffset`を返します。`query`はIDとdescriptionの大文字小文字を区別しない部分一致検索であり、候補を絞るだけです。**検索結果が0件でも、フィルタ付き・未取得ページあり・別Workspaceの結果なら「未登録」とは断定できません。** 完全に取得したフィルタなしの一覧か、実行Workspaceを確認したうえでの正確なIDの照会結果だけが、そのWorkspace内の存在・不在の根拠になります。ツールの失敗や対象Workspaceの不明は「未確認」として扱います。`describe`は公開定義と、管理操作用の`definitionHash`および実行前照合用の`executionHash`を返します。検索ミスを根拠にIDを推測したり、代替コマンドを新規登録したりしてはいけません。
 
-委譲された作業に複数の**正確な許可済みCommand ID**が含まれる場合、CommandRunnerはその中から必要なコマンドを選び、登録定義に収まる引数と実行順序を決められます。許可済みの一覧にないIDは、既に登録されていても実行できません。正確なWorkspaceやCommand IDの未登録を確認できた場合は、観測したエラー・照会Workspace・不足する登録情報を返し、現在の委譲を終了します。登録するか、追加承認を求めるか、再実行を委譲するかはOrchestratorの判断です。
+委譲された作業に複数の**正確な許可済みCommand ID**が含まれる場合、委譲されたWorkerはその中から必要なコマンドを選び、登録定義に収まる引数と実行順序を決められます。許可済みの一覧にないIDは、既に登録されていても実行できません。正確なWorkspaceやCommand IDの未登録を確認できた場合、当該Workerは委譲済みの登録操作であればその場で登録を開始できます。有効化にはHookを通じた人間承認が必要で、許可されていない操作は停止して報告します。
 
 ### コマンド管理
 
@@ -271,7 +271,7 @@ $COPILOT_HOME/command-runner/executions/<workspace-id>/<UTC-timestamp>_<UUID>/
 - Hookは、ターミナルのcwd・環境変数・shell・profile・バックグラウンド実行の上書きを拒否します。
 - コマンドは `spawn(..., shell: false)` で起動します。
 - timeoutまたは出力上限による停止時は、RunnerがコマンドのPOSIX process group全体へ停止を送り、固定猶予後に `SIGTERM` から `SIGKILL` へ昇格するため、通常の子孫processをbounded runの外へ残しません。意図的にdetachされた子孫processはこの保証の対象外です。
-- Agent固有Hookは固定Runnerのインターフェースだけを許可し、ユーザーレベルの制御ファイルを保護します。
+- 共通Hookは宣言済みの読取・検索・編集ツールを通し、ユーザーレベルRunner制御ファイルの編集を拒否し、ターミナルからは固定Runnerだけを許可します。
 - HookはLocalの`execute`・`terminal/execute`、実機で観測されたVS Code／Copilotの`run_in_terminal`、従来の`execute/runInTerminal`、Copilot harnessの`Bash`などのターミナルTool名に対して、同じ固定Runner検証を適用します。未認識ツールの拒否も維持し、両形式の許可判定フィールドを返します。ただし、静的テストだけではVS Code／Copilot実機がHookを呼び出して判定を強制するか確認できません。実際のツール名と許可・拒否を[conformanceの`CONF-024`](../../tests/conformance.md)で確認してください。既存インストールでは更新したHookを再配置し、Agentセッションを再読み込みします。
 - `output`は有効なexecution IDだけを受け取り、現在のWorkspaceのexecution領域配下だけを解決します。任意ファイルパスは受け付けません。
 - 実行出力は信頼できないデータとして扱い、後続コマンドの権限にはなりません。

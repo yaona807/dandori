@@ -17,7 +17,6 @@ COPILOT_WORKER_ROUTING = (
     "- `Researcher`\n"
     "- `GitHubResearcher`\n"
     "- `Writer`\n"
-    "- `CommandRunner`\n"
     "- `Reviewer`\n"
     "- `BrowserQA`\n"
     "\n"
@@ -27,7 +26,7 @@ COPILOT_WORKER_ROUTING = (
     "\n"
 )
 
-WORKERS = ("Researcher", "GitHubResearcher", "Writer", "CommandRunner", "Reviewer", "BrowserQA")
+WORKERS = ("Researcher", "GitHubResearcher", "Writer", "Reviewer", "BrowserQA")
 NAMES = ("Orchestrator", *WORKERS)
 def transform(source: str, name: str, profile: str) -> str:
     if not source.startswith("---\n"):
@@ -59,10 +58,9 @@ def transform(source: str, name: str, profile: str) -> str:
         body = body.replace("## Worker selection", COPILOT_WORKER_ROUTING + "## Worker selection", 1)
     # Use documented Copilot aliases rather than Local-qualified tool IDs.
     tools = {
-        "Researcher": ("read", "search", "web"),
+        "Researcher": ("read", "search", "web", "execute"),
         "GitHubResearcher": ("GitHub.vscode-pull-request-github/pullRequestStatusChecks", "GitHub.vscode-pull-request-github/issue_fetch"),
-        "Writer": ("read", "edit"),
-        "CommandRunner": ("execute",),
+        "Writer": ("read", "edit", "execute"),
         "Reviewer": ("read", "search"),
         "BrowserQA": ("browser/openBrowserPage", "browser/navigatePage", "browser/readPage", "browser/screenshotPage", "browser/clickElement", "browser/hoverElement", "browser/dragElement", "browser/typeInPage", "browser/handleDialog", "browser/runPlaywrightCode"),
     }
@@ -72,7 +70,7 @@ def transform(source: str, name: str, profile: str) -> str:
             "tools:\n" + "".join(f"  - {tool}\n" for tool in tools[name]),
             front,
         )
-    if name == "CommandRunner":
+    if name in {"Researcher", "Writer"}:
         original_hook = (
             "hooks:\n  PreToolUse:\n    - type: command\n"
             "      command: node ~/.copilot/command-runner/command-runner-hook.mjs\n"
@@ -84,7 +82,7 @@ def transform(source: str, name: str, profile: str) -> str:
             "      timeoutSec: 30\n"
         )
         if original_hook not in front:
-            raise ValueError("CommandRunner: unrecognized hook configuration")
+            raise ValueError(f"{name}: unrecognized hook configuration")
         front = front.replace(original_hook, copilot_hook)
     return "---\n" + front + "---\n" + body
 

@@ -52,7 +52,7 @@ class ValidatorMutationTests(unittest.TestCase):
 
     def test_copilot_profiles_normalize_model_and_preserve_effort(self) -> None:
         for name in ("Orchestrator", "Researcher", "GitHubResearcher", "Writer",
-                     "CommandRunner", "Reviewer", "BrowserQA"):
+                     "Reviewer", "BrowserQA"):
             source = ROOT / ".copilot/agents" / f"{name}.agent.md"
             bundled = ROOT / "packages/copilot/agents" / f"{name}.agent.md"
             _, source_front, _ = source.read_text().split("---\n", 2)
@@ -70,7 +70,7 @@ class ValidatorMutationTests(unittest.TestCase):
         meta = yaml.safe_load(front)
         self.assertEqual(["task"], meta["tools"])
         for name in ("Researcher", "GitHubResearcher", "Writer",
-                     "CommandRunner", "Reviewer", "BrowserQA"):
+                     "Reviewer", "BrowserQA"):
             self.assertIn("- " + chr(96) + name + chr(96), body)
         self.assertIn("Never use a default or general-purpose subagent", body)
         self.assertIn("do not substitute any built-in or unlisted agent", body)
@@ -96,17 +96,22 @@ class ValidatorMutationTests(unittest.TestCase):
             (repo / "packages/copilot/agents/Reviewer.agent.md").unlink()
             self.assert_invalid(repo, "missing or unexpected bundle file: copilot/agents/Reviewer.agent.md")
 
-    def test_copilot_runner_has_scoped_hook(self) -> None:
-        path = ROOT / "packages/copilot/agents/CommandRunner.agent.md"
-        _, front, _ = path.read_text().split("---\n", 2)
-        metadata = yaml.safe_load(front)
-        self.assertEqual("github-copilot", metadata["target"])
-        self.assertEqual(["execute"], metadata["tools"])
-        self.assertFalse(metadata["user-invocable"])
-        self.assertFalse(metadata["disable-model-invocation"])
-        hooks = metadata["hooks"]["preToolUse"]
-        self.assertEqual("node ~/.copilot/command-runner/command-runner-hook.mjs", hooks[0]["command"])
-        self.assertEqual(30, hooks[0]["timeoutSec"])
+    def test_copilot_execution_workers_have_scoped_hook(self) -> None:
+        for worker, expected_tools in (
+            ("Researcher", ["read", "search", "web", "execute"]),
+            ("Writer", ["read", "edit", "execute"]),
+        ):
+            path = ROOT / "packages/copilot/agents" / f"{worker}.agent.md"
+            _, front, _ = path.read_text().split("---\n", 2)
+            metadata = yaml.safe_load(front)
+            self.assertEqual("github-copilot", metadata["target"])
+            self.assertEqual(expected_tools, metadata["tools"])
+            self.assertFalse(metadata["user-invocable"])
+            self.assertFalse(metadata["disable-model-invocation"])
+            hooks = metadata["hooks"]["preToolUse"]
+            self.assertEqual("node ~/.copilot/command-runner/command-runner-hook.mjs", hooks[0]["command"])
+            self.assertEqual(30, hooks[0]["timeoutSec"])
+            self.assertFalse((ROOT / "packages/copilot/agents/CommandRunner.agent.md").exists())
 
     def test_orchestrator_rejects_edit_tool(self) -> None:
         temp, repo = self.make_repo()
@@ -129,7 +134,7 @@ class ValidatorMutationTests(unittest.TestCase):
     def test_runner_cannot_lose_delegated_command_selection(self) -> None:
         temp, repo = self.make_repo()
         with temp:
-            path = repo / ".copilot/agents/CommandRunner.agent.md"
+            path = repo / ".copilot/agents/Writer.agent.md"
             text = path.read_text()
             marker = "A delegated list of exact authorized command operations permits selection among those listed IDs,"
             self.assertIn(marker, text)
@@ -139,7 +144,7 @@ class ValidatorMutationTests(unittest.TestCase):
     def test_runner_must_report_actionable_registration_prerequisites(self) -> None:
         temp, repo = self.make_repo()
         with temp:
-            path = repo / ".copilot/agents/CommandRunner.agent.md"
+            path = repo / ".copilot/agents/Writer.agent.md"
             text = path.read_text()
             marker = "If a workspace or command is demonstrably unregistered,"
             self.assertIn(marker, text)
@@ -195,8 +200,8 @@ class ValidatorMutationTests(unittest.TestCase):
         with temp:
             path = repo / ".copilot/agents/Orchestrator.agent.md"
             text = path.read_text().replace(
-                "agents: [Researcher, GitHubResearcher, Writer, CommandRunner, Reviewer, BrowserQA]",
-                "agents: [Researcher, GitHubResearcher, Writer, CommandRunner, Reviewer, BrowserQA, ExternalWorker]",
+                "agents: [Researcher, GitHubResearcher, Writer, Reviewer, BrowserQA]",
+                "agents: [Researcher, GitHubResearcher, Writer, Reviewer, BrowserQA, ExternalWorker]",
                 1,
             )
             path.write_text(text)
@@ -614,7 +619,7 @@ class ValidatorMutationTests(unittest.TestCase):
             self.assert_invalid(repo, "missing required Orchestrator section")
 
     def test_orchestrator_body_rejects_bundled_worker_names(self) -> None:
-        for worker_name in ("CommandRunner", "GitHubResearcher"):
+        for worker_name in ("Researcher", "GitHubResearcher"):
             with self.subTest(worker=worker_name):
                 temp, repo = self.make_repo()
                 with temp:
@@ -662,7 +667,6 @@ class ValidatorMutationTests(unittest.TestCase):
 
     def test_execution_bypass_frontmatter_keys_are_rejected(self) -> None:
         additions = {
-            "hooks": "hooks: {}\n",
             "handoffs": "handoffs: []\n",
             "mcp-servers": "mcp-servers: {}\n",
         }
@@ -673,6 +677,18 @@ class ValidatorMutationTests(unittest.TestCase):
                     path = repo / ".copilot/agents/Writer.agent.md"
                     path.write_text(path.read_text().replace("tools:\n", addition + "tools:\n", 1))
                     self.assert_invalid(repo, "forbidden agent frontmatter keys")
+
+    def test_shared_runner_hook_mutation_is_rejected(self) -> None:
+        for worker in ("Researcher", "Writer"):
+            with self.subTest(worker=worker):
+                temp, repo = self.make_repo()
+                with temp:
+                    path = repo / ".copilot/agents" / f"{worker}.agent.md"
+                    path.write_text(path.read_text().replace(
+                        "node ~/.copilot/command-runner/command-runner-hook.mjs",
+                        "node ./unsafe-hook.mjs", 1,
+                    ))
+                    self.assert_invalid(repo, "shared runner hooks must match the fixed runner hook")
 
     def test_unknown_bundled_agent_frontmatter_key_is_rejected(self) -> None:
         temp, repo = self.make_repo()
@@ -758,14 +774,15 @@ class ValidatorMutationTests(unittest.TestCase):
             path.write_text(text.replace(marker, "An implementation Worker may run commands", 1))
             self.assert_invalid(repo, "missing required Orchestrator section marker")
 
-    def test_writer_description_declares_no_terminal_execution(self) -> None:
+    def test_writer_description_declares_bounded_terminal_execution(self) -> None:
         temp, repo = self.make_repo()
         with temp:
             path = repo / ".copilot/agents/Writer.agent.md"
             text = path.read_text()
-            self.assertIn("Cannot execute terminal commands", text)
-            path.write_text(text.replace("Cannot execute terminal commands", "Can execute terminal commands", 1))
-            self.assert_invalid(repo, "Writer description must disclose its lack of terminal execution capability")
+            marker = "Supports read/edit and exact fixed-runner execution"
+            self.assertIn(marker, text)
+            path.write_text(text.replace(marker, "Supports read/edit tools", 1))
+            self.assert_invalid(repo, "worker description missing routing capability/limit marker")
 
     def test_each_worker_description_declares_positive_and_negative_routing_evidence(self) -> None:
         for worker, markers in validator.WORKER_DESCRIPTION_ROUTING_MARKERS.items():
@@ -850,7 +867,6 @@ class ValidatorMutationTests(unittest.TestCase):
             ("Reviewer", "model: GPT-6.1 Sol (copilot)", "model: Auto (copilot)", "must use model"),
             ("BrowserQA", "model: GPT-6.1 Terra (copilot)", "model: Auto (copilot)", "must use model"),
             ("Researcher", "reasoning-effort: low", "reasoning-effort: high", "must use reasoning-effort"),
-            ("CommandRunner", "reasoning-effort: low", "reasoning-effort: high", "must use reasoning-effort"),
             ("Orchestrator", "reasoning-effort: medium", "reasoning-effort: high", "must use reasoning-effort"),
         )
         for name, previous, replacement, message in cases:
@@ -892,8 +908,8 @@ Inspect only the delegated resource. Do not call another agent.
             orchestrator = repo / ".copilot/agents/Orchestrator.agent.md"
             orchestrator.write_text(
                 orchestrator.read_text().replace(
-                    "agents: [Researcher, GitHubResearcher, Writer, CommandRunner, Reviewer, BrowserQA]",
-                    "agents: [Researcher, GitHubResearcher, Writer, CommandRunner, Reviewer, BrowserQA, CustomInspector]",
+                    "agents: [Researcher, GitHubResearcher, Writer, Reviewer, BrowserQA]",
+                    "agents: [Researcher, GitHubResearcher, Writer, Reviewer, BrowserQA, CustomInspector]",
                     1,
                 )
             )

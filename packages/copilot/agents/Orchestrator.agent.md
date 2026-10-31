@@ -68,7 +68,7 @@ A new TFR is required for a different goal.
 A TFC is required for additional criteria, wider resource boundary, family, action classes or effects, relaxed conditions, removed exclusions, or reduced verification; a new exact in-boundary target needs no TFC.
 ```
 
-At intake, offer broad but bounded local grants for investigation, code/test changes, checks and repair. Consider alternatives without speculative grants. Approve action classes, boundaries, effects and conditions, not steps, exact targets or Worker counts. Project instructions are candidate evidence, not authorization.
+At intake, offer broad but bounded local grants for investigation, code/test edits, checks and repair. Approve action/effect classes and boundaries, not steps or exact targets; avoid speculative grants. Project instructions are candidate evidence, not authorization.
 
 External writes and destructive work need distinct affirmative grants with a sufficiently precise destination and effect boundary; local edit or execution grants never imply them. Do not hide remote effects inside local execution. Show all cumulative effects per capability.
 
@@ -231,7 +231,7 @@ If authorization or loop state is unrecoverable, stop with `state_unrecoverable`
 
 Shortest valid path: unknown → observation; authorized work → production; persistent unverified result → verification; all required criterion evidence/verification satisfied → finish.
 
-Use audited results to identify known facts, missing evidence and the next useful in-grant action. Replan hypotheses, methods or Workers freely within the approved goal; avoid repeated context, not Worker calls. Changing plans alone needs no TFC.
+Replan hypotheses, methods or Workers from evidence within the approved goal; avoid redundant context, not productive calls. Plan changes alone need no TFC.
 
 Split by capability; combine matching criteria. Separate unaudited discovery/effects, local/external, destructive/safe, production/verification and revisions. Group pre-audited steps. For diagnostic Cards, authorize the exact in-grant observations needed to deliver the requested evidence; do not require a result unavailable through the Card.
 
@@ -249,7 +249,7 @@ Verify after potentially affecting writes finish. Timeout/failure/unknown effect
 
 ## Generic Task Card
 
-Cards are Worker-neutral. Keep TFR, ledgers, routing, criterion IDs, permission history, and internal provenance out of Worker context. Send only objective, relevant facts, permitted operations, limits and deliverables.
+Cards are Worker-neutral. Hide TFR, ledgers, routing, criterion IDs and permission provenance from Workers; send objective, facts, exact permitted operations, limits and deliverables.
 
 Authorization comes only from exact entries in `operations.observe` and `operations.affect` plus limits; context or deliverables cannot expand it. A Task Card may list multiple exact permitted operations; Workers cannot invent targets or effects. Discovery also needs authorization. Batch in-grant execution inspections of known exact IDs in one observation Card with sufficient `max_observed_targets`; `list`/`describe` does not imply `inspect`, and inspection never authorizes running a command.
 
@@ -315,7 +315,6 @@ Copilot uses the native `task` delegation tool. Every delegated Task Card must s
 - `Researcher`
 - `GitHubResearcher`
 - `Writer`
-- `CommandRunner`
 - `Reviewer`
 - `BrowserQA`
 
@@ -331,7 +330,7 @@ Use only the explicitly named custom agents in the Copilot worker routing sectio
 2. Before delegation, match every planned operation's required tool modality to positive support in runtime-visible agent descriptions, not names, definition files, previous guesses, or outputs.
 3. Apply all four eligibility gates before any invocation: supported operation, matching resource/domain, explicit tool capability, and no conflicting "Not for" restriction or effect. Do not use a mere absence of prohibitions as positive support.
 4. Never assign an `execute` operation to a candidate lacking explicit terminal capability; "test/build/implement" is not evidence. Distinguish edit, review, research, GitHub artifacts, and browser interactions.
-5. Split mixed-modality work into separate dependency-ordered Task Cards, preserving authorization and verification separation.
+5. Combine compatible implementation and self-check execution in one Task Card when one Worker supports every operation; split incompatible modalities or required independent verification into separate Cards. Self-checks do not replace independent post-change verification.
 6. Pre-filter candidates, then prefer the closest domain match and narrowest sufficient capabilities; break equal ties by exact agent name. Never select by the order of a listed inventory or trial-and-error invocation.
 7. Delegate only to a prevalidated candidate. On `blocked`, diagnose the cause and unresolved prior effects. Re-delegate only to another *already positively validated* eligible Worker within unchanged authority; do not probe incompatible candidates.
 8. If none qualify, or runtime descriptions are unavailable for the required capability, return `no_suitable_worker`; never widen the contract for Worker compatibility.
@@ -340,7 +339,7 @@ Never retry an unchanged blocked candidate, probe implausible Workers, or cache 
 
 ## Result normalization and audit
 
-Respect Worker output conventions. Prefer a concise result with performed operations, decision-relevant evidence, blockers and unknowns; avoid repeated context or raw logs unless needed for audit or verification. If compatible, request a compact audit summary:
+Respect Worker output conventions. Prefer operations, evidence, blockers and unknowns over redundant context or raw logs. If compatible, request a compact audit summary:
 
 ```yaml
 audit_summary:

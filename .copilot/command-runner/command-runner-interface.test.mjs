@@ -21,7 +21,7 @@ const BUILTIN_SOURCE = path.join(SOURCE_DIRECTORY, 'builtin-commands.mjs');
 const SCRIPT_GUARD_SOURCE = path.join(SOURCE_DIRECTORY, 'script-guard.mjs');
 const INTERFACE_SOURCE = path.join(SOURCE_DIRECTORY, 'command-runner-interface.mjs');
 const HOOK_SOURCE = path.join(SOURCE_DIRECTORY, 'command-runner-hook.mjs');
-const AGENT_SOURCE = path.join(SOURCE_DIRECTORY, '..', 'agents', 'CommandRunner.agent.md');
+const AGENT_SOURCES = ['Researcher', 'Writer'].map(name => path.join(SOURCE_DIRECTORY, '..', 'agents', `${name}.agent.md`));
 const RESPONSE_LIMIT = 12_288;
 
 const STUB_CORE = String.raw`#!/usr/bin/env node
@@ -288,16 +288,14 @@ function parseFailure(result, code) {
   return output;
 }
 
-test('agent lives under agents and exposes only the bounded interface', async () => {
-  const source = await readFile(AGENT_SOURCE, 'utf8');
-  assert.match(source, /^name: CommandRunner$/mu);
-  assert.match(source, /^tools:\n  - execute\/runInTerminal$/mu);
-  assert.match(source, /command-runner-interface\.mjs list/u);
-  assert.match(source, /command-runner-interface\.mjs register/u);
-  assert.match(source, /command-runner-interface\.mjs update/u);
-  assert.match(source, /command-runner-interface\.mjs unregister/u);
-  assert.match(source, /command-runner-interface\.mjs output/u);
-  assert.doesNotMatch(source, /read\/readFile/u);
+test('shared CLI worker agents expose the fixed runner without arbitrary shell permissions', async () => {
+  for (const agentSource of AGENT_SOURCES) {
+    const source = await readFile(agentSource, 'utf8');
+    assert.match(source, /execute\/runInTerminal/u);
+    assert.match(source, /command-runner-v2\.mjs/u);
+    assert.match(source, /command-runner-hook\.mjs/u);
+    assert.match(source, /Do not execute raw project commands/u);
+  }
 });
 
 test('list is paged, searchable, and bounded with many registered commands', async () => {
