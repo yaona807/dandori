@@ -2,7 +2,7 @@
 
 [日本語](./README_ja.md)
 
-This directory contains the fixed Node.js runner, its bounded management/execution interface, its agent-scoped `PreToolUse` hook, and the example personal workspace configuration. The `CommandRunner` agent definition lives in `../agents/CommandRunner.agent.md` with the other DANDORI agents.
+This directory contains the fixed Node.js runner, its bounded management/execution interface, its agent-scoped `PreToolUse` hook, and the example personal workspace configuration. Researcher and Writer share this CLI and its Hook; no dedicated execution agent is required.
 
 The installed files live under `~/.copilot/`. No CommandRunner control files or personal command allowlists need to be added to a project repository.
 
@@ -18,7 +18,7 @@ Install the agent with the other DANDORI agents, then install the fixed runner a
 
 ```bash
 mkdir -p ~/.copilot/agents ~/.copilot/command-runner
-cp .copilot/agents/CommandRunner.agent.md ~/.copilot/agents/
+cp .copilot/agents/{Researcher,Writer}.agent.md ~/.copilot/agents/
 cp .copilot/command-runner/command-runner.mjs ~/.copilot/command-runner/
 cp .copilot/command-runner/builtin-commands.mjs ~/.copilot/command-runner/
 cp .copilot/command-runner/command-runner-interface.mjs ~/.copilot/command-runner/
@@ -31,7 +31,7 @@ test -f ~/.copilot/command-runner/workspaces.json \
 
 The copied configuration starts with an empty workspace registry. Run `node ~/.copilot/command-runner/command-runner-v2.mjs workspace.ensure` from the exact project root (containing `.git` or `package.json`) to auto-register the workspace after the hook's first-use confirmation. The runner chooses an internal ID and canonical root; no manual `workspaces.json` edit or workspace ID is required. Legacy manual `workspace-register <id>` remains available for migration. This personal file is not part of the DANDORI repository.
 
-Set `chat.useCustomAgentHooks` to `true` in VS Code because agent-scoped hooks are a preview feature. Confirm in Chat Diagnostics that `CommandRunner` is loaded from `~/.copilot/agents/CommandRunner.agent.md`.
+Set `chat.useCustomAgentHooks` to `true` in VS Code because agent-scoped hooks are a preview feature. Confirm in Chat Diagnostics that both Researcher and Writer load their hooks. Remove any previously installed `CommandRunner.agent.md` from user/workspace agent directories.
 
 If `COPILOT_HOME` is set, only the runner data/configuration lookup changes. The runner reads `$COPILOT_HOME/command-runner/workspaces.json` and stores execution output below `$COPILOT_HOME/command-runner/executions/`. The installed Agent, runner, and hook paths remain under `~/.copilot/`.
 
@@ -136,7 +136,7 @@ All interface responses are bounded below the terminal spill threshold. `list` i
 
 `definitionHash` covers the full stored definition for management compare-and-swap, including its description. `executionHash` remains available for audit and legacy guarded execution, but is **not required to run a command**. The current command definition is validated before execution; legacy callers using explicit hashes retain stale-definition rejection. New Worker invocations do not copy or construct hashes.
 
-When a delegated request authorizes several exact registered command IDs, the CommandRunner worker may select from those IDs and choose validated arguments and execution order. Registration and the current flow's execution authorization are separate: an ID merely being registered never grants execution permission. After a confirmed missing workspace or command registration, the worker reports the selected workspace/cwd evidence, exact lookup or complete unfiltered discovery result, and required registration facts. Partial or filtered misses remain unknown. The worker never registers automatically, widens authorization, or executes a follow-up command without a new delegation. The Orchestrator handles approval and subsequent Task Cards.
+When a delegated request authorizes several exact registered command IDs, the delegated Worker may select from those IDs and choose validated arguments and execution order. Registration and the current flow's execution authorization are separate: an ID merely being registered never grants execution permission. After a confirmed missing workspace or command registration, the worker reports the selected workspace/cwd evidence, exact lookup or complete unfiltered discovery result, and required registration facts. Partial or filtered misses remain unknown. A Worker may initiate an exact delegated registration in the same invocation; activation still requires host-mediated human approval. Execution beyond delegated operations remains blocked.
 
 ## Command management
 
@@ -273,7 +273,7 @@ The cache is temporary observation data, not an audit log. Before a new run, the
 - Terminal working-directory, environment, shell, profile, and background overrides are denied by the hook.
 - Commands are started with `spawn(..., shell: false)`.
 - On timeout or output-limit termination, the runner stops the command's POSIX process group, escalating from `SIGTERM` to `SIGKILL` after a fixed grace period so ordinary descendants do not outlive the bounded run. Deliberately detached descendants are outside this guarantee.
-- The agent-scoped hook permits only the fixed runner interface and protects the user-level control files.
+- The shared agent-scoped hook permits declared read, search and edit tools, guards user-level runner control files against edits, and restricts terminal calls to the fixed runner.
 - The hook validates Local execution aliases (`execute` and `terminal/execute`), the observed VS Code/Copilot `run_in_terminal` alias, and legacy `execute/runInTerminal` with the same strict fixed-interface policy as Copilot harness terminal tool names such as `Bash`; unknown tools still fail closed. It emits permission decisions in both hook envelope formats. Static tests do not establish that a particular VS Code/Copilot installation invokes or enforces the hook; inspect actual tool names and verify both allowed and denied execution with `CONF-024` in [`tests/conformance.md`](../../tests/conformance.md). Existing installations must reinstall the updated hook and reload their agent session.
 - `output` accepts only a valid execution ID and only resolves output under the current workspace's execution directory; arbitrary paths are not accepted.
 - Execution output is untrusted data and does not grant authority for follow-up commands.

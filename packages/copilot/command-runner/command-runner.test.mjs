@@ -23,7 +23,7 @@ const SCRIPT_GUARD_SOURCE = path.join(SOURCE_DIRECTORY, 'script-guard.mjs');
 const V2_SOURCE = path.join(SOURCE_DIRECTORY, 'command-runner-v2.mjs');
 const INTERFACE_SOURCE = path.join(SOURCE_DIRECTORY, 'command-runner-interface.mjs');
 const HOOK_SOURCE = path.join(SOURCE_DIRECTORY, 'command-runner-hook.mjs');
-const AGENT_SOURCE = path.join(SOURCE_DIRECTORY, '..', 'agents', 'CommandRunner.agent.md');
+const AGENT_SOURCES = ['Researcher', 'Writer'].map(name => path.join(SOURCE_DIRECTORY, '..', 'agents', `${name}.agent.md`));
 
 async function makeFixture(configure = (configuration) => configuration) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'command-runner-test-'));
@@ -54,10 +54,9 @@ async function makeFixture(configure = (configuration) => configuration) {
     path.join(home, 'command-runner', 'command-runner-hook.mjs'),
     await readFile(HOOK_SOURCE),
   );
-  await writeFile(
-    path.join(home, 'agents', 'CommandRunner.agent.md'),
-    await readFile(AGENT_SOURCE),
-  );
+  for (const agentSource of AGENT_SOURCES) {
+    await writeFile(path.join(home, 'agents', path.basename(agentSource)), await readFile(agentSource));
+  }
   await writeFile(
     path.join(alpha, 'echo-args.mjs'),
     'process.stdout.write(JSON.stringify(process.argv.slice(2)));\n',
@@ -288,31 +287,17 @@ async function withFixture(callback, configure) {
   }
 }
 
-test('distributed agent is user-level, agent-scoped, and fixed-runner-only', async () => {
-  const source = await readFile(AGENT_SOURCE, 'utf8');
-  assert.match(source, /^name: CommandRunner$/mu);
-  assert.match(source, /^user-invocable: false$/mu);
-  assert.match(source, /^disable-model-invocation: true$/mu);
-  assert.match(source, /tools:\n  - execute\/runInTerminal\n  - execute\nagents: \[\]\nhooks:/u);
-  assert.match(source, /command: node ~\/\.copilot\/command-runner\/command-runner-hook\.mjs/u);
-  assert.match(source, /timeout: 30/u);
-  assert.match(source, /node ~\/\.copilot\/command-runner\/command-runner-interface\.mjs list/u);
-  assert.match(source, /node ~\/\.copilot\/command-runner\/command-runner-interface\.mjs output/u);
-  assert.match(source, /Do not execute a raw project command\./u);
-  assert.match(source, /description: >-[\s\S]*?Use for fixed-runner command execution/u);
-  assert.match(source, /Supports approved registered commands/u);
-  assert.match(source, /Not for arbitrary shell/u);
-  assert.match(source, /The fixed runner rejects a workspace mismatch before disclosing command data/u);
-  assert.match(source, /require evidence that it is the same directory before registration/u);
-  assert.match(source, /A filtered or incomplete miss proves no absence/u);
-  assert.match(source, /Pass the delegated workspace ID as a mandatory runtime assertion/u);
-  assert.match(source, /Do not claim a command is unregistered solely from a query miss/u);
-  assert.match(source, /Never use the expected workspace ID to select or override/u);
-  assert.match(source, /Never request a terminal working-directory/u);
-  assert.doesNotMatch(
-    source,
-    /\b(?:DANDORI|Orchestrator|Task Card|TFR|TFC|Flow Ledger)\b/u,
-  );
+test('distributed Researcher and Writer share the fixed runner CLI hook', async () => {
+  for (const agentSource of AGENT_SOURCES) {
+    const source = await readFile(agentSource, 'utf8');
+    assert.match(source, /^user-invocable: false$/mu);
+    assert.match(source, /^disable-model-invocation: true$/mu);
+    assert.match(source, /  - execute\/runInTerminal\n  - execute\nagents: \[\]\nhooks:/u);
+    assert.match(source, /command-runner-hook\.mjs/u);
+    assert.match(source, /node ~\/\.copilot\/command-runner\/command-runner-v2\.mjs/u);
+    assert.match(source, /Do not execute raw project commands/u);
+    assert.doesNotMatch(source, /\b(?:DANDORI|Orchestrator|Task Card|TFR|TFC|Flow Ledger)\b/u);
+  }
 });
 
 test('list exposes commands only for the current workspace', async () => {
@@ -1148,9 +1133,9 @@ test('hook denies terminal execution overrides and background execution', async 
   });
 });
 
-test('hook permits only explicit read-only non-terminal tools', async () => {
+test('shared hook allows ordinary read, search and edit tools while protecting runner config', async () => {
   await withFixture(async (fixture) => {
-    for (const toolName of ['read/readFile', 'Read', 'view']) {
+    for (const toolName of ['read/readFile', 'Read', 'view', 'read', 'search', 'search/codebase', 'web', 'edit', 'Edit', 'edit/createFile', 'edit/createDirectory']) {
       const read = runHook(fixture, {
         hook_event_name: 'PreToolUse',
         tool_name: toolName,
@@ -1183,7 +1168,7 @@ test('hook permits only explicit read-only non-terminal tools', async () => {
         files: [{ path: 'src/example.js', replacement: 'export {};' }],
       },
     });
-    assert.equal(JSON.parse(unrelated.stdout).permissionDecision, 'deny');
+    assert.deepEqual(JSON.parse(unrelated.stdout), { continue: true });
   });
 });
 
@@ -1208,7 +1193,7 @@ test('hook fails closed for unknown terminal names in both harness envelopes', a
       },
       {
         hook_event_name: 'PreToolUse',
-        tool_name: 'edit/editFiles',
+        tool_name: 'edit/unrecognizedTool',
         tool_input: { files: [{ path: 'src/example.js', replacement: 'unsafe' }] },
       },
     ]) {

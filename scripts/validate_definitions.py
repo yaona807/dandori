@@ -367,9 +367,11 @@ BUNDLED_WORKER_REQUIRED_SECTION_MARKERS: dict[str, dict[str, tuple[str, ...]]] =
     },
     "Researcher": {
         "## Delegated task contract": ("Treat the delegated request as the complete task boundary.",),
-        "## Strict rules": (
+        "## Fixed runner operations": (
             "A delegated list of exact authorized command operations permits selection among those listed IDs,",
             "If a workspace or command is demonstrably unregistered,",
+        ),
+        "## Strict rules": (
             BOUNDARY_ENFORCEMENT_POLICY,
             "ordinary in-boundary access needs no additional alias proof.",
             "require tool-supported evidence that it denotes the same resource.",
@@ -398,9 +400,11 @@ BUNDLED_WORKER_REQUIRED_SECTION_MARKERS: dict[str, dict[str, tuple[str, ...]]] =
     },
     "Writer": {
         "## Delegated task contract": ("Treat the delegated request as the complete task boundary.",),
-        "## Strict rules": (
+        "## Fixed runner operations": (
             "A delegated list of exact authorized command operations permits selection among those listed IDs,",
             "If a workspace or command is demonstrably unregistered,",
+        ),
+        "## Strict rules": (
             BOUNDARY_ENFORCEMENT_POLICY,
             "ordinary in-boundary access needs no additional alias proof.",
             "require tool-supported evidence that it denotes the same resource.",
