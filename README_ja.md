@@ -18,7 +18,7 @@
 
 DANDORI は、VS Code上のGitHub Copilot Custom Agents向けOrchestratorレイヤーです。
 
-人間が承認したGoalと能力・リソース境界を、厳密なTask Cardへ変換します。Orchestratorは契約内で自律的に調査・計画・再計画し、各Workerは毎回指定された対象・Action・Effectだけを実行します。
+人間が承認したGoalと能力・リソース境界を、厳密なTask Cardへ変換します。Orchestratorは契約内で自律的に調査・計画・再計画し、Workerには指定された対象・Action・Effectの範囲で実行するよう指示し、報告された操作を監査します。
 
 DANDORI の中核は **Orchestrator** です。同梱している Worker は reference implementation です。そのまま使うことも、既存の Custom Agent へ置き換えることも、専用 Worker を追加することもできます。Orchestrator へ Worker の内部詳細を埋め込む必要はありません。
 
@@ -537,7 +537,7 @@ Validatorが証明するのは、次の内容です。
 
 ## セキュリティ境界
 
-DANDORI は委譲範囲を狭め、逸脱の検出と停止を容易にしますが、OSレベルのサンドボックスではありません。tool制限、Workspace Trust、承認設定、diff確認など、プラットフォーム側の制御も引き続き重要です。
+Task Cardはモデルへの指示と結果監査の境界であり、すべての編集ツールでファイル単位の許可を強制する仕組みではありません。DANDORIはOSレベルのサンドボックスではなく、実際の強制制御は対応するツール、Hook、ホストの権限設定、Workspace Trust、diff確認などにも依存します。
 
 DANDORI はWorkerの逸脱を完全に不可能にすると主張しません。契約を狭め、発見と作用を分離し、Workerが報告した操作を監査し、包含関係を確認できない場合に停止します。
 
