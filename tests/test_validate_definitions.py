@@ -102,7 +102,7 @@ class ValidatorMutationTests(unittest.TestCase):
             ("Writer", ["read", "edit", "execute"]),
         ):
             path = ROOT / "packages/copilot/agents" / f"{worker}.agent.md"
-            _, front, _ = path.read_text().split("---\\n", 2)
+            _, front, _ = path.read_text().split("---\n", 2)
             metadata = yaml.safe_load(front)
             self.assertEqual("github-copilot", metadata["target"])
             self.assertEqual(expected_tools, metadata["tools"])
@@ -667,15 +667,15 @@ class ValidatorMutationTests(unittest.TestCase):
 
     def test_execution_bypass_frontmatter_keys_are_rejected(self) -> None:
         additions = {
-            "handoffs": "handoffs: []\\n",
-            "mcp-servers": "mcp-servers: {}\\n",
+            "handoffs": "handoffs: []\n",
+            "mcp-servers": "mcp-servers: {}\n",
         }
         for key, addition in additions.items():
             with self.subTest(key=key):
                 temp, repo = self.make_repo()
                 with temp:
                     path = repo / ".copilot/agents/Writer.agent.md"
-                    path.write_text(path.read_text().replace("tools:\\n", addition + "tools:\\n", 1))
+                    path.write_text(path.read_text().replace("tools:\n", addition + "tools:\n", 1))
                     self.assert_invalid(repo, "forbidden agent frontmatter keys")
 
     def test_shared_runner_hook_mutation_is_rejected(self) -> None:
