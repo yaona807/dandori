@@ -82,12 +82,22 @@ class ValidatorMutationTests(unittest.TestCase):
                         builder.transform(mutated, "Orchestrator", "copilot")
 
     def test_pending_card_criterion_refs_derive_from_operations(self) -> None:
-        for relative in (".copilot/agents/Orchestrator.agent.md", "packages/local/agents/Orchestrator.agent.md", "packages/copilot/agents/Orchestrator.agent.md"):
+        """The pending Card carries per-operation provenance, not a second writable criterion list."""
+        for relative in (
+            ".copilot/agents/Orchestrator.agent.md",
+            "packages/local/agents/Orchestrator.agent.md",
+            "packages/copilot/agents/Orchestrator.agent.md",
+        ):
             body = (ROOT / relative).read_text(encoding="utf-8")
-            state = body.split("## Session state and concurrency", 1)[1].split("## Result audit and verification", 1)[0]
-            self.assertNotIn("      criterion_refs: []\\n      expected_delta:", state)
-            self.assertIn("operation_provenance:", state)
-            self.assertIn("criterion_refs: []", state)
+            state = body.split("## Session state and concurrency", 1)[1].split(
+                "## Result audit and verification", 1
+            )[0]
+            schema = state.split("```yaml", 1)[1].split("```", 1)[0]
+            pending = next(iter(yaml.safe_load(schema)["flow_ledger"]["pending_invocations"].values()))
+            self.assertNotIn("criterion_refs", pending)
+            self.assertEqual({}, pending["expected_delta"])
+            operations = pending["operation_provenance"]
+            self.assertIn("criterion_refs", next(iter(operations.values())))
 
     def test_flow_ledger_does_not_duplicate_contract_or_operation_authority(self) -> None:
         for relative in (
