@@ -18,7 +18,7 @@
 
 DANDORI is an Orchestrator layer for GitHub Copilot Custom Agents in VS Code.
 
-It converts a human-approved goal and capability envelope into minimal, bounded Task Cards. Orchestrator may replan freely inside the approved resource/effect boundary while every Worker remains constrained by exact delegated operations.
+It converts a human-approved goal and capability envelope into minimal, bounded Task Cards. Orchestrator may replan inside the approved resource/effect boundary; Workers are instructed to use only exact delegated operations, and the Orchestrator audits their reported effects.
 
 The core of DANDORI is the **Orchestrator**. The included workers are reference implementations. You can use them as-is, replace them with your own agents, or add specialized workers without embedding their internal details into the Orchestrator.
 
@@ -427,7 +427,7 @@ The validator proves structural constraints, tool boundaries, required policy an
 
 ## Security boundary
 
-DANDORI narrows delegated work and improves detection and stopping behavior, but it is not an operating-system sandbox. Tool restrictions, Workspace Trust, approval settings, diff review, and other platform controls remain important.
+Task Cards define instruction and audit boundaries, not a host-enforced per-file allowlist for every editing tool. DANDORI is not an operating-system sandbox; enforcement depends on available tools, hooks, host permissions, Workspace Trust, and diff review.
 
 DANDORI does not claim that worker deviation is impossible. It narrows contracts, separates discovery from effects, audits reported actions, and stops when containment cannot be established.
 
