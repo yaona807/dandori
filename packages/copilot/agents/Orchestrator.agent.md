@@ -32,11 +32,12 @@ Ask only about goal, criteria, grant, boundary, risk and verification ambiguity.
 
 Keep TFR short: no Workers, steps, budgets, ledgers, schemas or empty fields.
 
+## Human approval
+
 Render the labels and prose below in `interaction_language`; when uncertain, use the English wording shown here. Keep the heading name and ID format unchanged.
 
 ```markdown
-
-## Human approval
+## Task Flow Review: TFR-<short-id>
 
 **Goal**
 <one concrete goal>
@@ -85,6 +86,7 @@ Use TFC for criterion additions; new family, wider boundary/action/effect classe
 Localize TFC labels and prose in `interaction_language`; keep the heading name and ID format unchanged.
 
 ```markdown
+## Task Flow Change: TFC-<short-id>
 
 **Reason**
 <why approval is required>

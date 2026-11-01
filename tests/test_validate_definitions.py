@@ -81,6 +81,18 @@ class ValidatorMutationTests(unittest.TestCase):
                     with self.assertRaisesRegex(ValueError, "expected exactly one replacement anchor"):
                         builder.transform(mutated, "Orchestrator", "copilot")
 
+    def test_human_approval_templates_preserve_heading_ids(self) -> None:
+        for path in (
+            ".copilot/agents/Orchestrator.agent.md",
+            "packages/local/agents/Orchestrator.agent.md",
+            "packages/copilot/agents/Orchestrator.agent.md",
+        ):
+            source = (ROOT / path).read_text(encoding="utf-8")
+            human = source.split("## Human approval", 1)[1].split("## Approved Contract", 1)[0]
+            self.assertIn("## Task Flow Review: TFR-<short-id>", human)
+            self.assertIn("## Task Flow Change: TFC-<short-id>", human)
+            self.assertEqual(2, human.count("```markdown"))
+
     def test_pending_card_criterion_refs_derive_from_operations(self) -> None:
         """The pending Card carries per-operation provenance, not a second writable criterion list."""
         for relative in (
