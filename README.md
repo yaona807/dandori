@@ -57,7 +57,9 @@ active approved contract = ordered fold(authorization source sequence)
 
 A **Task Flow Review (TFR)** is a short human decision surface. It is not a detailed execution plan.
 
-A **Task Card** is a worker-neutral execution contract containing the objective, exact target/action/effect operations, limits, deliverables, and stop conditions. Criterion links, permission provenance, expected-progress classification, and routing remain in the Orchestrator's internal ledger, not the Worker-facing Card.
+A **Task Card** is a worker-neutral execution contract containing objective, exact target/action/effect operations, limits, and deliverables. Minimal stop and no-delegation limits remain in each self-contained Card; redundant reporting boilerplate is removed. Criterion links, permission provenance, progress and routing stay inside Orchestrator.
+
+The active Contract and criteria are not duplicated in the Flow Ledger; authorized operations come from audited Cards, while one criterion-evidence collection supports completion decisions. Unresolved effects and blockers are still tracked.
 
 The human approves the goal, resource boundary, capability classes, effects, and exclusions—not file names or command IDs. The Orchestrator investigates, chooses exact targets/checks, changes workers, and replans within that envelope; it requests a **Task Flow Change (TFC)** only to widen authority. Every Worker remains bound by an exact Task Card.
 

@@ -57,7 +57,9 @@ active approved contract = ordered fold(authorization source sequence)
 
 **Task Flow Review（TFR）** は、ユーザーが短時間で判断するための承認画面です。詳細な実行計画ではありません。
 
-**Task Card** は、Worker非依存の実行契約です。具体的な目的、許可された対象・Action・Effect、上限、成果物、中断条件だけを渡します。Criterion参照、承認由来、進捗分類、ルーティングはOrchestratorの内部台帳で管理し、Workerには渡しません。
+**Task Card** はWorker非依存の実行契約です。目的、許可された対象・Action・Effect、上限、成果物だけを渡し、停止・委譲禁止条件はCard自体に簡潔に残し、重複する報告書式は削ります。Criterion参照、承認由来、進捗分類、ルーティングはOrchestrator内部に保持します。
+
+有効なContractと完了条件をFlow Ledgerへ複製せず、認可済み操作は監査済みCardを正本とします。完了判定の根拠は単一のCriterion Evidenceに集約し、不明な副作用やブロッカーの追跡は維持します。
 
 人間は目的と対象領域・可能な操作・副作用を承認し、個別ファイル名やコマンドIDは承認しません。Orchestratorは契約内の具体化、Worker選択、調査、修正、再計画を自由に行い、権限を拡張する場合だけ **Task Flow Change（TFC）** を提示します。
 
