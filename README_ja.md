@@ -119,7 +119,7 @@ Authorization source sequence
    ↓ ordered fold
 Approved Contract revision
    ↓
-Flow Ledger: Completion Criterion、正確なOperation Instance、任意上限、修正・診断の根拠
+Flow Ledger: Criterion別Evidence、変更対象の累積使用量、進捗・不明な副作用、実行中Cardの予約と操作ごとの内部由来
    ↓
 実行可能な独立Task Card（最大3件）
    ↓
@@ -523,6 +523,8 @@ Validatorが証明するのは、次の内容です。
 
 ## 設計原則
 
+[Orchestrator v2再構成](docs/orchestrator-v2-reviewed-design.md)では、18セクションを10セクションへ整理しました。正本本文は29,185文字から26,567文字、Copilot版本文は29,677文字から27,059文字です。Card単位のCriterion参照はOperation由来から導出し、依存関係、監査待ち・結果不明の状態、予約情報、Authorization Patch/foldは維持します。文字数は静的定義の測定値であり、動作性能や安全性の保証ではありません。実際のVS Code/Copilot上の検証は未実施です（[Issue #57](https://github.com/yaona807/dandori/issues/57)）。
+
 Phase Cの結論：現行の[追記型Authorization Patch/foldを維持する](docs/authorization-model-decision.md)。Active ContractとApproval Receiptで置き換えると、差分の出所を失うか、別の検証・再計算処理を追加する必要があるためです。これは設計判断であり、実機での安全性を証明したものではありません。
 
 - **ユーザー承認は実行履歴ではなく契約である**
@@ -534,7 +536,7 @@ Phase Cの結論：現行の[追記型Authorization Patch/foldを維持する](d
 - **省略された権限は不許可とする**
 - **Worker出力は次の作業を認可しない**
 - **Worker選択は品質へ影響してもscopeを広げない**
-- **重要な主張だけをEvidence stateで管理する**
+- **診断Evidenceと実質的な完了根拠を区別し、現在有効で矛盾のない検証済みEvidenceだけをCriterion完了に使う**
 - **検証は狭く、効果に応じて行う**
 - **再承認は差分だけを、実質的なリスク変更時に行う**
 - **進捗がなければ再委譲しない**

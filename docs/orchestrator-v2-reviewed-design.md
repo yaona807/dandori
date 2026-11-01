@@ -1,6 +1,6 @@
 # Orchestrator v2: critical design review and rewrite contract
 
-**Status:** reviewed design, approved for staged implementation **with explicit corrections below**. **Not implemented**. Baseline: `master` at `0a940b3a2080922146676add006035f45d0e4911`, after Phase C ([decision](authorization-model-decision.md)). No runtime conformance claims.
+**Status:** v2 control-plane rewrite **implemented in [PR #94](https://github.com/yaona807/dandori/pull/94)** after design review [PR #93](https://github.com/yaona807/dandori/pull/93). Original design baseline: `0a940b3a2080922146676add006035f45d0e4911`, after Phase C ([decision](authorization-model-decision.md)). GitHub Actions and Codex code review passed for PR #94; **real VS Code/Copilot behavior is not certified**.
 
 ## Objective and non-goals
 
@@ -8,7 +8,7 @@ Reconstruct the additively grown Orchestrator prompt as a coherent control plane
 
 Out of scope: redesigning the Worker profiles, runner/Hook permissions, changing human-visible approval semantics, adopting an external authorization service, durable Journal, cross-session recovery, new persistence or routing protocols, or dropping approved conformance requirements. Retain the Phase C **ordered, append-only `normalized_patch` fold**.
 
-**Target:** 10 logical sections; 19,000–23,000 source-body characters (working center ~20,600). Character counts are **an estimate, not a safety or acceptance condition**. Copilot's generated routing text has its own overhead; both variants must remain below the existing 30,000 body-character maximum. Do not sacrifice invariant coverage to meet a numerical target.
+**Original estimate:** 10 logical sections, 19,000–23,000 source-body characters (center ~20,600). **Measured result (PR #94):** 10 sections, canonical source-body **26,567** characters (was 29,185), generated Copilot-body **27,059** (was 29,677). Smaller savings were accepted to preserve contract/effect/approval safety constraints and validator regression coverage. The 30,000 body-character maximum remains; character targets were never acceptance criteria.
 
 ## Critical review — blockers found and resolution
 
@@ -24,7 +24,7 @@ Out of scope: redesigning the Worker profiles, runner/Hook permissions, changing
 | MEDIUM | Treat 10 sections and ~20.6k characters as mandatory | Overcompression of approval, effect audit, Source Fidelity or spill recovery | These are readability targets only; every security-sensitive nuance and all 42 conformance cases take precedence |
 | MEDIUM | An entire runtime rewrite in one PR without baseline specification | Green CI may hide behavior drift because natural-language correctness is not statically provable | Separate design/guarantee freeze (PR A), one atomic prompt+Validator+bundle rewrite (PR B), and follow-up docs/cleanup (PR C); no partially converted prompt merged to master |
 
-No unresolved *design-level blocker* remains for **PR A** after these corrections. PR B remains contingent on complete conformance mapping, code review and CI. Actual VS Code/Copilot runtime behavior is **unverified** and is explicitly deferred by user instruction; leave [Issue #57](https://github.com/yaona807/dandori/issues/57) open.
+The corrected design was merged in PR #93 and implemented in PR #94. The prior Codex findings on missing human-visible TFR/TFC IDs and the pending-criterion regression assertion were fixed before merging PR #94. Actual VS Code/Copilot runtime behavior remains **unverified** by user instruction; [Issue #57](https://github.com/yaona807/dandori/issues/57) stays open.
 
 ## Ten-section control-plane layout
 
@@ -184,12 +184,12 @@ Each existing case is included **exactly once**. This is the acceptance inventor
 
 ## Implementation staging / merge gates
 
-**PR A (this PR):** critical review, precise design, state-reduction gates, complete conformance ownership matrix. Documentation only. Does not claim the redesign is implemented.
+**PR A — completed:** [PR #93](https://github.com/yaona807/dandori/pull/93) reviewed and recorded the design, gates and complete conformance ownership matrix.
 
-**PR B (atomic functional rewrite):** rewrite the canonical Orchestrator in the ten-section layout, migrate the Validator/tests and transform/generate both bundles **in the same branch and PR**; keep current Task Card outward shape and authorization contract semantics. Candidate state deletions are allowed only after their strict gates are satisfied; otherwise retain. Run definition validation, existing fixed mutation suites, build `--check`, release-archive validation, and code review. Compare source/Copilot body sizes and rule/state counts. No semantic simplification may be justified only by text-length savings. Do not merge a half-migrated prompt.
+**PR B — completed:** [PR #94](https://github.com/yaona807/dandori/pull/94) atomically updated the canonical Orchestrator, Validator, regression tests and both bundles. Ten sections replaced eighteen; pending Card-level `criterion_refs` were removed as duplicate state and derived from operation provenance. Required safety markers, authorization fold, dependencies and reservations were retained. GitHub Actions and Codex code review passed; actual runtime conformance was not run.
 
-**PR C (documentation follow-up):** update README/architecture narrative and remove stale terms after PR B lands. Recheck release archives. No implicit Worker/Runner policy migration.
+**PR C — documentation sync:** update both READMEs and this design record with actual measurements, current Ledger ownership, unchanged Worker/Runner boundary and the unverified-runtime limitation; release-archive checks must remain green.
 
-**Required report for PR B:** old/new source body characters, Copilot body characters, section count, independent state keys removed, Validator coverage replacements, all 42 case mapping and any unverified behaviors, CI outputs, manual review findings. Explicitly mark real VS Code/Copilot scenarios `not_run`.
+**PR B outcome:** source-body `29,185 → 26,567`; Copilot-body `29,677 → 27,059`; H2 sections `18 → 10`. Duplicated pending Card-level `criterion_refs` removed; execution, provenance, Evidence, cumulative cap usage, dependency, returned/unknown and footprint state retained. Validator section-owned markers were remapped; existing regression tests retained and human-visible TFR/TFC-heading regression coverage added. All 42 conformance cases remain in the acceptance matrix, not executed in a real host (`not_run`).
 
 **Human-requested skip:** Real environment conformance on [Issue #57](https://github.com/yaona807/dandori/issues/57) is deferred, not declared passed and the Issue is not closed. Static CI proves only its validated checks; it cannot certify live model adherence or per-file OS sandboxing.
