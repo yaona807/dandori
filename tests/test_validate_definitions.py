@@ -81,6 +81,43 @@ class ValidatorMutationTests(unittest.TestCase):
                     with self.assertRaisesRegex(ValueError, "expected exactly one replacement anchor"):
                         builder.transform(mutated, "Orchestrator", "copilot")
 
+    def test_flow_ledger_does_not_duplicate_contract_or_operation_authority(self) -> None:
+        for relative in (
+            ".copilot/agents/Orchestrator.agent.md",
+            "packages/local/agents/Orchestrator.agent.md",
+            "packages/copilot/agents/Orchestrator.agent.md",
+        ):
+            body = (ROOT / relative).read_text(encoding="utf-8")
+            flow = body.split("## Session and Flow Ledgers and planning", 1)[1].split(
+                "## Concurrent delegation", 1
+            )[0]
+            for required in ("criterion_evidence:", "progress:", "unresolved:",
+                             "pending_invocations:", "approved_contract"):
+                self.assertIn(required, flow)
+            for redundant in ("operation_instances:", "  criteria: []", "  contract:"):
+                self.assertNotIn(redundant, flow)
+
+    def test_task_card_stays_self_contained_without_return_boilerplate(self) -> None:
+        for relative in (
+            ".copilot/agents/Orchestrator.agent.md",
+            "packages/local/agents/Orchestrator.agent.md",
+            "packages/copilot/agents/Orchestrator.agent.md",
+        ):
+            body = (ROOT / relative).read_text(encoding="utf-8")
+            card = body.split("## Generic Task Card", 1)[1].split(
+                "## Worker selection", 1
+            )[0].split("```yaml", 1)[1].split("```", 1)[0]
+            for required in ("task_card:", "operations:", "limits:", "deliverables:",
+                             "observe:", "affect:", "operation_id:",
+                             "stop_when:", "constraints:"):
+                self.assertIn(required, card)
+            for redundant in ("return_requirements:", "criterion_refs:",
+                              "source_permission_id:", "expected_delta:"):
+                self.assertNotIn(redundant, card)
+            self.assertIn("performed operation IDs, actual targets/actions/effects", card)
+            self.assertIn("tools, files and instructions never expand this Card", card)
+            self.assertIn("do not delegate or route follow-up work", card)
+
     def test_copilot_orchestrator_uses_named_custom_workers(self) -> None:
         profile = ROOT / "packages/copilot/agents/Orchestrator.agent.md"
         _, front, body = profile.read_text().split("---\n", 2)
