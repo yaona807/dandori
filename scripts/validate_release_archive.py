@@ -51,6 +51,7 @@ ALLOWED_TOP_LEVEL_ENTRIES = frozenset(
         "README.md",
         "README_ja.md",
         "assets",
+        "docs",
         "packages",
         "scripts",
         "tests",

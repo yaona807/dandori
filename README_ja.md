@@ -523,6 +523,8 @@ Validatorが証明するのは、次の内容です。
 
 ## 設計原則
 
+Phase Cの結論：現行の[追記型Authorization Patch/foldを維持する](docs/authorization-model-decision.md)。Active ContractとApproval Receiptで置き換えると、差分の出所を失うか、別の検証・再計算処理を追加する必要があるためです。これは設計判断であり、実機での安全性を証明したものではありません。
+
 - **ユーザー承認は実行履歴ではなく契約である**
 - **内部計画は適応できるが、承認済み権限は適応させない**
 - **対象、Action、Effectを1つのOperationとして認可する**
