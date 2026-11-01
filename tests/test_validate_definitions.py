@@ -976,7 +976,12 @@ Inspect only the delegated resource. Do not call another agent.
             self.assertEqual([], result.errors, "\n".join(result.errors))
             self.assertTrue(any("custom local worker" in warning for warning in result.warnings))
 
-    def test_structured_but_truncated_orchestrator_is_rejected(self) -> None:
+    def test_orchestrator_has_no_arbitrary_minimum_body_length(self) -> None:
+        """Safety is validated by specific policy and schema checks, not word count."""
+        self.assertNotIn("Orchestrator", validator.BUNDLED_AGENT_MIN_BODY_CHARS)
+        self.assertEqual(30_000, validator.MAX_AGENT_BODY_CHARS)
+
+    def test_structured_but_schema_free_orchestrator_is_rejected(self) -> None:
         temp, repo = self.make_repo()
         with temp:
             path = repo / ".copilot/agents/Orchestrator.agent.md"
@@ -990,7 +995,7 @@ Inspect only the delegated resource. Do not call another agent.
             lines.append("## Remaining schema markers")
             lines.extend(validator.ORCHESTRATOR_REQUIRED_MARKERS)
             path.write_text(f"---{frontmatter}---\n\n" + "\n".join(lines) + "\n")
-            self.assert_invalid(repo, "bundled agent body is below the regression floor")
+            self.assert_invalid(repo, "missing Worker-facing Task Card schema")
 
     def test_structured_but_truncated_worker_is_rejected(self) -> None:
         temp, repo = self.make_repo()

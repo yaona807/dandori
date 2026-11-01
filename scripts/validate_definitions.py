@@ -313,7 +313,6 @@ BUNDLED_AGENT_MODEL_SETTINGS = {
     "BrowserQA": ("GPT-6.1 Terra (copilot)", "low"),
 }
 BUNDLED_AGENT_MIN_BODY_CHARS = {
-    "Orchestrator": 20_000,
     "BrowserQA": 1_000,
     "GitHubResearcher": 1_200,
     "Researcher": 1_100,
@@ -525,7 +524,6 @@ ORCHESTRATOR_REQUIRED_SECTION_MARKERS: dict[str, tuple[str, ...]] = {
     "## Evidence resolution": (
         "When a Worker reports a missing prerequisite,",
         "A partial or filtered search cannot establish global absence.",
-        "Discovery provides candidates, not authority.",
         "An observation cannot hide an actual `execute` or other effect",
         "Distinguish absent TFR authority, unavailable prerequisites, incomplete discovery",
     ),
