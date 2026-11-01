@@ -81,6 +81,36 @@ class ValidatorMutationTests(unittest.TestCase):
                     with self.assertRaisesRegex(ValueError, "expected exactly one replacement anchor"):
                         builder.transform(mutated, "Orchestrator", "copilot")
 
+    def test_human_approval_templates_preserve_heading_ids(self) -> None:
+        for path in (
+            ".copilot/agents/Orchestrator.agent.md",
+            "packages/local/agents/Orchestrator.agent.md",
+            "packages/copilot/agents/Orchestrator.agent.md",
+        ):
+            source = (ROOT / path).read_text(encoding="utf-8")
+            human = source.split("## Human approval", 1)[1].split("## Approved Contract", 1)[0]
+            self.assertIn("## Task Flow Review: TFR-<short-id>", human)
+            self.assertIn("## Task Flow Change: TFC-<short-id>", human)
+            self.assertEqual(2, human.count("```markdown"))
+
+    def test_pending_card_criterion_refs_derive_from_operations(self) -> None:
+        """The pending Card carries per-operation provenance, not a second writable criterion list."""
+        for relative in (
+            ".copilot/agents/Orchestrator.agent.md",
+            "packages/local/agents/Orchestrator.agent.md",
+            "packages/copilot/agents/Orchestrator.agent.md",
+        ):
+            body = (ROOT / relative).read_text(encoding="utf-8")
+            state = body.split("## Session state and concurrency", 1)[1].split(
+                "## Result audit and verification", 1
+            )[0]
+            schema = state.split("```yaml", 1)[1].split("```", 1)[0]
+            pending = next(iter(yaml.safe_load(schema)["flow_ledger"]["pending_invocations"].values()))
+            self.assertNotIn("criterion_refs", pending)
+            self.assertEqual({}, pending["expected_delta"])
+            operations = pending["operation_provenance"]
+            self.assertIn("criterion_refs", next(iter(operations.values())))
+
     def test_flow_ledger_does_not_duplicate_contract_or_operation_authority(self) -> None:
         for relative in (
             ".copilot/agents/Orchestrator.agent.md",
@@ -88,8 +118,8 @@ class ValidatorMutationTests(unittest.TestCase):
             "packages/copilot/agents/Orchestrator.agent.md",
         ):
             body = (ROOT / relative).read_text(encoding="utf-8")
-            flow = body.split("## Session and Flow Ledgers and planning", 1)[1].split(
-                "## Concurrent delegation", 1
+            flow = body.split("## Session state and concurrency", 1)[1].split(
+                "## Result audit and verification", 1
             )[0]
             for required in ("criterion_evidence:", "progress:", "unresolved:",
                              "pending_invocations:", "approved_contract"):
@@ -104,7 +134,7 @@ class ValidatorMutationTests(unittest.TestCase):
             "packages/copilot/agents/Orchestrator.agent.md",
         ):
             body = (ROOT / relative).read_text(encoding="utf-8")
-            card = body.split("## Generic Task Card", 1)[1].split(
+            card = body.split("## Planning and Task Cards", 1)[1].split(
                 "## Worker selection", 1
             )[0].split("```yaml", 1)[1].split("```", 1)[0]
             for required in ("task_card:", "operations:", "limits:", "deliverables:",
@@ -1016,7 +1046,7 @@ Inspect only the delegated resource. Do not call another agent.
         temp, repo = self.make_repo()
         with temp:
             path = repo / ".copilot/agents/Orchestrator.agent.md"
-            path.write_text(path.read_text() + "\n## Invariants\nDuplicate section.\n")
+            path.write_text(path.read_text() + "\n## Invariants and interaction\nDuplicate section.\n")
             self.assert_invalid(repo, "duplicate required Orchestrator section")
 
     def test_code_review_frontmatter_is_closed(self) -> None:
