@@ -413,6 +413,8 @@ The validator proves structural constraints, tool boundaries, required policy an
 
 ## Design principles
 
+Phase C decision: [retain the append-only Authorization Patch/fold](docs/authorization-model-decision.md). Replacing it with a mutable Active Contract and Approval Receipts without an independently enforceable comparison would either lose approved-delta provenance or reproduce the fold with more state. This is an architectural decision, not a runtime safety certification.
+
 - **Human approval is a contract, not an execution trace.**
 - **Internal plans may adapt; approved permissions may not.**
 - **Target, action, and effect are authorized together as one operation.**
