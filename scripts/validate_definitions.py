@@ -521,7 +521,7 @@ ORCHESTRATOR_REQUIRED_SECTION_MARKERS: dict[str, tuple[str, ...]] = {
     "## Planning and Task Cards": (
         "A Task Card may list multiple exact permitted operations",
         "When the exact command ID is unavailable, authorize discovery of registered-command metadata",
-        "Terminal-backed metadata queries, inspections and runs need exact `operations.affect` entries",
+        "Terminal-backed metadata and runs need exact `operations.affect` entries",
         "Keep `operation_id` stable in the outward Card and its internal provenance mapping",
         "Do not expose that link to the Worker.",
         "Derived missing-ancestor directories need an authorized exact file create",
