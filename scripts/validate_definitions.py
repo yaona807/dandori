@@ -119,6 +119,7 @@ REQUIRED_MUTATION_TEST_METHODS = frozenset(
     {
         "test_repository_is_valid",
         "test_orchestrator_rejects_edit_tool",
+        "test_orchestrator_command_discovery_and_status_grants_are_required",
         "test_worker_rejects_agent_tool",
         "test_missing_bundled_worker_definition_is_rejected",
         "test_execution_bypass_frontmatter_keys_are_rejected",
@@ -510,12 +511,15 @@ ORCHESTRATOR_REQUIRED_SECTION_MARKERS: dict[str, tuple[str, ...]] = {
         "consume no additional affect target/cap",
         "A newly discovered subject cannot be affected in the same invocation unless",
         "Registered checks require audit of definition, arguments, workspace and effects.",
-        "A broad human edit grant still instantiates the smallest atomic file",
+        "If a required exact ID is unknown, delegate bounded registered-command metadata discovery",
+        "Terminal-backed status queries require actual `observe+execute` effects under a `run_local` grant",
+        "A broad human edit grant still instantiates the smallest atomic file
         "The runner resolves the current command by ID and validates workspace/arguments.",
     ),
     "## Planning and Task Cards": (
         "A Task Card may list multiple exact permitted operations",
-        "Keep `operation_id` stable in the outward Card and its internal provenance mapping",
+        "When the exact command ID is unavailable, authorize discovery of registered-command metadata",
+        "Keep `operation_id` stable in the outward Card and its internal provenance mapping
         "Do not expose that link to the Worker.",
         "Derived missing-ancestor directories need an authorized exact file create",
         "incidental_output_boundaries:",

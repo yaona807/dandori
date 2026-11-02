@@ -246,6 +246,21 @@ class ValidatorMutationTests(unittest.TestCase):
             path.write_text(text.replace(marker, "When a Worker reports that it cannot continue,", 1))
             self.assert_invalid(repo, marker)
 
+    def test_orchestrator_command_discovery_and_status_grants_are_required(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".copilot/agents/Orchestrator.agent.md"
+            original = path.read_text()
+            for marker in (
+                "If a required exact ID is unknown, delegate bounded registered-command metadata discovery",
+                "Terminal-backed status queries require actual `observe+execute` effects under a `run_local` grant",
+                "When the exact command ID is unavailable, authorize discovery of registered-command metadata",
+            ):
+                self.assertIn(marker, original)
+                path.write_text(original.replace(marker, "", 1))
+                self.assert_invalid(repo, "missing required Orchestrator invariant")
+                path.write_text(original)
+
     def test_orchestrator_supports_exact_operation_choice(self) -> None:
         temp, repo = self.make_repo()
         with temp:

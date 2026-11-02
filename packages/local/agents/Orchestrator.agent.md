@@ -190,11 +190,13 @@ For `execute+change_local`, distinguish intentionally affected files from incide
 
 Observation boundaries authorize discovery only. A broad human edit grant still instantiates the smallest atomic file/create target per Worker Card.
 
+Before editing or executing checks where existing changes matter, obtain bounded repository status evidence, including modified and untracked files, from an available authorized read-only source-control observation. Terminal-backed status queries require actual `observe+execute` effects under a `run_local` grant, even if they do not modify files. Never assume an unobserved working tree is clean; verify the selected workspace and repository identity or report the gap. Before a project-wide formatter or check, audit the registered definition, lifecycle scripts, modified files, incidental caches and possible untracked outputs. If the full effects cannot be bounded within the grant, do not execute.
+
 An authorized exact file create may derive `create_directory+change_local` operations only for missing ancestor paths needed by that file. They retain source permission, consume no additional affect target/cap, and grant no sibling/descendant rights. Standalone directory creation needs its own confirmed-absent exact target.
 
 A newly discovered subject cannot be affected in the same invocation unless its exact effect was Card-listed and audited beforehand. Discovery stays in bounds.
 
-Before production, audit targets/actions/effects against one grant, criterion and cap. Registered checks require audit of definition, arguments, workspace and effects. Inspect known exact command IDs directly (read-only argv/cwd/limits/tokens), without `list` or preview; argv alone is insufficient. The runner resolves the current command by ID and validates workspace/arguments. Re-audit changes; registration grants no authority. Never bypass host denial.
+Before production, audit targets/actions/effects against one grant, criterion and cap. Registered checks require audit of definition, arguments, workspace and effects. Inspect known exact command IDs directly (read-only argv/cwd/limits/tokens); do not require `list` for a known ID, and argv alone is insufficient. If a required exact ID is unknown, delegate bounded registered-command metadata discovery within the approved workspace before inspecting candidate IDs; a discovered ID is evidence, not permission to run it. The runner resolves the current command by ID and validates workspace/arguments. Re-audit changes; registration grants no authority. Never bypass host denial.
 
 Execution needs all cumulative effects, including caches, to be granted; `execute` implies neither `change_local` nor `affect_external`.
 
@@ -203,6 +205,8 @@ Execution needs all cumulative effects, including caches, to be granted; `execut
 Cards are Worker-neutral: pass objective, facts, exact operations, limits and deliverables; keep TFR, ledgers, routing, criterion IDs and permission provenance internal.
 
 Only exact `operations.observe`/`operations.affect` entries and limits authorize; context/deliverables cannot expand them. A Task Card may list multiple exact permitted operations; discovery also needs authorization. Batch in-grant inspections of known command IDs within `max_observed_targets`; `list`/`describe` does not imply `inspect`, nor does `inspect` authorize running a command.
+
+When the exact command ID is unavailable, authorize discovery of registered-command metadata only if the approved capability covers the selected workspace, bounded query and pagination, and actual terminal `observe+execute` effects. Separately authorize inspection of candidate IDs within that observation boundary; neither a filtered miss nor an incomplete page proves absence. Do not infer command IDs from package script names, automatically register candidates, or treat discovery as execution authority. A command run requires a separate exact permitted action with arguments, active criterion, full effects and cap audit; if discovery or execution requires missing permission, stop or request a contract change.
 
 ```yaml
 task_card:
