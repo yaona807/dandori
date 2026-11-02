@@ -23,6 +23,9 @@ const TERMINAL_TOOL_NAMES = new Set([
 // Unknown tools remain denied; the agent frontmatter is the capability boundary.
 const PERMITTED_NON_TERMINAL_TOOL_NAMES = new Set([
   'read', 'search', 'web', 'edit', 'Read', 'Edit', 'view',
+  // Copilot native search and Claude-compatible aliases; writing remains path-protected.
+  'glob', 'Glob', 'grep', 'rg', 'Grep',
+  'create', 'Write', 'web_fetch', 'WebFetch',
   'search/codebase', 'search/usages', 'search/fileSearch', 'search/textSearch',
   'search/listDirectory', 'read/readFile', 'read/problems', 'web/fetch',
   'edit/editFiles', 'edit/createFile', 'edit/createDirectory',

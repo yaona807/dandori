@@ -39,7 +39,7 @@ Agent固有HookはPreview機能のため、VS Codeの `chat.useCustomAgentHooks`
 Workspace登録後、次の固定コマンドを利用できます。
 
 - ファイル操作：`builtin-fs-move`、`builtin-fs-copy`、`builtin-fs-trash`、`builtin-fs-restore`、`builtin-fs-trash-list`。
-- Git読み取り：`builtin-git-status`、`builtin-git-diff`、`builtin-git-log`、`builtin-git-show`、`builtin-git-ls-files`、`builtin-git-branch-info`。
+- Git読み取り：`builtin-git-status`、`builtin-git-diff`、`builtin-git-refs`、`builtin-git-compare`、`builtin-git-log`、`builtin-git-show`、`builtin-git-ls-files`、`builtin-git-branch-info`。
 
 **登録不要は権限不要という意味ではありません。** exactなCommand IDと全Effectを含む承認済みTask Cardが必要です。Built-in IDは予約され、登録・更新・削除できません。
 通常ファイルのみ扱い、既存ファイルの上書き、symlinkの経由、再帰的な物理削除は行いません。ゴミ箱はWorkspace直下の `.agent-trash/`。内部の `.gitignore` は `*` に固定され、通常のGit追跡から除外します。既にGit追跡済みのゴミ箱は拒否します。退避済みファイルはIDで復元可能です。**物理削除コマンドはありません。** 異なるファイルシステム間の移動は拒否します。
@@ -310,3 +310,7 @@ v2が登録したnpm系コマンドはすべてのpackage script定義とpackage
 新しいWorkspaceの初回登録はHookがrootの実体パスを表示して確認し、登録済みrootは再確認しません。npmのみ末尾の `--` を使用し、pnpm/Yarn/Bunでは引数として渡さないようにします。
 
 モノレポの `propose <id> packageDir=<Workspace相対のパッケージ>` は、対象packageから登録済みWorkspace rootまでの範囲だけで、最も近い `packageManager` またはlockfileを参照します。実行時も同じ検証を行います。コマンド候補の応答は対象スクリプトの抜粋に限定し、ハッシュには全スクリプトを含めます。
+
+### Git差分調査
+
+`builtin-git-refs` で手元のブランチ参照と40桁のコミットSHA（最大100件）を確認し、根拠のあるSHAだけを `builtin-git-compare base=<40桁SHA>` へ渡します。比較はmerge-baseからHEADのコミット済み差分です。未コミット・未追跡の変更は `builtin-git-status` および `builtin-git-diff` を別途確認してください。いずれも承認されたTask Cardの正確な操作権限が必要です。自動fetch・基準ブランチ推定は行いません。

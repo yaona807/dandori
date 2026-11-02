@@ -1165,7 +1165,7 @@ test('hook denies terminal execution overrides and background execution', async 
 
 test('shared hook allows ordinary read, search and edit tools while protecting runner config', async () => {
   await withFixture(async (fixture) => {
-    for (const toolName of ['read/readFile', 'Read', 'view', 'read', 'search', 'search/codebase', 'web', 'edit', 'Edit', 'edit/createFile', 'edit/createDirectory']) {
+    for (const toolName of ['read/readFile', 'Read', 'view', 'read', 'search', 'search/codebase', 'web', 'edit', 'Edit', 'edit/createFile', 'edit/createDirectory', 'glob', 'Glob', 'grep', 'rg', 'Grep', 'web_fetch', 'WebFetch', 'create', 'Write']) {
       const read = runHook(fixture, {
         hook_event_name: 'PreToolUse',
         tool_name: toolName,
@@ -1198,6 +1198,19 @@ test('shared hook allows ordinary read, search and edit tools while protecting r
         'deny',
         protectedPath,
       );
+    }
+
+    for (const alias of ['glob', 'Glob', 'grep', 'rg', 'Grep', 'create', 'Write']) {
+      const payload = runHook(fixture, {
+        sessionId: 'copilot-session',
+        toolName: alias,
+        toolArgs: JSON.stringify({ path: '~/.copilot/command-runner/workspaces.json' }),
+      });
+      if (alias === 'create' || alias === 'Write') {
+        assert.equal(JSON.parse(payload.stdout).permissionDecision, 'deny', alias);
+      } else {
+        assert.deepEqual(JSON.parse(payload.stdout), { continue: true }, alias);
+      }
     }
 
     const unrelated = runHook(fixture, {
@@ -1261,6 +1274,7 @@ test('P0 built-ins are discoverable, immutable, and safely manage one file at a 
       'builtin-fs-restore', 'builtin-fs-trash-list',
       'builtin-git-status', 'builtin-git-diff', 'builtin-git-log',
       'builtin-git-show', 'builtin-git-ls-files', 'builtin-git-branch-info',
+      'builtin-git-refs', 'builtin-git-compare',
     ]) assert.ok(ids.includes(id), id);
 
     const described = runInterface(fixture, fixture.alpha, ['describe', 'builtin-fs-move']);
@@ -1352,7 +1366,23 @@ test('P0 Git built-ins only observe a repository rooted at the workspace', async
     assert.equal(run('builtin-git-show', ['commit=' + commit]).status, 'completed');
     assert.equal(run('builtin-git-ls-files').status, 'completed');
     assert.equal(run('builtin-git-branch-info').status, 'completed');
+    const refs = run('builtin-git-refs');
+    assert.equal(refs.status, 'completed');
+    assert.match(refs.stdout, /refs\\/heads\\//u);
+    assert.match(refs.stdout, new RegExp(commit, 'u'));
+    assert.equal(run('builtin-git-compare', ['base=' + commit]).status, 'completed');
     assert.equal(run('builtin-git-show', ['commit=HEAD']).status, 'failed');
+    assert.equal(run('builtin-git-compare', ['base=HEAD']).status, 'failed');
+    assert.equal(run('builtin-git-compare', ['base=' + 'a'.repeat(40)]).status, 'failed');
+
+    await writeFile(path.join(fixture.alpha, 'tests', 'sample.test.js'), 'export const changed = true;\\n');
+    execGit('add', 'tests/sample.test.js');
+    execGit('commit', '-qm', 'second');
+    const comparison = run('builtin-git-compare', ['base=' + commit]);
+    assert.equal(comparison.status, 'completed');
+    assert.match(comparison.stdout, /changed = true/u);
+    assert.equal(run('builtin-git-compare', ['base=' + commit, 'file=tests%2Fsample.test.js']).status, 'completed');
+    assert.equal(run('builtin-git-compare', ['base=' + commit, 'file=..%2Foutside.js']).status, 'failed');
     const indexBefore = await readFile(path.join(fixture.alpha, '.git', 'index'));
     assert.equal(run('builtin-fs-trash', ['source=tests%2Fsample.test.js']).status, 'completed');
     const ignore = spawnSync('git', ['check-ignore', '-q', '--no-index', '.agent-trash/.gitignore'],
