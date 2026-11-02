@@ -372,8 +372,7 @@ function patchTargetPaths(value) {
   for (const originalLine of lines.slice(1, -1)) {
     // In update hunks, one leading space is a context-line marker. It may
     // contain literal "*** Update File" documentation rather than a directive.
-    if (section === 'update' && originalLine.startsWith(' ')
-      && !originalLine.startsWith('  ')) continue;
+    if (section === 'update' && originalLine.startsWith(' *** ')) continue;
     const line = originalLine.trimStart();
     if (!line.startsWith('*** ')) continue;
     const file = /^\*\*\* (Add|Update|Delete) File: (.+)$/u.exec(line);
