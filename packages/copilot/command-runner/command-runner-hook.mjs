@@ -25,6 +25,8 @@ const PERMITTED_NON_TERMINAL_TOOL_NAMES = new Set([
   'read', 'search', 'web', 'edit', 'Read', 'Edit', 'view',
   // Native Copilot code search and compatible PascalCase search aliases.
   'glob', 'Glob', 'grep', 'rg', 'Grep',
+  // Native edit tools; the host still enforces the Writer's granted scope.
+  'apply_patch', 'str_replace_editor',
   'search/codebase', 'search/usages', 'search/fileSearch', 'search/textSearch',
   'search/listDirectory', 'read/readFile', 'read/problems', 'web/fetch',
   'edit/editFiles', 'edit/createFile', 'edit/createDirectory',
@@ -356,8 +358,34 @@ function normalizePossiblePath(value) {
   return normalized;
 }
 
+function patchTargetPaths(value) {
+  const patch = typeof value === 'string' ? value
+    : value !== null && typeof value === 'object' && !Array.isArray(value)
+      ? (value.patch ?? value.input) : null;
+  if (typeof patch !== 'string') throw new Error('patch tool requires patch text');
+  const lines = patch.replaceAll('\r\n', '\n').trimEnd().split('\n');
+  if (lines[0] !== '*** Begin Patch' || lines.at(-1) !== '*** End Patch') {
+    throw new Error('patch tool requires a bounded Begin/End Patch envelope');
+  }
+  const paths = [];
+  for (const line of lines) {
+    if (!line.startsWith('*** ')) continue;
+    const match = /^(?:\*\*\* (?:Add|Update|Delete) File: |\*\*\* Move to: )(.+)$/u.exec(line);
+    if (match) {
+      paths.push(match[1]);
+    } else if (!['*** Begin Patch', '*** End Patch', '*** End of File'].includes(line)) {
+      throw new Error('unsupported patch path directive');
+    }
+  }
+  if (!paths.length) throw new Error('patch tool needs an explicit file path');
+  return paths;
+}
+
 function containsProtectedPath(value) {
   if (typeof value === 'string') {
+    if (value.startsWith('*** Begin Patch')) {
+      return patchTargetPaths(value).some(containsProtectedPath);
+    }
     const normalized = normalizePossiblePath(value);
     if (normalized === null) return false;
     return [...PROTECTED_SUFFIXES].some(
@@ -427,6 +455,12 @@ try {
     }
   }
   if (!TERMINAL_TOOL_NAMES.has(toolName)) {
+    if (toolName === 'apply_patch') {
+      const targets = patchTargetPaths(toolInput);
+      if (targets.some(containsProtectedPath)) {
+        deny('User-level CommandRunner control files cannot be modified by agent write tools.');
+      }
+    }
     if (
       typeof toolName === 'string'
       && WRITE_TOOL_NAME_PATTERN.test(toolName)

@@ -1255,6 +1255,65 @@ test('native file and text search aliases remain read-only under Local and Copil
   });
 });
 
+test('native patch editing works with exact file-path protection in both hook envelopes', async () => {
+  await withFixture(async (fixture) => {
+    const patch = ['*** Begin Patch', '*** Update File: src/example.js',
+      '@@', '-old', '+new', '*** End Patch'].join('\n');
+    for (const [toolName, input, expected] of [
+      ['apply_patch', {
+        hook_event_name: 'PreToolUse', tool_name: 'apply_patch', tool_input: patch,
+      }, { continue: true }],
+      ['apply_patch', {
+        sessionId: 'copilot-session', toolName: 'apply_patch', toolArgs: patch,
+      }, {}],
+      ['apply_patch', {
+        sessionId: 'copilot-session', toolName: 'apply_patch',
+        toolArgs: JSON.stringify({ patch }),
+      }, {}],
+      ['str_replace_editor', {
+        sessionId: 'copilot-session', toolName: 'str_replace_editor',
+        toolArgs: JSON.stringify({ path: 'src/example.js', replacement: 'new' }),
+      }, {}],
+    ]) {
+      const result = runHook(fixture, input);
+      assert.equal(result.status, 0, result.stderr + toolName);
+      assert.deepEqual(JSON.parse(result.stdout), expected, toolName);
+    }
+
+    const control = '~/.copilot/command-runner/workspaces.json';
+    for (const directive of [
+      '*** Update File: ' + control,
+      '*** Add File: ' + control,
+      '*** Delete File: ' + control,
+      '*** Update File: src/example.js\n*** Move to: ' + control,
+    ]) {
+      const unsafePatch = ['*** Begin Patch', directive, '@@', '-old', '+new',
+        '*** End Patch'].join('\n');
+      for (const input of [
+        { hook_event_name: 'PreToolUse', tool_name: 'apply_patch', tool_input: unsafePatch },
+        { sessionId: 'copilot-session', toolName: 'apply_patch', toolArgs: unsafePatch },
+        { sessionId: 'copilot-session', toolName: 'Edit', toolArgs: unsafePatch },
+      ]) {
+        const denied = runHook(fixture, input);
+        assert.equal(denied.status, 0, denied.stderr);
+        assert.equal(JSON.parse(denied.stdout).permissionDecision, 'deny', directive);
+      }
+    }
+    for (const patchText of ['bad patch', '*** Begin Patch\n*** End Patch',
+      '*** Begin Patch\n*** Update File: src/example.js\n*** Unknown: x\n*** End Patch']) {
+      const denied = runHook(fixture, {
+        sessionId: 'copilot-session', toolName: 'apply_patch', toolArgs: patchText,
+      });
+      assert.equal(JSON.parse(denied.stdout).permissionDecision, 'deny');
+    }
+    const deniedReplace = runHook(fixture, {
+      sessionId: 'copilot-session', toolName: 'str_replace_editor',
+      toolArgs: JSON.stringify({ path: control, replacement: 'unsafe' }),
+    });
+    assert.equal(JSON.parse(deniedReplace.stdout).permissionDecision, 'deny');
+  });
+});
+
 test('hook fails closed for unknown terminal names in both harness envelopes', async () => {
   await withFixture(async (fixture) => {
     const accepted = 'node ~/.copilot/command-runner/command-runner-interface.mjs list --expected-workspace=alpha';
