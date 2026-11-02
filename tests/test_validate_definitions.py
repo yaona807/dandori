@@ -269,6 +269,9 @@ class ValidatorMutationTests(unittest.TestCase):
             skill.unlink()
             self.assert_invalid(repo, "command-runner skill is missing")
             skill.write_text(original_skill, encoding="utf-8")
+            skill.write_text(original_skill.replace("If `outputTruncated: true`", "If output is incomplete"), encoding="utf-8")
+            self.assert_invalid(repo, "command-runner skill must distinguish irreversible output truncation")
+            skill.write_text(original_skill, encoding="utf-8")
             worker = repo / ".copilot/agents/Writer.agent.md"
             original_worker = worker.read_text(encoding="utf-8")
             worker.write_text(original_worker.replace(

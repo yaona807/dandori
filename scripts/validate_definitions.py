@@ -1962,6 +1962,10 @@ def validate_repository(root: Path) -> ValidationResult:
         result.errors.append("code-review skill is missing")
     if "command-runner" not in skill_entries:
         result.errors.append("command-runner skill is missing")
+    else:
+        runner_text = skill_entries["command-runner"].read_text(encoding="utf-8")
+        if "If `outputTruncated: true`" not in runner_text:
+            result.errors.append("command-runner skill must distinguish irreversible output truncation")
     for worker_name in SHARED_RUNNER_WORKERS:
         worker = definitions.get(worker_name)
         if worker is not None and "[command-runner skill](../skills/command-runner/SKILL.md)" not in worker.body:
