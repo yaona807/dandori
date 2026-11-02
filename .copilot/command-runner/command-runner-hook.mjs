@@ -368,11 +368,14 @@ function patchTargetPaths(value) {
     throw new Error('patch tool requires a bounded Begin/End Patch envelope');
   }
   const paths = [];
-  for (const line of lines) {
+  for (const originalLine of lines) {
+    // Native patch tools may accept indented file directives. Canonicalize
+    // them before classifying targets, rather than silently skipping them.
+    const line = originalLine.trimStart();
     if (!line.startsWith('*** ')) continue;
     const match = /^(?:\*\*\* (?:Add|Update|Delete) File: |\*\*\* Move to: )(.+)$/u.exec(line);
     if (match) {
-      paths.push(match[1]);
+      paths.push(match[1].trim());
     } else if (!['*** Begin Patch', '*** End Patch', '*** End of File'].includes(line)) {
       throw new Error('unsupported patch path directive');
     }

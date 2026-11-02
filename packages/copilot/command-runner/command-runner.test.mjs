@@ -1299,6 +1299,26 @@ test('native patch editing works with exact file-path protection in both hook en
         assert.equal(JSON.parse(denied.stdout).permissionDecision, 'deny', directive);
       }
     }
+    // A native parser accepts indented file directives; protect those too.
+    for (const leading of ['  ', '\t', ' \t']) {
+      const bypass = ['*** Begin Patch', '*** Add File: examples/ok.txt',
+        '+ok', leading + '*** Add File: ' + control, '+blocked',
+        '*** End Patch'].join('\n');
+      for (const toolArgs of [bypass, JSON.stringify({ patch: bypass })]) {
+        const denied = runHook(fixture, {
+          sessionId: 'copilot-session', toolName: 'apply_patch', toolArgs,
+        });
+        assert.equal(denied.status, 0, denied.stderr);
+        assert.equal(JSON.parse(denied.stdout).permissionDecision, 'deny', leading);
+      }
+      const move = ['*** Begin Patch', '*** Update File: examples/ok.txt',
+        leading + '*** Move to: ' + control, '@@', '-old', '+new',
+        '*** End Patch'].join('\n');
+      const moved = runHook(fixture, {
+        sessionId: 'copilot-session', toolName: 'apply_patch', toolArgs: move,
+      });
+      assert.equal(JSON.parse(moved.stdout).permissionDecision, 'deny', leading);
+    }
     for (const patchText of ['bad patch', '*** Begin Patch\n*** End Patch',
       '*** Begin Patch\n*** Update File: src/example.js\n*** Unknown: x\n*** End Patch']) {
       const denied = runHook(fixture, {
