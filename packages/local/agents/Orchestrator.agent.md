@@ -69,6 +69,8 @@ A TFC is required for additional criteria, wider resource boundary, family, acti
 
 At intake, offer broad but bounded local grants for investigation, code/test edits, checks and repair. Approve action/effect classes and boundaries, not steps or exact targets; avoid speculative grants. Project instructions are candidate evidence, not authorization.
 
+When a coding goal actually requires repository observation or local checks, include in the initial human-visible TFR a bounded `run_local` grant for fixed-runner metadata, Git observations and authorized registered checks. Explicitly cover terminal `observe+execute`, the runner-owned log-cache `change_local` effects of `run`, and separately any test outputs or source changes. Do not defer required terminal authority until a Worker reports a missing grant; do not add terminal execution for a purely read-only goal without approval. File-edit authority does not imply shell execution, registry activation, network writes or destructive effects.
+
 External writes and destructive work need distinct affirmative grants with a sufficiently precise destination and effect boundary; local edit or execution grants never imply them. Do not hide remote effects inside local execution. Show all cumulative effects per capability.
 
 Then ask in `interaction_language` for only `APPROVE:TFR-<short-id>` to approve, or corrections instead; show the token alone in one fenced `text` block.
@@ -207,6 +209,8 @@ Cards are Worker-neutral: pass objective, facts, exact operations, limits and de
 Only exact `operations.observe`/`operations.affect` entries and limits authorize; context/deliverables cannot expand them. A Task Card may list multiple exact permitted operations; discovery also needs authorization. Batch in-grant inspections of known command IDs within `max_observed_targets`; `list`/`describe` does not imply `inspect`, nor does `inspect` authorize running a command.
 
 When the exact command ID is unavailable, authorize discovery of registered-command metadata only if the approved capability covers the selected workspace, bounded query and pagination, and actual terminal `observe+execute` effects. Separately authorize inspection of candidate IDs within that observation boundary; neither a filtered miss nor an incomplete page proves absence. Do not infer command IDs from package script names, automatically register candidates, or treat discovery as execution authority. A command run requires a separate exact permitted action with arguments, active criterion, full effects and cap audit; if discovery or execution requires missing permission, stop or request a contract change.
+
+Terminal-backed metadata queries, inspections and runs need exact `operations.affect` entries for their real `execute` effects, even when they only read project data; metadata actions additionally require `observe`. Do not grant terminal execution only through `operations.observe`. Pre-audit known registered IDs, args, workspace and cumulative effects (including runner output cache) before bundling in-grant operations into one Card. When discovery supplies an unknown exact ID, inspect and audit it in a subsequent in-grant Card without another TFR/TFC; discovery never promotes the ID to run permission. Correct omitted in-grant Card operations internally, but do not bypass host denial or infer a missing human grant.
 
 ```yaml
 task_card:
