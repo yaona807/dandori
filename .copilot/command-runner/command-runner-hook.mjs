@@ -383,6 +383,9 @@ function patchTargetPaths(value) {
 
 function containsProtectedPath(value) {
   if (typeof value === 'string') {
+    // Source text containing patch directives is not a path argument. Only
+    // actual patch-bearing fields are inspected by patchTargetPaths above.
+    if (value.includes('\n') || value.trimStart().startsWith('*** ')) return false;
     const normalized = normalizePossiblePath(value);
     if (normalized === null) return false;
     return [...PROTECTED_SUFFIXES].some(
