@@ -1368,14 +1368,14 @@ test('P0 Git built-ins only observe a repository rooted at the workspace', async
     assert.equal(run('builtin-git-branch-info').status, 'completed');
     const refs = run('builtin-git-refs');
     assert.equal(refs.status, 'completed');
-    assert.match(refs.stdout, /refs\\/heads\\//u);
+    assert.ok(refs.stdout.includes('refs/heads/'));
     assert.match(refs.stdout, new RegExp(commit, 'u'));
     assert.equal(run('builtin-git-compare', ['base=' + commit]).status, 'completed');
     assert.equal(run('builtin-git-show', ['commit=HEAD']).status, 'failed');
     assert.equal(run('builtin-git-compare', ['base=HEAD']).status, 'failed');
     assert.equal(run('builtin-git-compare', ['base=' + 'a'.repeat(40)]).status, 'failed');
 
-    await writeFile(path.join(fixture.alpha, 'tests', 'sample.test.js'), 'export const changed = true;\\n');
+    await writeFile(path.join(fixture.alpha, 'tests', 'sample.test.js'), 'export const changed = true;' + String.fromCharCode(10));
     execGit('add', 'tests/sample.test.js');
     execGit('commit', '-qm', 'second');
     const comparison = run('builtin-git-compare', ['base=' + commit]);
