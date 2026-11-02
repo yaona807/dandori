@@ -1329,6 +1329,11 @@ test('native patch editing works with exact file-path protection in both hook en
       sessionId: 'copilot-session', toolName: 'apply_patch', toolArgs: disguisedPatch,
     });
     assert.equal(JSON.parse(disguised.stdout).permissionDecision, 'deny');
+    const disguisedEdit = runHook(fixture, {
+      sessionId: 'copilot-session', toolName: 'Edit',
+      toolArgs: JSON.stringify({ path: disguisedControl, content: 'safe' }),
+    });
+    assert.equal(JSON.parse(disguisedEdit.stdout).permissionDecision, 'deny');
 
     // The leading space below is a hunk context marker, not a file directive.
     const quotedPathPatch = ['*** Begin Patch',

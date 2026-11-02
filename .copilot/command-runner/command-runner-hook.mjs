@@ -400,20 +400,23 @@ function isProtectedTargetPath(value) {
   );
 }
 
-function containsProtectedPath(value) {
+const EDIT_TARGET_KEYS = new Set([
+  'path', 'filePath', 'file_path', 'filename', 'target', 'targetPath',
+  'destination', 'destinationPath', 'source', 'sourcePath', 'oldPath', 'newPath',
+  'directory', 'folder', 'to', 'from', 'paths',
+]);
+
+function containsProtectedPath(value, field = null) {
   if (typeof value === 'string') {
-    // Free-form edit content is not an editable path. Explicit patch targets
-    // use isProtectedTargetPath directly without these content exemptions.
+    // Explicit target paths are never exempt, even when they look like prose.
+    if (EDIT_TARGET_KEYS.has(field)) return isProtectedTargetPath(value);
+    // Only free-form edit content may contain literal patch documentation.
     if (value.includes('\n') || value.trimStart().startsWith('*** ')) return false;
-    const normalized = normalizePossiblePath(value);
-    if (normalized === null) return false;
-    return [...PROTECTED_SUFFIXES].some(
-      (suffix) => normalized === suffix || normalized.endsWith(`/${suffix}`),
-    );
+    return isProtectedTargetPath(value);
   }
-  if (Array.isArray(value)) return value.some(containsProtectedPath);
+  if (Array.isArray(value)) return value.some((entry) => containsProtectedPath(entry, field));
   if (value !== null && typeof value === 'object') {
-    return Object.values(value).some(containsProtectedPath);
+    return Object.entries(value).some(([key, entry]) => containsProtectedPath(entry, key));
   }
   return false;
 }
