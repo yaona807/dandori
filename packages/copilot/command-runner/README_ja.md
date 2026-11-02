@@ -256,7 +256,7 @@ $COPILOT_HOME/command-runner/executions/<workspace-id>/<UTC-timestamp>_<UUID>/
   stderr.log
 ```
 
-このキャッシュは一時的な観測データであり、監査ログではありません。新しい `run` の前に24時間を超えた管理対象executionを削除し、必要な場合は管理キャッシュ全体が256 MiB以内になるまで古いexecutionを削除します。容量整理では61分より新しい結果を削除しません。これはcommandの最大timeout 1時間より長いためです。最近の結果だけで容量上限に達している場合は、実行中の可能性がある出力を消さず、新しい `run` をfail-closedで拒否します。
+このキャッシュは一時的な観測データであり監査ログではありません。通常の `run` は全Workspace共通の管理対象キャッシュ容量（256 MiB、実行ごとに32 MiBの予約）を検査しますが、**既存ログを一切自動削除しません**。容量不足ならコマンド起動前に `execution_cache_full` で停止します。削除はWorker v2 CLIとHookから使用できない明示的な管理操作です。ユーザー自身が `node ~/.copilot/command-runner/command-runner-interface.mjs cache-prune confirm=prune-managed-executions` を直接実行した場合のみ、管理対象の24時間超の実行結果を削除し、必要なら61分超の古い結果から容量整理します（他Workspaceのキャッシュを含む）。これは破壊的な管理操作であり、Workerの通常実行権限には含まれません。
 
 ## セキュリティ境界
 

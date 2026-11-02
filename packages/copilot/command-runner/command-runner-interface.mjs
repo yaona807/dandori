@@ -877,6 +877,18 @@ async function managedExecutions() {
   return entries;
 }
 
+// Cache deletion is an explicit owner maintenance action, never part of 'run'.
+async function requireExecutionCapacity(reserveBytes = 0) {
+  const entries = await managedExecutions();
+  const total = entries.reduce((sum, entry) => sum + entry.size, 0);
+  if (total > LIMITS.executionCacheBytes - reserveBytes) {
+    throw new InterfaceError(
+      'execution_cache_full',
+      'managed execution cache is full; owner must explicitly prune it before running another command',
+    );
+  }
+}
+
 async function cleanupExecutions(reserveBytes = 0) {
   let entries = await managedExecutions();
   for (const entry of entries.filter(({ age }) => age >= LIMITS.executionTtlMs)) {
@@ -1039,10 +1051,11 @@ async function main() {
     'unregister',
     'run',
     'output',
+    'cache-prune',
   ].includes(operation)) {
     throw new InterfaceError(
       'usage',
-      'usage: command-runner-interface.mjs workspace-list [query=<value>] [offset=<n>] | workspace-describe <id> | workspace-register <id> | workspace-unregister <id> expected=<workspace-hash> | list --expected-workspace=<id> [query=<value>] [offset=<n>] | describe <id> --expected-workspace=<id> | inspect <id> --expected-workspace=<id> | register <id> --expected-workspace=<id> definition=<encoded-json> | update <id> --expected-workspace=<id> expected=<definition-hash> definition=<encoded-json> | unregister <id> --expected-workspace=<id> expected=<definition-hash> | run <id> --expected-workspace=<id> [name=encoded-value ...] | output <execution-id> --expected-workspace=<id> stream=stdout|stderr [offset=<n>]',
+      'usage: command-runner-interface.mjs workspace-list [query=<value>] [offset=<n>] | workspace-describe <id> | workspace-register <id> | workspace-unregister <id> expected=<workspace-hash> | list --expected-workspace=<id> [query=<value>] [offset=<n>] | describe <id> --expected-workspace=<id> | inspect <id> --expected-workspace=<id> | register <id> --expected-workspace=<id> definition=<encoded-json> | update <id> --expected-workspace=<id> expected=<definition-hash> definition=<encoded-json> | unregister <id> --expected-workspace=<id> expected=<definition-hash> | run <id> --expected-workspace=<id> [name=encoded-value ...] | output <execution-id> --expected-workspace=<id> stream=stdout|stderr [offset=<n>] | cache-prune confirm=prune-managed-executions (user maintenance only)',
     );
   }
 
@@ -1215,6 +1228,15 @@ async function main() {
     return 0;
   }
 
+  if (operation === 'cache-prune') {
+    if (subject !== 'confirm=prune-managed-executions' || rest.length !== 0) {
+      throw new InterfaceError('usage', 'cache-prune requires exact confirm=prune-managed-executions (user maintenance only)');
+    }
+    await cleanupExecutions(0);
+    emit({ status: 'pruned', scope: 'managed-execution-caches' });
+    return 0;
+  }
+
   if (operation === 'run') {
     if (!COMMAND_ID_RE.test(subject ?? '')) {
       throw new InterfaceError('usage', 'run requires a safe command ID');
@@ -1253,7 +1275,7 @@ async function main() {
     if (expectedIdentity !== undefined && preflight.workspaceIdentity !== expectedIdentity) {
       throw new InterfaceError('workspace_identity_changed', 'selected workspace identity changed');
     }
-    await cleanupExecutions(LIMITS.maxExecutionReserveBytes);
+    await requireExecutionCapacity(LIMITS.maxExecutionReserveBytes);
     const result = await runCore(['run', subject, ...rest]);
     if (result?.workspaceId !== expectedWorkspace || result?.commandId !== subject) {
       throw new InterfaceError('runner_protocol_error', 'unexpected execution identity');
