@@ -23,6 +23,8 @@ const TERMINAL_TOOL_NAMES = new Set([
 // Unknown tools remain denied; the agent frontmatter is the capability boundary.
 const PERMITTED_NON_TERMINAL_TOOL_NAMES = new Set([
   'read', 'search', 'web', 'edit', 'Read', 'Edit', 'view',
+  // Native Copilot code search and compatible PascalCase search aliases.
+  'glob', 'Glob', 'grep', 'rg', 'Grep',
   'search/codebase', 'search/usages', 'search/fileSearch', 'search/textSearch',
   'search/listDirectory', 'read/readFile', 'read/problems', 'web/fetch',
   'edit/editFiles', 'edit/createFile', 'edit/createDirectory',
@@ -432,7 +434,9 @@ try {
     ) {
       deny('User-level CommandRunner control files cannot be modified by agent write tools.');
     } else if (PERMITTED_NON_TERMINAL_TOOL_NAMES.has(toolName)) {
-      output({ continue: true });
+      // Local expects a continuation response; Copilot camelCase expects no
+      // hook permission decision so native permission checks still apply.
+      output(input?.toolName === undefined ? { continue: true } : {});
     } else {
       deny('Shared runner permits only declared Worker tools and fixed-runner terminal calls.');
     }

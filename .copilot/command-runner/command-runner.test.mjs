@@ -1208,6 +1208,50 @@ test('shared hook allows ordinary read, search and edit tools while protecting r
       },
     });
     assert.deepEqual(JSON.parse(unrelated.stdout), { continue: true });
+    const copilotRead = runHook(fixture, {
+      sessionId: 'copilot-session',
+      toolName: 'Read',
+      toolArgs: { path: 'README.md' },
+    });
+    assert.deepEqual(JSON.parse(copilotRead.stdout), {});
+  });
+});
+
+test('native file and text search aliases remain read-only under Local and Copilot hooks', async () => {
+  await withFixture(async (fixture) => {
+    for (const toolName of ['glob', 'Glob', 'grep', 'rg', 'Grep']) {
+      const local = runHook(fixture, {
+        hook_event_name: 'PreToolUse',
+        tool_name: toolName,
+        tool_input: { pattern: '**/*.ts' },
+      });
+      assert.equal(local.status, 0, local.stderr);
+      assert.deepEqual(JSON.parse(local.stdout), { continue: true }, toolName);
+
+      const copilot = runHook(fixture, {
+        sessionId: 'copilot-session',
+        toolName,
+        toolArgs: JSON.stringify({ pattern: '**/*.ts' }),
+      });
+      assert.equal(copilot.status, 0, copilot.stderr);
+      assert.deepEqual(JSON.parse(copilot.stdout), {}, toolName);
+    }
+
+    // The fix must not grant editing, delegation, web search or shell execution.
+    for (const toolName of ['create', 'Write', 'web_search', 'WebSearch', 'task', 'Agent']) {
+      const denied = runHook(fixture, {
+        sessionId: 'copilot-session',
+        toolName,
+        toolArgs: '{}',
+      });
+      assert.equal(JSON.parse(denied.stdout).permissionDecision, 'deny', toolName);
+    }
+    const shell = runHook(fixture, {
+      hook_event_name: 'PreToolUse',
+      tool_name: 'run_in_terminal',
+      tool_input: { command: 'rg example src' },
+    });
+    assert.equal(JSON.parse(shell.stdout).permissionDecision, 'deny');
   });
 });
 
