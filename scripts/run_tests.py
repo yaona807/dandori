@@ -50,6 +50,7 @@ REQUIRED_TEST_METHODS = {
         "test_missing_bundled_worker_definition_is_rejected",
         "test_new_conformance_case_requires_run_record_entry",
         "test_no_progress_triggers_replan_not_fixed_stop",
+        "test_orchestrator_command_discovery_and_status_grants_are_required",
         "test_orchestrator_invariant_must_remain_in_its_required_section",
         "test_orchestrator_rejects_edit_tool",
         "test_parallel_conflict_policy_is_required",
