@@ -368,15 +368,23 @@ function patchTargetPaths(value) {
     throw new Error('patch tool requires a bounded Begin/End Patch envelope');
   }
   const paths = [];
-  for (const originalLine of lines) {
-    // Native patch tools may accept indented file directives. Canonicalize
-    // them before classifying targets, rather than silently skipping them.
+  let section = null;
+  for (const originalLine of lines.slice(1, -1)) {
+    // In update hunks, one leading space is a context-line marker. It may
+    // contain literal "*** Update File" documentation rather than a directive.
+    if (section === 'update' && originalLine.startsWith(' ')
+      && !originalLine.startsWith('  ')) continue;
     const line = originalLine.trimStart();
     if (!line.startsWith('*** ')) continue;
-    const match = /^(?:\*\*\* (?:Add|Update|Delete) File: |\*\*\* Move to: )(.+)$/u.exec(line);
-    if (match) {
-      paths.push(match[1].trim());
-    } else if (!['*** Begin Patch', '*** End Patch', '*** End of File'].includes(line)) {
+    const file = /^\*\*\* (Add|Update|Delete) File: (.+)$/u.exec(line);
+    const move = /^\*\*\* Move to: (.+)$/u.exec(line);
+    if (file) {
+      section = file[1].toLowerCase();
+      paths.push(file[2].trim());
+    } else if (move) {
+      if (section !== 'update') throw new Error('move must follow update');
+      paths.push(move[1].trim());
+    } else if (!['*** End of File'].includes(line)) {
       throw new Error('unsupported patch path directive');
     }
   }
@@ -384,10 +392,18 @@ function patchTargetPaths(value) {
   return paths;
 }
 
+function isProtectedTargetPath(value) {
+  const normalized = normalizePossiblePath(value);
+  if (normalized === null) return false;
+  return [...PROTECTED_SUFFIXES].some(
+    (suffix) => normalized === suffix || normalized.endsWith(`/${suffix}`),
+  );
+}
+
 function containsProtectedPath(value) {
   if (typeof value === 'string') {
-    // Source text containing patch directives is not a path argument. Only
-    // actual patch-bearing fields are inspected by patchTargetPaths above.
+    // Free-form edit content is not an editable path. Explicit patch targets
+    // use isProtectedTargetPath directly without these content exemptions.
     if (value.includes('\n') || value.trimStart().startsWith('*** ')) return false;
     const normalized = normalizePossiblePath(value);
     if (normalized === null) return false;
@@ -469,7 +485,7 @@ try {
           && !Array.isArray(toolInput) && typeof toolInput.patch === 'string'
           ? toolInput.patch : null;
     const blockedPatch = patchPayload !== null
-      && patchTargetPaths(patchPayload).some(containsProtectedPath);
+      && patchTargetPaths(patchPayload).some(isProtectedTargetPath);
     if (
       blockedPatch || (isWriteTool && containsProtectedPath(toolInput))
     ) {
