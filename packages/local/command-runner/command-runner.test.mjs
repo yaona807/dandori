@@ -295,6 +295,8 @@ test('distributed Researcher and Writer share the fixed runner CLI hook', async 
     assert.match(source, /  - execute\/runInTerminal\n  - execute\nagents: \[\]\nhooks:/u);
     assert.match(source, /command-runner-hook\.mjs/u);
     assert.match(source, /node ~\/\.copilot\/command-runner\/command-runner-v2\.mjs/u);
+    assert.match(source, /request synchronous execution/u);
+    assert.match(source, /omit the terminal `timeout` option/u);
     assert.match(source, /Do not execute raw project commands/u);
     assert.doesNotMatch(source, /\b(?:DANDORI|Orchestrator|Task Card|TFR|TFC|Flow Ledger)\b/u);
   }
@@ -1087,6 +1089,34 @@ test('hook validates actual Local and Copilot terminal aliases instead of reject
       tool_input: { command: accepted, mode: 'sync', explanation: 'Inspect registered commands', goal: 'Read command list' },
     });
     assert.equal(JSON.parse(vscodeSync.stdout).permissionDecision, 'allow');
+
+    // Reproduce the observed v2 inspect call under both Local and Copilot hook envelopes.
+    const v2Inspect = 'node ~/.copilot/command-runner/command-runner-v2.mjs inspect builtin-git-diff';
+    for (const input of [
+      { tool_name: 'run_in_terminal', tool_input: { command: v2Inspect, mode: 'sync', explanation: 'Inspect diff' } },
+      { toolName: 'run_in_terminal', toolArgs: JSON.stringify({ command: v2Inspect, mode: 'sync' }) },
+      { tool_name: 'execute/runInTerminal', tool_input: { command: v2Inspect, mode: 'sync', timeout: 0 } },
+    ]) {
+      const permitted = runHook(fixture, input);
+      assert.equal(permitted.status, 0, permitted.stderr);
+      assert.equal(JSON.parse(permitted.stdout).permissionDecision, 'allow');
+    }
+
+    for (const [options, reason] of [
+      [{ mode: 'async' }, /terminal mode must be sync or omitted/u],
+      [{ mode: 'background' }, /terminal mode must be sync or omitted/u],
+      [{ mode: null }, /terminal mode must be sync or omitted/u],
+      [{ timeout: 5000 }, /terminal timeout must be 0 or omitted/u],
+      [{ timeout: '0' }, /terminal timeout must be 0 or omitted/u],
+    ]) {
+      const denied = runHook(fixture, {
+        toolName: 'run_in_terminal',
+        toolArgs: JSON.stringify({ command: v2Inspect, ...options }),
+      });
+      const payload = JSON.parse(denied.stdout);
+      assert.equal(payload.permissionDecision, 'deny');
+      assert.match(payload.permissionDecisionReason, reason);
+    }
 
     for (const options of [
       { mode: 'async' },
