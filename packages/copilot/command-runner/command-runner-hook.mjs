@@ -391,9 +391,11 @@ function validateTerminalInput(toolInput) {
   if (toolInput.isBackground === true || toolInput.background === true) {
     throw new Error('background terminal execution is not allowed');
   }
-  if ((toolInput.mode !== undefined && toolInput.mode !== 'sync')
-    || (toolInput.timeout !== undefined && toolInput.timeout !== 0)) {
-    throw new Error('asynchronous or timed background terminal execution is not allowed');
+  if (toolInput.mode !== undefined && toolInput.mode !== 'sync') {
+    throw new Error('terminal mode must be sync or omitted; retry the same fixed-runner command with mode=sync');
+  }
+  if (toolInput.timeout !== undefined && toolInput.timeout !== 0) {
+    throw new Error('terminal timeout must be 0 or omitted; retry the same fixed-runner command without terminal timeout');
   }
   const words = parseCommand(toolInput.command);
   if (V2_PREFIX.every((s, i) => words[i] === s)) return validateV2Invocation(words);
