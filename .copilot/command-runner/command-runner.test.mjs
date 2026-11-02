@@ -1311,6 +1311,35 @@ test('native patch editing works with exact file-path protection in both hook en
       toolArgs: JSON.stringify({ path: control, replacement: 'unsafe' }),
     });
     assert.equal(JSON.parse(deniedReplace.stdout).permissionDecision, 'deny');
+
+    // Patch documentation is data, not a request to execute that patch.
+    for (const [toolName, args] of [
+      ['str_replace_editor', { path: 'examples/change.patch',
+        old_str: '*** Begin Patch', new_str: '*** Update File: ' + control }],
+      ['Edit', { path: 'examples/change.patch', content: [
+        '*** Begin Patch', '*** Update File: ' + control, '*** End Patch',
+      ].join('\\n') }],
+      ['edit/editFiles', { files: [{ path: 'examples/change.patch',
+        replacement: '*** Begin Patch' }] }],
+    ]) {
+      const ordinaryEdit = runHook(fixture, {
+        sessionId: 'copilot-session', toolName,
+        toolArgs: JSON.stringify(args),
+      });
+      assert.equal(ordinaryEdit.status, 0, ordinaryEdit.stderr);
+      assert.deepEqual(JSON.parse(ordinaryEdit.stdout), {}, toolName);
+    }
+
+    // A patch-bearing Edit argument must still protect actual patch targets.
+    for (const args of [
+      { patch: ['*** Begin Patch', '*** Update File: ' + control,
+        '@@', '-old', '+new', '*** End Patch'].join('\\n') },
+    ]) {
+      const denied = runHook(fixture, {
+        sessionId: 'copilot-session', toolName: 'Edit', toolArgs: JSON.stringify(args),
+      });
+      assert.equal(JSON.parse(denied.stdout).permissionDecision, 'deny');
+    }
   });
 });
 

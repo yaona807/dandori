@@ -383,9 +383,6 @@ function patchTargetPaths(value) {
 
 function containsProtectedPath(value) {
   if (typeof value === 'string') {
-    if (value.startsWith('*** Begin Patch')) {
-      return patchTargetPaths(value).some(containsProtectedPath);
-    }
     const normalized = normalizePossiblePath(value);
     if (normalized === null) return false;
     return [...PROTECTED_SUFFIXES].some(
@@ -455,15 +452,20 @@ try {
     }
   }
   if (!TERMINAL_TOOL_NAMES.has(toolName)) {
-    // Parse patch-target paths before deciding; emit only one hook decision.
-    const blockedPatch = toolName === 'apply_patch'
-      && patchTargetPaths(toolInput).some(containsProtectedPath);
+    // Parse only a real patch-bearing argument, never ordinary source text or
+    // replacement strings that merely contain patch syntax as documentation.
+    const isWriteTool = typeof toolName === 'string'
+      && (WRITE_TOOL_NAME_PATTERN.test(toolName) || toolName === 'str_replace_editor');
+    const patchPayload = toolName === 'apply_patch' ? toolInput
+      : isWriteTool && typeof toolInput === 'string' && toolInput.startsWith('*** Begin Patch')
+        ? toolInput
+        : isWriteTool && toolInput !== null && typeof toolInput === 'object'
+          && !Array.isArray(toolInput) && typeof toolInput.patch === 'string'
+          ? toolInput.patch : null;
+    const blockedPatch = patchPayload !== null
+      && patchTargetPaths(patchPayload).some(containsProtectedPath);
     if (
-      blockedPatch || (
-        typeof toolName === 'string'
-        && (WRITE_TOOL_NAME_PATTERN.test(toolName) || toolName === 'str_replace_editor')
-        && containsProtectedPath(toolInput)
-      )
+      blockedPatch || (isWriteTool && containsProtectedPath(toolInput))
     ) {
       deny('User-level CommandRunner control files cannot be modified by agent write tools.');
     } else if (PERMITTED_NON_TERMINAL_TOOL_NAMES.has(toolName)) {
