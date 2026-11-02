@@ -300,7 +300,3 @@ The worker does not send a workspace ID. The existing core selects the registere
 The generated argv is manager-sensitive: npm uses a terminal `--` separator, pnpm/Yarn/Bun do not. New npm/pnpm/Yarn/Bun registrations carry a `scriptGuard` fingerprint checked by the core before every execution, including through v1. All package scripts and declared package manager are hashed conservatively; this does not sandbox script contents or dependencies. Legacy entries without a guard remain supported. Do not auto-approve new candidates.
 
 For monorepos, `propose <id> packageDir=<workspace-relative-package>` inherits the closest package-manager declaration or lockfile from that package through the **registered workspace root only**. The execution guard repeats the identical resolution. The proposal response contains only the selected-script preview, never the full script catalog; the internal fingerprint still covers all package scripts.
-
-### Read-only Git comparison
-
-Use `builtin-git-refs` to inspect available local and remote-tracking branch refs (at most 100) and full commit SHAs. After verifying the comparison baseline, invoke `builtin-git-compare base=<40-hex-SHA>` through the fixed runner with explicit Task Card authorization. The three-dot diff compares the merge base with HEAD; separately inspect status and staged/unstaged changes. No remote fetch or inferred default branch.

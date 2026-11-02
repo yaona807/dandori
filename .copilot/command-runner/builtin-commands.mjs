@@ -28,8 +28,6 @@ const SPECS = {
   'builtin-git-show': { description: 'Read one full-SHA commit without external diff execution.', arguments: { commit: positional({ type: 'string', maxLength: 40 }) } },
   'builtin-git-ls-files': { description: 'List tracked repository files.', arguments: { file: option('--file', file(false)) } },
   'builtin-git-branch-info': { description: 'Read the current repository branch.', arguments: {} },
-  'builtin-git-refs': { description: 'List up to 100 local and remote-tracking branches with full commit IDs (no network).', arguments: {} },
-  'builtin-git-compare': { description: 'Read the committed merge-base diff from an exact full base commit SHA to HEAD.', arguments: { base: positional({ type: 'string', maxLength: 40 }), file: option('--file', file(false)) } },
 };
 
 export function builtinDefinitions() {
@@ -258,19 +256,7 @@ async function gitAction(root, id, positionals, options) {
   } else if (id === 'builtin-git-ls-files') {
     args = ['--literal-pathspecs', 'ls-files', '--cached', '-z', ...(readPath ? ['--', readPath] : [])];
   } else if (id === 'builtin-git-branch-info') args = ['branch', '--show-current'];
-  else if (id === 'builtin-git-refs') {
-    if (positionals.length || Object.keys(options).length) refuse('Git ref listing accepts no arguments');
-    args = ['for-each-ref', '--count=100', '--sort=-committerdate',
-      '--format=%(refname)%09%(objectname)', 'refs/heads/', 'refs/remotes/'];
-  } else if (id === 'builtin-git-compare') {
-    const base = positionals[0];
-    if (positionals.length !== 1 || !/^[a-f0-9]{40}$/iu.test(base ?? '')) refuse('comparison requires one full base commit SHA');
-    if (Object.keys(options).some((option) => option !== '--file')) refuse('unsupported Git comparison option');
-    // A fixed full SHA avoids user-controlled ref syntax. Three dots compare the merge base with HEAD.
-    git(root, ['rev-parse', '--verify', base + '^{commit}']);
-    args = ['--literal-pathspecs', 'diff', '--no-ext-diff', '--no-textconv',
-      '--ignore-submodules=all', base + '...HEAD', ...(readPath ? ['--', readPath] : [])];
-  } else refuse('unsupported builtin Git operation');
+  else refuse('unsupported builtin Git operation');
   return { output: git(root, args) };
 }
 

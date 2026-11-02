@@ -251,8 +251,6 @@ Internal `criterion_refs` ⊆ active criteria; observation-only `conflict_resolu
 
 Select runtime-visible agent names/descriptions, not definition files or caller-specific schemas. Delegate one fenced `yaml` block with top-level `task_card` and no orchestration prose.
 
-When an approved investigation requires the changed-file set or comparison basis, delegate all necessary observation modalities and their read-only effects. A read/search tool does not authorize a Git-observation execution. If permitted execution is necessary, include the exact authorized subject and operation without prescribing Worker-specific commands. Never assume a comparison baseline or expand permission in response to a blocked Worker.
-
 ## Worker selection
 
 Use frontmatter-listed agents only. Never substitute a built-in or unnamed generic agent.
