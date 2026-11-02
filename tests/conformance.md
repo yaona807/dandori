@@ -493,6 +493,10 @@ Install the bundled user-level agents and fixed runner in a disposable VS Code e
 - Actual workspace and command identity guards still reject stale or wrong-target execution before launch. A failed host tool approval is distinguished from a DANDORI TFR authorization gap.
 - All legacy Local harness paths that are still supported continue to apply the fixed-runner policy, or the incompatibility is explicitly reported. Record VS Code/Copilot versions, selected harness, observed tool names, and pass/fail evidence.
 
+- Confirm that Copilot actually loads the declared `command-runner` Skill before an execution Worker uses the terminal, and that Local performs the explicit read before first terminal use. Without an installed Skill, the Worker returns `runner_skill_unavailable`, not a guessed raw command.
+- For an implementation goal needing Git observations and tests, the first TFR includes bounded terminal metadata, registered checks and runner-cache effects; effectful terminal actions appear in the exact delegated Card, avoiding a second human approval for in-grant execution. Host rejection remains a stop.
+- Record real synchronous terminal-tab reuse/retention and exit-code/output recovery in both harnesses. Evaluate hidden background auto-dispose only as an independent isolated host experiment without modifying the shipped Hook or launching project commands; unknown ownership or missing output/exit guarantees keep the synchronous policy. Never dispose user-created terminals.
+
 ### CONF-025 — Dispatch genuinely independent work concurrently
 
 **Input**

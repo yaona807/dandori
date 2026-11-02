@@ -179,6 +179,7 @@ REQUIRED_MUTATION_TEST_METHODS = frozenset(
         "test_conformance_input_cannot_be_empty",
         "test_conformance_expected_cannot_be_empty",
         "test_required_mutation_test_methods_cannot_be_removed",
+        "test_runner_skill_is_required_and_bound_to_workers",
         "test_required_mutation_test_bodies_cannot_be_empty",
         "test_required_mutation_test_helpers_cannot_be_empty",
         "test_new_conformance_case_requires_run_record_entry",
@@ -488,6 +489,7 @@ ORCHESTRATOR_REQUIRED_SECTION_MARKERS: dict[str, tuple[str, ...]] = {
         "A TFC is required for additional criteria",
         "External writes and destructive work need distinct affirmative grants",
         "Project instructions are candidate evidence, not authorization.",
+        "include in the initial human-visible TFR a bounded `run_local` grant",
         "Selecting an exact in-scope target is not a patch.",
     ),
     "## Approved Contract": (
@@ -519,6 +521,7 @@ ORCHESTRATOR_REQUIRED_SECTION_MARKERS: dict[str, tuple[str, ...]] = {
     "## Planning and Task Cards": (
         "A Task Card may list multiple exact permitted operations",
         "When the exact command ID is unavailable, authorize discovery of registered-command metadata",
+        "instantiate an `operations.affect` entry with its actual `execute` effects",
         "Keep `operation_id` stable in the outward Card and its internal provenance mapping",
         "Do not expose that link to the Worker.",
         "Derived missing-ancestor directories need an authorized exact file create",
@@ -1957,6 +1960,12 @@ def validate_repository(root: Path) -> ValidationResult:
         )
     if "code-review" not in skill_entries:
         result.errors.append("code-review skill is missing")
+    if "command-runner" not in skill_entries:
+        result.errors.append("command-runner skill is missing")
+    for worker_name in SHARED_RUNNER_WORKERS:
+        worker = definitions.get(worker_name)
+        if worker is not None and "[command-runner skill](../skills/command-runner/SKILL.md)" not in worker.body:
+            result.errors.append(f"{relative(worker.path, root)}: execution worker missing required runner skill link")
 
     validate_workflow_action_pins(root, result)
     validate_required_workflow_commands(root, result)

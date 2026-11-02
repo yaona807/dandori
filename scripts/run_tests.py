@@ -70,6 +70,7 @@ REQUIRED_TEST_METHODS = {
         "test_required_mutation_test_helpers_cannot_be_empty",
         "test_required_mutation_test_method_cannot_be_skipped",
         "test_required_mutation_test_methods_cannot_be_removed",
+        "test_runner_skill_is_required_and_bound_to_workers",
         "test_required_release_test_bodies_cannot_be_empty",
         "test_required_release_test_class_cannot_be_skipped",
         "test_required_release_test_helpers_cannot_be_empty",

@@ -277,6 +277,8 @@ DANDORIは**実質的進捗**（Criterionの検証済み改善）と**診断上�
   skills/
     code-review/
       SKILL.md
+    command-runner/
+      SKILL.md
 .github/
   workflows/
     validate.yml
@@ -296,6 +298,7 @@ assets/
 | `Orchestrator` | 要求整理、短い承認、契約管理、Task Card作成、Worker選択、監査、ループ制御、最終統合を担当するcontrol-plane agent |
 | Reference workers | 調査、指定されたGitHub Issue / Pull Request確認、実装、レビュー、ブラウザ確認用の任意Worker |
 | `code-review` skill | Reference Reviewerが使用するfocused review guidance |
+| `command-runner` skill | 実行ワーカー用の共通CLI操作・復旧ガイド |
 
 ## 互換性と前提条件
 
@@ -306,7 +309,7 @@ assets/
 - `BrowserQA`には設定済みのbrowser Tool群が必要です。
 - 利用できない、または認識されないTool名はruntimeに無視される場合があるため、実際のTool可用性を確認してください。
 - 同梱Workerは、Toolの引数とruntime挙動で委譲境界を強制できる場合だけ、そのToolを呼び出します。利用可能なToolがより広い範囲でしか動作できない場合は、実行せず`blocked`を返し、必要な狭いcapabilityを示します。
-- ResearcherとWriterは共通の固定CLIを直接利用します。`.copilot/command-runner/` からRunnerをインストールし、Agent固有Hookのため `chat.useCustomAgentHooks` を有効にしてください。
+- ResearcherとWriterは共通の固定CLIを直接利用します。`.copilot/command-runner/` からRunnerをインストールし、Agent固有Hookのため `chat.useCustomAgentHooks` を有効にしてください。 Copilotプロファイルは`command-runner` Skillを読み込み、LocalではWorkerがターミナル利用前に明示的に読み取ります。Skill自体は権限ではありません。同期実行のターミナルタブが残る問題は、環境別に検証が必要です。
 - 外部Workerは、自己完結した依頼を処理し、再委譲せず、必要以上のToolを持たず、役割と作用範囲をdescriptionへ正確に記載する必要があります。
 - VS Code Chat Diagnosticsで、すべてのAgentとSkillの読み込み元を確認してください。
 
@@ -358,14 +361,14 @@ workspace内の `.copilot/agents` と `.copilot/skills` を使うには、`chat.
 
 ```bash
 rm -f ~/.copilot/agents/{Orchestrator,Researcher,GitHubResearcher,PullRequestResearcher,Writer,CommandRunner,Reviewer,BrowserQA}.agent.md
-rm -rf ~/.copilot/skills/code-review
+rm -rf ~/.copilot/skills/code-review ~/.copilot/skills/command-runner
 ```
 
 標準workspace配置の削除対象：
 
 ```bash
 rm -f .github/agents/{Orchestrator,Researcher,GitHubResearcher,PullRequestResearcher,Writer,CommandRunner,Reviewer,BrowserQA}.agent.md
-rm -rf .github/skills/code-review
+rm -rf .github/skills/code-review .github/skills/command-runner
 ```
 
 更新時は旧 `PullRequestResearcher.agent.md` と廃止した `CommandRunner.agent.md` も削除し、古いWorkerが探索対象に残らないようにします。
@@ -375,7 +378,7 @@ rm -rf .github/skills/code-review
 ### 読み込み確認
 
 1. VS CodeのChat Viewでcontext menuを開き、**Diagnostics**を選択する
-2. すべてのDANDORI Agentと `code-review` Skillがエラーなく読み込まれていることを確認する
+2. すべてのDANDORI Agentと `code-review` と `command-runner` Skillがエラーなく読み込まれていることを確認する
 3. 各Agentの提供元を確認し、Orchestratorのallowlistが意図した定義を指していることを確認する
 4. 外部Workerが上記の互換性チェックを満たすことを確認する
 5. workspace、user、organization、extension、追加探索先にある同名定義の重複を削除または無効化する

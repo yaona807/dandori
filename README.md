@@ -274,6 +274,8 @@ If the current session's authorization or cumulative loop-control state cannot b
   skills/
     code-review/
       SKILL.md
+    command-runner/
+      SKILL.md
 .github/
   workflows/
     validate.yml
@@ -293,6 +295,7 @@ assets/
 | `Orchestrator` | Control-plane agent for intake, compact approval, contract management, Task Card creation, worker selection, audit, loop control, and synthesis |
 | Reference workers | Optional workers for investigation, exact GitHub issue/pull-request inspection, implementation, review, and browser-based verification |
 | `code-review` skill | Focused review guidance used by the reference review worker |
+| `command-runner` skill | Shared CLI operating and recovery guide for execution workers |
 
 ## Compatibility and prerequisites
 
@@ -303,7 +306,7 @@ assets/
 - `BrowserQA` requires the configured browser tool set.
 - Unavailable or unrecognized tool names can be ignored by the runtime; verify actual tool availability before use.
 - A bundled Worker calls a tool only when the tool arguments and runtime behavior can enforce the delegated boundary. If the available tool can operate only on a broader scope, the Worker returns `blocked` and identifies the narrower capability required.
-- Researcher and Writer call the shared fixed runner CLI directly. Install the user-level runner from `.copilot/command-runner/` and enable agent-scoped hooks with `chat.useCustomAgentHooks`.
+- Researcher and Writer call the shared fixed runner CLI directly. Install the user-level runner from `.copilot/command-runner/` and enable agent-scoped hooks with `chat.useCustomAgentHooks`. Copilot profiles load the declared `command-runner` Skill; Local workers explicitly read the installed Skill before terminal use. Skill availability is not execution permission. Synchronous terminal tabs may remain until host-specific cleanup is validated.
 - External workers must accept a self-contained request, avoid sub-delegation, use no broader tools than necessary, and describe their role and effect boundary accurately.
 - Confirm the loaded source for every agent and skill with VS Code Chat Diagnostics.
 
@@ -355,14 +358,14 @@ User-level cleanup:
 
 ```bash
 rm -f ~/.copilot/agents/{Orchestrator,Researcher,GitHubResearcher,PullRequestResearcher,Writer,CommandRunner,Reviewer,BrowserQA}.agent.md
-rm -rf ~/.copilot/skills/code-review
+rm -rf ~/.copilot/skills/code-review ~/.copilot/skills/command-runner
 ```
 
 Standard workspace cleanup:
 
 ```bash
 rm -f .github/agents/{Orchestrator,Researcher,GitHubResearcher,PullRequestResearcher,Writer,CommandRunner,Reviewer,BrowserQA}.agent.md
-rm -rf .github/skills/code-review
+rm -rf .github/skills/code-review .github/skills/command-runner
 ```
 
 The legacy `PullRequestResearcher.agent.md` name is also removed during this rename migration so an obsolete Worker definition cannot remain discoverable.
@@ -372,7 +375,7 @@ After cleanup, run the installation commands for the selected scope and verify d
 ### Verify discovery
 
 1. In the VS Code Chat view, open the context menu and select **Diagnostics**.
-2. Confirm that every DANDORI agent and the `code-review` skill are loaded without errors.
+2. Confirm that every DANDORI agent and the `code-review` and `command-runner` skills are loaded without errors.
 3. Check the source shown for each agent and confirm that the Orchestrator allowlist resolves to the intended definitions.
 4. Confirm that each external Worker satisfies the compatibility checklist above.
 5. Remove or disable duplicate same-name definitions from workspace, user, organization, extension, or custom discovery locations.
