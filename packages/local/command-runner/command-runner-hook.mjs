@@ -25,6 +25,8 @@ const PERMITTED_NON_TERMINAL_TOOL_NAMES = new Set([
   'read', 'search', 'web', 'edit', 'Read', 'Edit', 'view',
   // Native Copilot code search and compatible PascalCase search aliases.
   'glob', 'Glob', 'grep', 'rg', 'Grep',
+  // Native edit tools; the host still enforces the Writer's granted scope.
+  'apply_patch', 'str_replace_editor',
   'search/codebase', 'search/usages', 'search/fileSearch', 'search/textSearch',
   'search/listDirectory', 'read/readFile', 'read/problems', 'web/fetch',
   'edit/editFiles', 'edit/createFile', 'edit/createDirectory',
@@ -356,17 +358,64 @@ function normalizePossiblePath(value) {
   return normalized;
 }
 
-function containsProtectedPath(value) {
-  if (typeof value === 'string') {
-    const normalized = normalizePossiblePath(value);
-    if (normalized === null) return false;
-    return [...PROTECTED_SUFFIXES].some(
-      (suffix) => normalized === suffix || normalized.endsWith(`/${suffix}`),
-    );
+function patchTargetPaths(value) {
+  const patch = typeof value === 'string' ? value
+    : value !== null && typeof value === 'object' && !Array.isArray(value)
+      ? (value.patch ?? value.input) : null;
+  if (typeof patch !== 'string') throw new Error('patch tool requires patch text');
+  const lines = patch.replaceAll('\r\n', '\n').trimEnd().split('\n');
+  if (lines[0] !== '*** Begin Patch' || lines.at(-1) !== '*** End Patch') {
+    throw new Error('patch tool requires a bounded Begin/End Patch envelope');
   }
-  if (Array.isArray(value)) return value.some(containsProtectedPath);
+  const paths = [];
+  let section = null;
+  for (const originalLine of lines.slice(1, -1)) {
+    // In update hunks, one leading space is a context-line marker. It may
+    // contain literal "*** Update File" documentation rather than a directive.
+    if (section === 'update' && originalLine.startsWith(' *** ')) continue;
+    const line = originalLine.trimStart();
+    if (!line.startsWith('*** ')) continue;
+    const file = /^\*\*\* (Add|Update|Delete) File: (.+)$/u.exec(line);
+    const move = /^\*\*\* Move to: (.+)$/u.exec(line);
+    if (file) {
+      section = file[1].toLowerCase();
+      paths.push(file[2].trim());
+    } else if (move) {
+      if (section !== 'update') throw new Error('move must follow update');
+      paths.push(move[1].trim());
+    } else if (!['*** End of File'].includes(line)) {
+      throw new Error('unsupported patch path directive');
+    }
+  }
+  if (!paths.length) throw new Error('patch tool needs an explicit file path');
+  return paths;
+}
+
+function isProtectedTargetPath(value) {
+  const normalized = normalizePossiblePath(value);
+  if (normalized === null) return false;
+  return [...PROTECTED_SUFFIXES].some(
+    (suffix) => normalized === suffix || normalized.endsWith(`/${suffix}`),
+  );
+}
+
+const EDIT_TARGET_KEYS = new Set([
+  'path', 'filePath', 'file_path', 'filename', 'target', 'targetPath',
+  'destination', 'destinationPath', 'source', 'sourcePath', 'oldPath', 'newPath',
+  'directory', 'folder', 'to', 'from', 'paths',
+]);
+
+function containsProtectedPath(value, field = null) {
+  if (typeof value === 'string') {
+    // Explicit target paths are never exempt, even when they look like prose.
+    if (EDIT_TARGET_KEYS.has(field)) return isProtectedTargetPath(value);
+    // Only free-form edit content may contain literal patch documentation.
+    if (value.includes('\n') || value.trimStart().startsWith('*** ')) return false;
+    return isProtectedTargetPath(value);
+  }
+  if (Array.isArray(value)) return value.some((entry) => containsProtectedPath(entry, field));
   if (value !== null && typeof value === 'object') {
-    return Object.values(value).some(containsProtectedPath);
+    return Object.entries(value).some(([key, entry]) => containsProtectedPath(entry, key));
   }
   return false;
 }
@@ -427,10 +476,20 @@ try {
     }
   }
   if (!TERMINAL_TOOL_NAMES.has(toolName)) {
+    // Parse only a real patch-bearing argument, never ordinary source text or
+    // replacement strings that merely contain patch syntax as documentation.
+    const isWriteTool = typeof toolName === 'string'
+      && (WRITE_TOOL_NAME_PATTERN.test(toolName) || toolName === 'str_replace_editor');
+    const patchPayload = toolName === 'apply_patch' ? toolInput
+      : isWriteTool && typeof toolInput === 'string' && toolInput.startsWith('*** Begin Patch')
+        ? toolInput
+        : isWriteTool && toolInput !== null && typeof toolInput === 'object'
+          && !Array.isArray(toolInput) && typeof toolInput.patch === 'string'
+          ? toolInput.patch : null;
+    const blockedPatch = patchPayload !== null
+      && patchTargetPaths(patchPayload).some(isProtectedTargetPath);
     if (
-      typeof toolName === 'string'
-      && WRITE_TOOL_NAME_PATTERN.test(toolName)
-      && containsProtectedPath(toolInput)
+      blockedPatch || (isWriteTool && containsProtectedPath(toolInput))
     ) {
       deny('User-level CommandRunner control files cannot be modified by agent write tools.');
     } else if (PERMITTED_NON_TERMINAL_TOOL_NAMES.has(toolName)) {
