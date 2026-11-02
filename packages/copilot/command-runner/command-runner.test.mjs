@@ -1318,7 +1318,7 @@ test('native patch editing works with exact file-path protection in both hook en
         old_str: '*** Begin Patch', new_str: '*** Update File: ' + control }],
       ['Edit', { path: 'examples/change.patch', content: [
         '*** Begin Patch', '*** Update File: ' + control, '*** End Patch',
-      ].join('\\n') }],
+      ].join('\n') }],
       ['edit/editFiles', { files: [{ path: 'examples/change.patch',
         replacement: '*** Begin Patch' }] }],
     ]) {
@@ -1333,7 +1333,7 @@ test('native patch editing works with exact file-path protection in both hook en
     // A patch-bearing Edit argument must still protect actual patch targets.
     for (const args of [
       { patch: ['*** Begin Patch', '*** Update File: ' + control,
-        '@@', '-old', '+new', '*** End Patch'].join('\\n') },
+        '@@', '-old', '+new', '*** End Patch'].join('\n') },
     ]) {
       const denied = runHook(fixture, {
         sessionId: 'copilot-session', toolName: 'Edit', toolArgs: JSON.stringify(args),
