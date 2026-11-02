@@ -258,7 +258,7 @@ $COPILOT_HOME/command-runner/executions/<workspace-id>/<UTC-timestamp>_<UUID>/
   stderr.log
 ```
 
-The cache is temporary observation data, not an audit log. Before a new run, the runner deletes managed executions older than 24 hours and, when needed, older executions until the global managed cache is within 256 MiB. Results newer than 61 minutes are not removed for capacity cleanup, which is longer than the maximum one-hour command timeout. If recent results alone fill the cache, the new run fails closed instead of deleting potentially active output.
+The cache is temporary observation data, not an audit log. A normal `run` checks the *global* managed cache against its 256 MiB ceiling (reserving 32 MiB per execution) and **does not delete any existing logs**, including other workspaces' logs. If the capacity check fails, `execution_cache_full` stops before command launch. Cache maintenance is separate and intentionally unavailable through the Worker v2 facade and its Hook: the owner may explicitly run `node ~/.copilot/command-runner/command-runner-interface.mjs cache-prune confirm=prune-managed-executions` directly. This deletes managed execution directories older than 24 hours, then (if capacity still requires it) oldest logs older than 61 minutes; it does not touch workspace source files. The maintenance action is destructive and must not be silently included in a Worker grant.
 
 ## Security boundary
 
