@@ -461,7 +461,7 @@ try {
     if (
       blockedPatch || (
         typeof toolName === 'string'
-        && WRITE_TOOL_NAME_PATTERN.test(toolName)
+        && (WRITE_TOOL_NAME_PATTERN.test(toolName) || toolName === 'str_replace_editor')
         && containsProtectedPath(toolInput)
       )
     ) {
