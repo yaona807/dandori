@@ -83,6 +83,7 @@ REQUIRED_TEST_METHODS = {
         "test_required_validation_step_cannot_ignore_failures",
         "test_required_validation_step_rejects_shell_override",
         "test_reusable_workflow_requires_full_commit_sha",
+        "test_runner_skill_is_required_and_bound_to_workers",
         "test_scripts_inventory_rejects_module_shadowing",
         "test_serial_only_legacy_policy_is_rejected",
         "test_target_usage_requires_canonical_typed_identity",

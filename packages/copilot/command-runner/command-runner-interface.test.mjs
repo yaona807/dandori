@@ -8,6 +8,7 @@ import {
   readFile,
   readdir,
   rm,
+  truncate,
   writeFile,
 } from 'node:fs/promises';
 import os from 'node:os';
@@ -1006,16 +1007,43 @@ test('execution output is scoped to the current workspace', async () => {
   });
 });
 
-test('expired execution directories are cleaned before a new run', async () => {
+test('run never prunes old cache entries, and owner-only maintenance is explicit', async () => {
   await withFixture(async (fixture) => {
-    const executionRoot = path.join(fixture.home, 'command-runner', 'executions', 'alpha');
+    const executionRoot = path.join(fixture.home, 'command-runner', 'executions', 'beta');
     const expired = '20000101T000000.000Z_00000000-0000-4000-8000-000000000000';
-    await mkdir(path.join(executionRoot, expired), { recursive: true });
-    await writeFile(path.join(executionRoot, expired, 'stdout.log'), 'old');
-    await writeFile(path.join(executionRoot, expired, 'stderr.log'), '');
+    const directory = path.join(executionRoot, expired);
+    await mkdir(directory, { recursive: true });
+    await writeFile(path.join(directory, 'stdout.log'), 'preserve');
+    await writeFile(path.join(directory, 'stderr.log'), '');
     parseSuccess(runInterface(fixture, fixture.alpha, ['run', 'echo']));
-    const entries = await readdir(executionRoot);
-    assert.equal(entries.includes(expired), false);
+    assert.equal((await readdir(executionRoot)).includes(expired), true,
+      'a run in alpha must not delete an expired execution in beta');
+    parseFailure(runInterfaceWithoutHashes(fixture, fixture.alpha, ['cache-prune']), 'usage');
+    assert.equal((await readdir(executionRoot)).includes(expired), true);
+    const pruned = parseSuccess(runInterfaceWithoutHashes(fixture, fixture.alpha,
+      ['cache-prune', 'confirm=prune-managed-executions']));
+    assert.equal(pruned.status, 'pruned');
+    assert.equal((await readdir(executionRoot)).includes(expired), false);
+  });
+});
+
+test('full shared execution cache fails closed instead of deleting other-workspace outputs', async () => {
+  await withFixture(async (fixture) => {
+    const executionRoot = path.join(fixture.home, 'command-runner', 'executions', 'beta');
+    const id = `${new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString().replaceAll('-', '').replaceAll(':', '')}_00000000-0000-4000-8000-000000000000`;
+    const dir = path.join(executionRoot, id);
+    await mkdir(dir, { recursive: true });
+    const log = path.join(dir, 'stdout.log');
+    await writeFile(log, 'old');
+    await truncate(log, 225 * 1024 * 1024);
+    await writeFile(path.join(dir, 'stderr.log'), '');
+    const result = runInterface(fixture, fixture.alpha, ['run', 'echo']);
+    parseFailure(result, 'execution_cache_full');
+    assert.equal((await readdir(executionRoot)).includes(id), true);
+    parseSuccess(runInterfaceWithoutHashes(fixture, fixture.alpha,
+      ['cache-prune', 'confirm=prune-managed-executions']));
+    assert.equal((await readdir(executionRoot)).includes(id), false);
+    parseSuccess(runInterface(fixture, fixture.alpha, ['run', 'echo']));
   });
 });
 
@@ -1043,6 +1071,7 @@ test('hook permits only bounded execution and management interface shapes', asyn
     for (const toolInput of [
       { command: 'node ~/.copilot/command-runner/command-runner.mjs list' },
       { command: 'node ~/.copilot/command-runner/command-runner-interface.mjs run echo' },
+      { command: 'node ~/.copilot/command-runner/command-runner-interface.mjs cache-prune confirm=prune-managed-executions' },
       { command: 'node ~/.copilot/command-runner/command-runner-interface.mjs list query=test' },
       { command: 'node ~/.copilot/command-runner/command-runner-interface.mjs describe echo' },
       { command: 'node ~/.copilot/command-runner/command-runner-interface.mjs inspect echo' },

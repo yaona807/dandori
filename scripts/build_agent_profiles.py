@@ -80,6 +80,9 @@ def transform(source: str, name: str, profile: str) -> str:
             front,
         )
     if name in {"Researcher", "Writer"}:
+        # Copilot supports declarative skills; Local uses an explicit read.
+        front += "skills:\n  - command-runner\n"
+    if name in {"Researcher", "Writer"}:
         original_hook = (
             "hooks:\n  PreToolUse:\n    - type: command\n"
             "      command: node ~/.copilot/command-runner/command-runner-hook.mjs\n"

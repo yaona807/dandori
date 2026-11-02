@@ -261,6 +261,25 @@ class ValidatorMutationTests(unittest.TestCase):
                 self.assert_invalid(repo, "missing required Orchestrator invariant")
                 path.write_text(original)
 
+    def test_runner_skill_is_required_and_bound_to_workers(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            skill = repo / ".copilot/skills/command-runner/SKILL.md"
+            original_skill = skill.read_text(encoding="utf-8")
+            skill.unlink()
+            self.assert_invalid(repo, "command-runner skill is missing")
+            skill.write_text(original_skill, encoding="utf-8")
+            skill.write_text(original_skill.replace("If `outputTruncated: true`", "If output is incomplete"), encoding="utf-8")
+            self.assert_invalid(repo, "command-runner skill must distinguish irreversible output truncation")
+            skill.write_text(original_skill, encoding="utf-8")
+            worker = repo / ".copilot/agents/Writer.agent.md"
+            original_worker = worker.read_text(encoding="utf-8")
+            worker.write_text(original_worker.replace(
+                "[command-runner skill](../skills/command-runner/SKILL.md)",
+                "Runner guide", 1))
+            self.assert_invalid(repo, "execution worker missing required runner skill link")
+            worker.write_text(original_worker)
+
     def test_orchestrator_supports_exact_operation_choice(self) -> None:
         temp, repo = self.make_repo()
         with temp:
