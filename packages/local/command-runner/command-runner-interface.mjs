@@ -1232,7 +1232,8 @@ async function main() {
     if (subject !== 'confirm=prune-managed-executions' || rest.length !== 0) {
       throw new InterfaceError('usage', 'cache-prune requires exact confirm=prune-managed-executions (user maintenance only)');
     }
-    await cleanupExecutions(0);
+    // Leave room for the next maximum-size execution after deliberate cleanup.
+    await cleanupExecutions(LIMITS.maxExecutionReserveBytes);
     emit({ status: 'pruned', scope: 'managed-execution-caches' });
     return 0;
   }
