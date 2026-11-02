@@ -455,16 +455,15 @@ try {
     }
   }
   if (!TERMINAL_TOOL_NAMES.has(toolName)) {
-    if (toolName === 'apply_patch') {
-      const targets = patchTargetPaths(toolInput);
-      if (targets.some(containsProtectedPath)) {
-        deny('User-level CommandRunner control files cannot be modified by agent write tools.');
-      }
-    }
+    // Parse patch-target paths before deciding; emit only one hook decision.
+    const blockedPatch = toolName === 'apply_patch'
+      && patchTargetPaths(toolInput).some(containsProtectedPath);
     if (
-      typeof toolName === 'string'
-      && WRITE_TOOL_NAME_PATTERN.test(toolName)
-      && containsProtectedPath(toolInput)
+      blockedPatch || (
+        typeof toolName === 'string'
+        && WRITE_TOOL_NAME_PATTERN.test(toolName)
+        && containsProtectedPath(toolInput)
+      )
     ) {
       deny('User-level CommandRunner control files cannot be modified by agent write tools.');
     } else if (PERMITTED_NON_TERMINAL_TOOL_NAMES.has(toolName)) {
