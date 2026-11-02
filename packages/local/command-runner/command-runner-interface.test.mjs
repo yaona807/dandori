@@ -1030,7 +1030,7 @@ test('run never prunes old cache entries, and owner-only maintenance is explicit
 test('full shared execution cache fails closed instead of deleting other-workspace outputs', async () => {
   await withFixture(async (fixture) => {
     const executionRoot = path.join(fixture.home, 'command-runner', 'executions', 'beta');
-    const id = '20000101T000000.000Z_00000000-0000-4000-8000-000000000000';
+    const id = `${new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString().replaceAll('-', '').replaceAll(':', '')}_00000000-0000-4000-8000-000000000000`;
     const dir = path.join(executionRoot, id);
     await mkdir(dir, { recursive: true });
     const log = path.join(dir, 'stdout.log');
@@ -1040,6 +1040,10 @@ test('full shared execution cache fails closed instead of deleting other-workspa
     const result = runInterface(fixture, fixture.alpha, ['run', 'echo']);
     parseFailure(result, 'execution_cache_full');
     assert.equal((await readdir(executionRoot)).includes(id), true);
+    parseSuccess(runInterfaceWithoutHashes(fixture, fixture.alpha,
+      ['cache-prune', 'confirm=prune-managed-executions']));
+    assert.equal((await readdir(executionRoot)).includes(id), false);
+    parseSuccess(runInterface(fixture, fixture.alpha, ['run', 'echo']));
   });
 });
 
@@ -1067,6 +1071,7 @@ test('hook permits only bounded execution and management interface shapes', asyn
     for (const toolInput of [
       { command: 'node ~/.copilot/command-runner/command-runner.mjs list' },
       { command: 'node ~/.copilot/command-runner/command-runner-interface.mjs run echo' },
+      { command: 'node ~/.copilot/command-runner/command-runner-interface.mjs cache-prune confirm=prune-managed-executions' },
       { command: 'node ~/.copilot/command-runner/command-runner-interface.mjs list query=test' },
       { command: 'node ~/.copilot/command-runner/command-runner-interface.mjs describe echo' },
       { command: 'node ~/.copilot/command-runner/command-runner-interface.mjs inspect echo' },
