@@ -348,9 +348,8 @@ function validateRunnerInvocation(tokens) {
 }
 
 function installedControlRoot() {
-  return process.env.COPILOT_HOME
-    ? path.resolve(process.env.COPILOT_HOME)
-    : path.join(os.homedir(), '.copilot');
+  // COPILOT_HOME is only for runner data, not for installed code.
+  return path.dirname(path.dirname(realpathSync(fileURLToPath(import.meta.url))));
 }
 
 function normalizePossiblePath(value) {
@@ -455,8 +454,15 @@ function isProtectedTargetPath(value) {
   if (target === null) return false;
   const canonicalTarget = canonicalTargetPath(target);
   const root = installedControlRoot();
-  return [...PROTECTED_SUFFIXES].some((suffix) => {
-    const installedPath = path.join(root, suffix.slice('.copilot/'.length));
+  const installedPaths = [...PROTECTED_SUFFIXES].map((suffix) =>
+    path.join(root, suffix.slice('.copilot/'.length)));
+  if (process.env.COPILOT_HOME) {
+    // The workspace registry follows COPILOT_HOME even when code does not.
+    installedPaths.push(path.join(
+      path.resolve(process.env.COPILOT_HOME), 'command-runner', 'workspaces.json',
+    ));
+  }
+  return installedPaths.some((installedPath) => {
     const canonicalInstalled = canonicalTargetPath(installedPath);
     return canonicalTarget === canonicalInstalled
       || sameExistingFile(canonicalTarget, canonicalInstalled);
@@ -473,9 +479,11 @@ function containsProtectedPath(value, field = null) {
   if (typeof value === 'string') {
     // Explicit target paths are never exempt, even when they look like prose.
     if (EDIT_TARGET_KEYS.has(field)) return isProtectedTargetPath(value);
-    // Only free-form edit content may contain literal patch documentation.
-    if (value.includes('\n') || value.trimStart().startsWith('*** ')) return false;
-    return isProtectedTargetPath(value);
+    // Content and replacement strings are data, not filesystem paths.
+    // A bare top-level string may still be a direct target argument.
+    return field === null && !value.includes('\n')
+      && !value.trimStart().startsWith('*** ')
+      && isProtectedTargetPath(value);
   }
   if (Array.isArray(value)) return value.some((entry) => containsProtectedPath(entry, field));
   if (value !== null && typeof value === 'object') {
