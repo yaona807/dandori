@@ -5,6 +5,7 @@ import { readFileSync, realpathSync } from 'node:fs';
 import {
   mkdtemp,
   mkdir,
+  link,
   readFile,
   realpath,
   rm,
@@ -14,7 +15,7 @@ import {
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const SOURCE_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
 const RUNNER_SOURCE = path.join(SOURCE_DIRECTORY, 'command-runner.mjs');
@@ -265,14 +266,14 @@ function runInterface(fixture, cwd, args) {
   );
 }
 
-function runHook(fixture, input) {
+function runHook(fixture, input, envOverrides = {}) {
   return spawnSync(
     process.execPath,
     [path.join(fixture.home, 'command-runner', 'command-runner-hook.mjs')],
     {
       cwd: fixture.alpha,
       encoding: 'utf8',
-      env: {...process.env, COPILOT_HOME: fixture.home},
+      env: { ...process.env, COPILOT_HOME: fixture.home, ...envOverrides },
       input: JSON.stringify(input),
     },
   );
@@ -1237,8 +1238,8 @@ test('native file and text search aliases remain read-only under Local and Copil
       assert.deepEqual(JSON.parse(copilot.stdout), {}, toolName);
     }
 
-    // The fix must not grant editing, delegation, web search or shell execution.
-    for (const toolName of ['create', 'Write', 'web_search', 'WebSearch', 'task', 'Agent']) {
+    // Unknown delegation, shell, and other tools remain denied.
+    for (const toolName of ['task', 'Agent', 'unrecognized_shell']) {
       const denied = runHook(fixture, {
         sessionId: 'copilot-session',
         toolName,
@@ -1252,6 +1253,138 @@ test('native file and text search aliases remain read-only under Local and Copil
       tool_input: { command: 'rg example src' },
     });
     assert.equal(JSON.parse(shell.stdout).permissionDecision, 'deny');
+  });
+});
+
+test('native Copilot web and file-creation aliases defer permission checks to Host', async () => {
+  await withFixture(async (fixture) => {
+    for (const toolName of ['create', 'Write', 'web_search', 'WebSearch', 'web_fetch', 'WebFetch']) {
+      const args = toolName === 'create' || toolName === 'Write'
+        ? { path: 'src/new-file.ts', content: 'export {};' }
+        : { query: 'bounded research', url: 'https://example.com' };
+      const local = runHook(fixture, {
+        hook_event_name: 'PreToolUse', tool_name: toolName, tool_input: args,
+      });
+      assert.equal(local.status, 0, local.stderr);
+      assert.deepEqual(JSON.parse(local.stdout), { continue: true }, toolName);
+
+      const copilot = runHook(fixture, {
+        sessionId: 'copilot-session', toolName, toolArgs: JSON.stringify(args),
+      });
+      assert.equal(copilot.status, 0, copilot.stderr);
+      assert.deepEqual(JSON.parse(copilot.stdout), {}, toolName);
+    }
+    for (const toolName of ['create', 'Write']) {
+      const denied = runHook(fixture, {
+        sessionId: 'copilot-session', toolName,
+        toolArgs: JSON.stringify({
+          path: path.join(fixture.home, 'agents', 'Writer.agent.md'), content: 'unsafe',
+        }),
+      });
+      assert.equal(JSON.parse(denied.stdout).permissionDecision, 'deny', toolName);
+    }
+  });
+});
+
+test('installed control identity is protected without blocking same-suffix repo sources', async () => {
+  await withFixture(async (fixture) => {
+    const sourceFile = path.join(fixture.alpha, '.copilot', 'agents', 'Writer.agent.md');
+    await mkdir(path.dirname(sourceFile), { recursive: true });
+    await writeFile(sourceFile, 'source-only');
+    const linkedFile = path.join(fixture.alpha, 'linked-control.md');
+    const linkedDirectory = path.join(fixture.alpha, 'linked-agent-directory');
+    const linkedHardFile = path.join(fixture.alpha, 'hardlinked-control.md');
+    await symlink(path.join(fixture.home, 'agents', 'Writer.agent.md'), linkedFile);
+    await symlink(path.join(fixture.home, 'agents'), linkedDirectory, 'dir');
+    await link(path.join(fixture.home, 'agents', 'Writer.agent.md'), linkedHardFile);
+    const linkedParentTraversal = linkedDirectory + path.sep + '..' + path.sep
+      + 'agents' + path.sep + 'Writer.agent.md';
+    // This raw filesystem path reaches the installed control through the link.
+    assert.equal(await readFile(linkedParentTraversal, 'utf8'),
+      await readFile(path.join(fixture.home, 'agents', 'Writer.agent.md'), 'utf8'));
+
+    for (const target of [
+      sourceFile, '.copilot/agents/Writer.agent.md', pathToFileURL(sourceFile).href,
+    ]) {
+      const result = runHook(fixture, {
+        sessionId: 'copilot-session', toolName: 'Edit',
+        toolArgs: JSON.stringify({ path: target, content: 'authorized source change' }),
+      });
+      assert.equal(result.status, 0, result.stderr);
+      assert.deepEqual(JSON.parse(result.stdout), {}, target);
+    }
+    for (const target of [
+      '~/.copilot/agents/Writer.agent.md',
+      path.join(fixture.home, 'agents', 'Writer.agent.md'),
+      pathToFileURL(path.join(fixture.home, 'agents', 'Writer.agent.md')).href,
+      path.join(fixture.home, 'agents', 'CommandRunner.agent.md'),
+      linkedFile,
+      linkedHardFile,
+      linkedParentTraversal,
+      path.join(linkedDirectory, 'Writer.agent.md'),
+      path.join(fixture.alpha, '..', 'copilot-home', 'command-runner', 'command-runner-hook.mjs'),
+    ]) {
+      const result = runHook(fixture, {
+        sessionId: 'copilot-session', toolName: 'Edit',
+        toolArgs: JSON.stringify({ path: target, content: 'unsafe change' }),
+      });
+      assert.equal(JSON.parse(result.stdout).permissionDecision, 'deny', target);
+    }
+  });
+});
+
+test('custom COPILOT_HOME protects both the installed root and runner data', async () => {
+  await withFixture(async (fixture) => {
+    const dataHome = path.join(fixture.root, 'separate-runner-data');
+    const config = path.join(dataHome, 'command-runner', 'workspaces.json');
+    await mkdir(path.dirname(config), { recursive: true });
+    await writeFile(config, '{"version":1,"workspaces":[]}');
+    const source = path.join(fixture.alpha, '.copilot', 'agents', 'Writer.agent.md');
+    await mkdir(path.dirname(source), { recursive: true });
+    await writeFile(source, 'project copy');
+    for (const target of [
+      '~/.copilot/agents/Writer.agent.md',
+      path.join(fixture.home, 'agents', 'Writer.agent.md'),
+      path.join(fixture.home, 'command-runner', 'command-runner-hook.mjs'),
+      path.join(fixture.home, 'command-runner', 'workspaces.json'),
+      config,
+    ]) {
+      const result = runHook(fixture, {
+        sessionId: 'copilot-session', toolName: 'Write',
+        toolArgs: JSON.stringify({ path: target, content: 'not allowed' }),
+      }, { COPILOT_HOME: dataHome });
+      assert.equal(JSON.parse(result.stdout).permissionDecision, 'deny', target);
+    }
+    const ordinary = runHook(fixture, {
+      sessionId: 'copilot-session', toolName: 'Write',
+      toolArgs: JSON.stringify({ path: source, content: 'source edit' }),
+    }, { COPILOT_HOME: dataHome });
+    assert.deepEqual(JSON.parse(ordinary.stdout), {});
+  });
+});
+
+test('long single-line edit content is never probed as a path', async () => {
+  await withFixture(async (fixture) => {
+    const longLine = 'x'.repeat(500);
+    for (const toolName of ['Edit', 'Write', 'create', 'str_replace_editor']) {
+      const args = { path: 'src/normal.ts', content: longLine,
+        old_str: longLine, new_str: longLine, replacement: longLine };
+      const result = runHook(fixture, {
+        sessionId: 'copilot-session', toolName, toolArgs: JSON.stringify(args),
+      });
+      assert.equal(result.status, 0, result.stderr);
+      assert.deepEqual(JSON.parse(result.stdout), {}, toolName);
+    }
+    for (const toolArgs of [
+      '~/.copilot/agents/Writer.agent.md',
+      { files: [{ path: '~/.copilot/agents/Writer.agent.md',
+        content: longLine }] },
+    ]) {
+      const result = runHook(fixture, {
+        sessionId: 'copilot-session', toolName: 'Edit', toolArgs,
+      });
+      assert.equal(JSON.parse(result.stdout).permissionDecision, 'deny');
+    }
   });
 });
 
@@ -1321,7 +1454,8 @@ test('native patch editing works with exact file-path protection in both hook en
     }
     // An explicit target may normalize through an unusual relative directory
     // spelling; source-text exemptions must not apply to real targets.
-    const disguisedControl = '*** /../.copilot/command-runner/workspaces.json';
+    const disguisedControl = path.join(fixture.alpha, '..', 'copilot-home',
+      'command-runner', 'workspaces.json');
     const disguisedPatch = ['*** Begin Patch',
       '*** Add File: examples/safe.txt', '+safe',
       '*** Add File: ' + disguisedControl, '+unsafe', '*** End Patch'].join('\n');

@@ -4,6 +4,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { lstatSync, readFileSync, realpathSync } from 'node:fs';
 import process from 'node:process';
+import { fileURLToPath } from 'node:url';
 
 const TERMINAL_TOOL_NAMES = new Set([
   'execute/runInTerminal',
@@ -30,6 +31,8 @@ const PERMITTED_NON_TERMINAL_TOOL_NAMES = new Set([
   'search/codebase', 'search/usages', 'search/fileSearch', 'search/textSearch',
   'search/listDirectory', 'read/readFile', 'read/problems', 'web/fetch',
   'edit/editFiles', 'edit/createFile', 'edit/createDirectory',
+  // Native Copilot Web and file-creation tools; Host permission checks still apply.
+  'create', 'Write', 'web_search', 'WebSearch', 'web_fetch', 'WebFetch',
 ]);
 const COMMAND_ID_PATTERN = /^[a-z][a-z0-9_-]{0,63}$/;
 const EXECUTION_ID_PATTERN = /^\d{8}T\d{6}\.\d{3}Z_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
@@ -344,18 +347,73 @@ function validateRunnerInvocation(tokens) {
   throw new Error(`unsupported command-runner operation: ${operation}`);
 }
 
+function installedControlRoot() {
+  // COPILOT_HOME is only for runner data, not for installed code.
+  return path.dirname(path.dirname(realpathSync(fileURLToPath(import.meta.url))));
+}
+
 function normalizePossiblePath(value) {
-  let normalized = value.trim().replaceAll('\\', '/');
-  if (normalized.startsWith('file://')) {
-    try {
-      normalized = decodeURIComponent(new URL(normalized).pathname);
-    } catch {
-      return null;
+  if (typeof value !== 'string' || !value.trim()) return null;
+  let candidate = value.trim();
+  if (candidate.startsWith('file://')) {
+    candidate = fileURLToPath(candidate);
+  } else {
+    const slashed = candidate.replaceAll('\\', '/');
+    if (slashed === '~/.copilot' || slashed.startsWith('~/.copilot/')) {
+      // The CLI uses ~/.copilot syntax even when COPILOT_HOME selects a test/install root.
+      candidate = installedControlRoot() + slashed.slice('~/.copilot'.length);
+    } else if (slashed === '~' || slashed.startsWith('~/')) {
+      candidate = os.homedir() + slashed.slice(1);
     }
   }
-  normalized = path.posix.normalize(normalized);
-  while (normalized.startsWith('./')) normalized = normalized.slice(2);
-  return normalized;
+  // Do not collapse ".." before resolving symlinks: the filesystem may follow
+  // the link first, so lexical normalization can point at a different file.
+  return candidate;
+}
+
+// Walk components in filesystem order: a symlink/../ suffix must follow the
+// symlink before moving up. Lexical path.resolve()/realpathSync() may otherwise
+// conceal installed control targets. Missing suffixes permit normal file creation.
+function canonicalTargetPath(target) {
+  const absolute = path.isAbsolute(target)
+    ? target : process.cwd() + path.sep + target;
+  const root = path.parse(absolute).root;
+  if (!root) throw new Error('cannot resolve edit target root');
+  let current = realpathSync(root);
+  const separator = process.platform === 'win32' ? /[\\/]+/u : /\/+/u;
+  for (const part of absolute.slice(root.length).split(separator)) {
+    if (!part || part === '.') continue;
+    if (part === '..') {
+      current = path.dirname(current);
+      continue;
+    }
+    const next = path.join(current, part);
+    try {
+      current = realpathSync(next);
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error;
+      try {
+        if (lstatSync(next).isSymbolicLink()) {
+          throw new Error('unresolvable symbolic link in edit target');
+        }
+      } catch (linkError) {
+        if (linkError?.code !== 'ENOENT') throw linkError;
+      }
+      current = next;
+    }
+  }
+  return current;
+}
+
+function sameExistingFile(left, right) {
+  try {
+    const a = lstatSync(left);
+    const b = lstatSync(right);
+    return a.isFile() && b.isFile() && a.dev === b.dev && a.ino === b.ino;
+  } catch (error) {
+    if (error?.code === 'ENOENT') return false;
+    throw error;
+  }
 }
 
 function patchTargetPaths(value) {
@@ -392,11 +450,23 @@ function patchTargetPaths(value) {
 }
 
 function isProtectedTargetPath(value) {
-  const normalized = normalizePossiblePath(value);
-  if (normalized === null) return false;
-  return [...PROTECTED_SUFFIXES].some(
-    (suffix) => normalized === suffix || normalized.endsWith(`/${suffix}`),
-  );
+  const target = normalizePossiblePath(value);
+  if (target === null) return false;
+  const canonicalTarget = canonicalTargetPath(target);
+  const root = installedControlRoot();
+  const installedPaths = [...PROTECTED_SUFFIXES].map((suffix) =>
+    path.join(root, suffix.slice('.copilot/'.length)));
+  if (process.env.COPILOT_HOME) {
+    // The workspace registry follows COPILOT_HOME even when code does not.
+    installedPaths.push(path.join(
+      path.resolve(process.env.COPILOT_HOME), 'command-runner', 'workspaces.json',
+    ));
+  }
+  return installedPaths.some((installedPath) => {
+    const canonicalInstalled = canonicalTargetPath(installedPath);
+    return canonicalTarget === canonicalInstalled
+      || sameExistingFile(canonicalTarget, canonicalInstalled);
+  });
 }
 
 const EDIT_TARGET_KEYS = new Set([
@@ -409,9 +479,11 @@ function containsProtectedPath(value, field = null) {
   if (typeof value === 'string') {
     // Explicit target paths are never exempt, even when they look like prose.
     if (EDIT_TARGET_KEYS.has(field)) return isProtectedTargetPath(value);
-    // Only free-form edit content may contain literal patch documentation.
-    if (value.includes('\n') || value.trimStart().startsWith('*** ')) return false;
-    return isProtectedTargetPath(value);
+    // Content and replacement strings are data, not filesystem paths.
+    // A bare top-level string may still be a direct target argument.
+    return field === null && !value.includes('\n')
+      && !value.trimStart().startsWith('*** ')
+      && isProtectedTargetPath(value);
   }
   if (Array.isArray(value)) return value.some((entry) => containsProtectedPath(entry, field));
   if (value !== null && typeof value === 'object') {
