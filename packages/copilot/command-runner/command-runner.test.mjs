@@ -266,14 +266,14 @@ function runInterface(fixture, cwd, args) {
   );
 }
 
-function runHook(fixture, input) {
+function runHook(fixture, input, envOverrides = {}) {
   return spawnSync(
     process.execPath,
     [path.join(fixture.home, 'command-runner', 'command-runner-hook.mjs')],
     {
       cwd: fixture.alpha,
       encoding: 'utf8',
-      env: {...process.env, COPILOT_HOME: fixture.home},
+      env: { ...process.env, COPILOT_HOME: fixture.home, ...envOverrides },
       input: JSON.stringify(input),
     },
   );
@@ -1329,6 +1329,61 @@ test('installed control identity is protected without blocking same-suffix repo 
         toolArgs: JSON.stringify({ path: target, content: 'unsafe change' }),
       });
       assert.equal(JSON.parse(result.stdout).permissionDecision, 'deny', target);
+    }
+  });
+});
+
+test('custom COPILOT_HOME protects both the installed root and runner data', async () => {
+  await withFixture(async (fixture) => {
+    const dataHome = path.join(fixture.root, 'separate-runner-data');
+    const config = path.join(dataHome, 'command-runner', 'workspaces.json');
+    await mkdir(path.dirname(config), { recursive: true });
+    await writeFile(config, '{"version":1,"workspaces":[]}');
+    const source = path.join(fixture.alpha, '.copilot', 'agents', 'Writer.agent.md');
+    await mkdir(path.dirname(source), { recursive: true });
+    await writeFile(source, 'project copy');
+    for (const target of [
+      '~/.copilot/agents/Writer.agent.md',
+      path.join(fixture.home, 'agents', 'Writer.agent.md'),
+      path.join(fixture.home, 'command-runner', 'command-runner-hook.mjs'),
+      path.join(fixture.home, 'command-runner', 'workspaces.json'),
+      config,
+    ]) {
+      const result = runHook(fixture, {
+        sessionId: 'copilot-session', toolName: 'Write',
+        toolArgs: JSON.stringify({ path: target, content: 'not allowed' }),
+      }, { COPILOT_HOME: dataHome });
+      assert.equal(JSON.parse(result.stdout).permissionDecision, 'deny', target);
+    }
+    const ordinary = runHook(fixture, {
+      sessionId: 'copilot-session', toolName: 'Write',
+      toolArgs: JSON.stringify({ path: source, content: 'source edit' }),
+    }, { COPILOT_HOME: dataHome });
+    assert.deepEqual(JSON.parse(ordinary.stdout), {});
+  });
+});
+
+test('long single-line edit content is never probed as a path', async () => {
+  await withFixture(async (fixture) => {
+    const longLine = 'x'.repeat(500);
+    for (const toolName of ['Edit', 'Write', 'create', 'str_replace_editor']) {
+      const args = { path: 'src/normal.ts', content: longLine,
+        old_str: longLine, new_str: longLine, replacement: longLine };
+      const result = runHook(fixture, {
+        sessionId: 'copilot-session', toolName, toolArgs: JSON.stringify(args),
+      });
+      assert.equal(result.status, 0, result.stderr);
+      assert.deepEqual(JSON.parse(result.stdout), {}, toolName);
+    }
+    for (const toolArgs of [
+      '~/.copilot/agents/Writer.agent.md',
+      { files: [{ path: '~/.copilot/agents/Writer.agent.md',
+        content: longLine }] },
+    ]) {
+      const result = runHook(fixture, {
+        sessionId: 'copilot-session', toolName: 'Edit', toolArgs,
+      });
+      assert.equal(JSON.parse(result.stdout).permissionDecision, 'deny');
     }
   });
 });
