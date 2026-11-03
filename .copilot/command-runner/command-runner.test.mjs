@@ -5,6 +5,7 @@ import { readFileSync, realpathSync } from 'node:fs';
 import {
   mkdtemp,
   mkdir,
+  link,
   readFile,
   realpath,
   rm,
@@ -1292,8 +1293,15 @@ test('installed control identity is protected without blocking same-suffix repo 
     await writeFile(sourceFile, 'source-only');
     const linkedFile = path.join(fixture.alpha, 'linked-control.md');
     const linkedDirectory = path.join(fixture.alpha, 'linked-agent-directory');
+    const linkedHardFile = path.join(fixture.alpha, 'hardlinked-control.md');
     await symlink(path.join(fixture.home, 'agents', 'Writer.agent.md'), linkedFile);
     await symlink(path.join(fixture.home, 'agents'), linkedDirectory, 'dir');
+    await link(path.join(fixture.home, 'agents', 'Writer.agent.md'), linkedHardFile);
+    const linkedParentTraversal = linkedDirectory + path.sep + '..' + path.sep
+      + 'agents' + path.sep + 'Writer.agent.md';
+    // This raw filesystem path reaches the installed control through the link.
+    assert.equal(await readFile(linkedParentTraversal, 'utf8'),
+      await readFile(path.join(fixture.home, 'agents', 'Writer.agent.md'), 'utf8'));
 
     for (const target of [
       sourceFile, '.copilot/agents/Writer.agent.md', pathToFileURL(sourceFile).href,
@@ -1311,6 +1319,8 @@ test('installed control identity is protected without blocking same-suffix repo 
       pathToFileURL(path.join(fixture.home, 'agents', 'Writer.agent.md')).href,
       path.join(fixture.home, 'agents', 'CommandRunner.agent.md'),
       linkedFile,
+      linkedHardFile,
+      linkedParentTraversal,
       path.join(linkedDirectory, 'Writer.agent.md'),
       path.join(fixture.alpha, '..', 'copilot-home', 'command-runner', 'command-runner-hook.mjs'),
     ]) {
