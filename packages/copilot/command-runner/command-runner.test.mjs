@@ -1389,7 +1389,8 @@ test('native patch editing works with exact file-path protection in both hook en
     }
     // An explicit target may normalize through an unusual relative directory
     // spelling; source-text exemptions must not apply to real targets.
-    const disguisedControl = '*** /../.copilot/command-runner/workspaces.json';
+    const disguisedControl = path.join(fixture.alpha, '..', 'copilot-home',
+      'command-runner', 'workspaces.json');
     const disguisedPatch = ['*** Begin Patch',
       '*** Add File: examples/safe.txt', '+safe',
       '*** Add File: ' + disguisedControl, '+unsafe', '*** End Patch'].join('\n');
