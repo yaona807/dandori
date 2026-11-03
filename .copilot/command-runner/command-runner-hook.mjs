@@ -4,6 +4,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { lstatSync, readFileSync, realpathSync } from 'node:fs';
 import process from 'node:process';
+import { fileURLToPath } from 'node:url';
 
 const TERMINAL_TOOL_NAMES = new Set([
   'execute/runInTerminal',
@@ -30,6 +31,8 @@ const PERMITTED_NON_TERMINAL_TOOL_NAMES = new Set([
   'search/codebase', 'search/usages', 'search/fileSearch', 'search/textSearch',
   'search/listDirectory', 'read/readFile', 'read/problems', 'web/fetch',
   'edit/editFiles', 'edit/createFile', 'edit/createDirectory',
+  // Native Copilot Web and file-creation tools; Host permission checks still apply.
+  'create', 'Write', 'web_search', 'WebSearch', 'web_fetch', 'WebFetch',
 ]);
 const COMMAND_ID_PATTERN = /^[a-z][a-z0-9_-]{0,63}$/;
 const EXECUTION_ID_PATTERN = /^\d{8}T\d{6}\.\d{3}Z_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
@@ -344,20 +347,53 @@ function validateRunnerInvocation(tokens) {
   throw new Error(`unsupported command-runner operation: ${operation}`);
 }
 
-function normalizePossiblePath(value) {
-  let normalized = value.trim().replaceAll('\\', '/');
-  if (normalized.startsWith('file://')) {
-    try {
-      normalized = decodeURIComponent(new URL(normalized).pathname);
-    } catch {
-      return null;
-    }
-  }
-  normalized = path.posix.normalize(normalized);
-  while (normalized.startsWith('./')) normalized = normalized.slice(2);
-  return normalized;
+function installedControlRoot() {
+  return process.env.COPILOT_HOME
+    ? path.resolve(process.env.COPILOT_HOME)
+    : path.join(os.homedir(), '.copilot');
 }
 
+function normalizePossiblePath(value) {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  let candidate = value.trim();
+  if (candidate.startsWith('file://')) {
+    candidate = fileURLToPath(candidate);
+  } else {
+    const slashed = candidate.replaceAll('\\', '/');
+    if (slashed === '~/.copilot' || slashed.startsWith('~/.copilot/')) {
+      // The CLI uses ~/.copilot syntax even when COPILOT_HOME selects a test/install root.
+      candidate = path.join(installedControlRoot(), slashed.slice('~/.copilot'.length));
+    } else if (slashed === '~' || slashed.startsWith('~/')) {
+      candidate = path.join(os.homedir(), slashed.slice(2));
+    }
+  }
+  return path.resolve(candidate);
+}
+
+// Resolve existing components and symlinks while supporting not-yet-created files.
+// Unresolvable symbolic links fail closed instead of bypassing protection.
+function canonicalTargetPath(target) {
+  let current = target;
+  const missing = [];
+  for (;;) {
+    try {
+      return path.join(realpathSync(current), ...missing.reverse());
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error;
+      try {
+        if (lstatSync(current).isSymbolicLink()) {
+          throw new Error('unresolvable symbolic link in edit target');
+        }
+      } catch (linkError) {
+        if (linkError?.code !== 'ENOENT') throw linkError;
+      }
+      const parent = path.dirname(current);
+      if (parent === current) throw new Error('cannot resolve edit target');
+      missing.push(path.basename(current));
+      current = parent;
+    }
+  }
+}
 function patchTargetPaths(value) {
   const patch = typeof value === 'string' ? value
     : value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -392,11 +428,14 @@ function patchTargetPaths(value) {
 }
 
 function isProtectedTargetPath(value) {
-  const normalized = normalizePossiblePath(value);
-  if (normalized === null) return false;
-  return [...PROTECTED_SUFFIXES].some(
-    (suffix) => normalized === suffix || normalized.endsWith(`/${suffix}`),
-  );
+  const target = normalizePossiblePath(value);
+  if (target === null) return false;
+  const canonicalTarget = canonicalTargetPath(target);
+  const root = installedControlRoot();
+  return [...PROTECTED_SUFFIXES].some((suffix) => {
+    const installedPath = path.join(root, suffix.slice('.copilot/'.length));
+    return canonicalTarget === canonicalTargetPath(installedPath);
+  });
 }
 
 const EDIT_TARGET_KEYS = new Set([
