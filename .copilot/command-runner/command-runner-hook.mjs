@@ -362,38 +362,61 @@ function normalizePossiblePath(value) {
     const slashed = candidate.replaceAll('\\', '/');
     if (slashed === '~/.copilot' || slashed.startsWith('~/.copilot/')) {
       // The CLI uses ~/.copilot syntax even when COPILOT_HOME selects a test/install root.
-      candidate = path.join(installedControlRoot(), slashed.slice('~/.copilot'.length));
+      candidate = installedControlRoot() + slashed.slice('~/.copilot'.length);
     } else if (slashed === '~' || slashed.startsWith('~/')) {
-      candidate = path.join(os.homedir(), slashed.slice(2));
+      candidate = os.homedir() + slashed.slice(1);
     }
   }
-  return path.resolve(candidate);
+  // Do not collapse ".." before resolving symlinks: the filesystem may follow
+  // the link first, so lexical normalization can point at a different file.
+  return candidate;
 }
 
-// Resolve existing components and symlinks while supporting not-yet-created files.
-// Unresolvable symbolic links fail closed instead of bypassing protection.
+// Walk components in filesystem order: a symlink/../ suffix must follow the
+// symlink before moving up. Lexical path.resolve()/realpathSync() may otherwise
+// conceal installed control targets. Missing suffixes permit normal file creation.
 function canonicalTargetPath(target) {
-  let current = target;
-  const missing = [];
-  for (;;) {
+  const absolute = path.isAbsolute(target)
+    ? target : process.cwd() + path.sep + target;
+  const root = path.parse(absolute).root;
+  if (!root) throw new Error('cannot resolve edit target root');
+  let current = realpathSync(root);
+  const separator = process.platform === 'win32' ? /[\\/]+/u : /\/+/u;
+  for (const part of absolute.slice(root.length).split(separator)) {
+    if (!part || part === '.') continue;
+    if (part === '..') {
+      current = path.dirname(current);
+      continue;
+    }
+    const next = path.join(current, part);
     try {
-      return path.join(realpathSync(current), ...missing.reverse());
+      current = realpathSync(next);
     } catch (error) {
       if (error?.code !== 'ENOENT') throw error;
       try {
-        if (lstatSync(current).isSymbolicLink()) {
+        if (lstatSync(next).isSymbolicLink()) {
           throw new Error('unresolvable symbolic link in edit target');
         }
       } catch (linkError) {
         if (linkError?.code !== 'ENOENT') throw linkError;
       }
-      const parent = path.dirname(current);
-      if (parent === current) throw new Error('cannot resolve edit target');
-      missing.push(path.basename(current));
-      current = parent;
+      current = next;
     }
   }
+  return current;
 }
+
+function sameExistingFile(left, right) {
+  try {
+    const a = lstatSync(left);
+    const b = lstatSync(right);
+    return a.isFile() && b.isFile() && a.dev === b.dev && a.ino === b.ino;
+  } catch (error) {
+    if (error?.code === 'ENOENT') return false;
+    throw error;
+  }
+}
+
 function patchTargetPaths(value) {
   const patch = typeof value === 'string' ? value
     : value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -434,7 +457,9 @@ function isProtectedTargetPath(value) {
   const root = installedControlRoot();
   return [...PROTECTED_SUFFIXES].some((suffix) => {
     const installedPath = path.join(root, suffix.slice('.copilot/'.length));
-    return canonicalTarget === canonicalTargetPath(installedPath);
+    const canonicalInstalled = canonicalTargetPath(installedPath);
+    return canonicalTarget === canonicalInstalled
+      || sameExistingFile(canonicalTarget, canonicalInstalled);
   });
 }
 
