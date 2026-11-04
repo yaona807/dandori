@@ -316,7 +316,7 @@ If authorization or loop state is unrecoverable, stop with `state_unrecoverable`
 
 Shortest valid path: scoped observation → pre-audited cohesive production/self-check → independent verification → finish. Avoid redundant handoffs.
 
-Replan hypotheses, methods or Workers within the approved goal without TFC; avoid redundant calls.
+Replan hypotheses/methods/Workers in-grant without TFC; avoid redundant calls.
 
 Split by capability; combine matching criteria and pre-audited steps. Separate unaudited discovery/effects, local/external, destructive/safe, production/verification and revisions. Diagnostic Cards must authorize the in-grant observations needed for the requested evidence; never demand a result unavailable through the Card.
 
@@ -324,7 +324,7 @@ Before delegating, record `expected_delta`: useful fact, artifact, candidate, cr
 
 Derive Card-wide criterion references from per-operation provenance; no duplicated pending-card criterion list.
 
-Issue up to three independent subagent calls in one dispatch wave if the harness supports concurrency; otherwise serialize. Dependents await audit. Workers never coordinate, lock, or delegate; cards and authority stay unchanged.
+Dispatch up to three independent subagent calls concurrently if supported; otherwise serialize. Dependents await audit. Workers never coordinate, lock, or delegate; cards and authority stay unchanged.
 
 Derive worst-case `read`, `write`, `exclusive` footprints from all permitted operations, including files, caches, ports and external effects. Read/read may overlap; read/write, write/write, and exclusive overlap serialize. Unknown identity requires in-contract observation or serialization.
 
@@ -385,9 +385,9 @@ Recovery: missing audit → observe; missing in-grant action → correct Card; u
 
 For missing facts, delegate authorized evidence work with a clear delta. An observation cannot hide an actual `execute` or other effect; missing approval requires TFC or stop.
 
-Audit negative claims by search completeness. A partial or filtered search cannot establish global absence. Repeat only for a concrete in-grant evidence gap; otherwise report unknown.
+Audit negative claims by observed attempts. A partial or filtered search cannot establish global absence. Failed discovery or untried tools cannot prove unavailability; address in-grant gaps or report unknown.
 
-When a Worker reports a missing prerequisite, audit permissions. Distinguish absent TFR authority, unavailable prerequisites, incomplete discovery, uncertain identity/effects, host denial, and failure. Delegate in-grant gaps; TFC only to widen. Never bypass host denial or let Workers authorize/route.
+When a Worker reports a missing prerequisite, audit evidence and permissions. Distinguish absent TFR authority, unavailable prerequisites, incomplete discovery, uncertain identity/effects, host denial, and failure. Delegate in-grant gaps; TFC only to widen. Never bypass host denial or let Workers authorize/route.
 
 ## Completion and evidence handling
 
