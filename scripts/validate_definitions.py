@@ -222,6 +222,14 @@ BOUNDARY_ENFORCEMENT_POLICY = (
     "If a call cannot be bounded safely, return `blocked` and identify the narrower capability required."
 )
 
+WORKER_FAILURE_EVIDENCE_POLICY = (
+    "Use a suitable exposed tool directly when authorized; discovery is not a prerequisite. "
+    "Failed discovery, untried operations, or a single tool failure do not prove global unavailability. "
+    "Report observed attempts/errors and missing exposure, with unresolved facts as unknown. "
+    "Recover using already delegated operations within valid scope/effects; "
+    "never repeat unchanged failures, bypass denials, or retry unknown effects."
+)
+
 BUNDLED_WORKER_TOOLS: dict[str, set[str]] = {
     "BrowserQA": {"browser"},
     "GitHubResearcher": {
@@ -344,6 +352,7 @@ BUNDLED_WORKER_REQUIRED_SECTION_MARKERS: dict[str, dict[str, tuple[str, ...]]] =
         ),
         "## Strict rules": (
             BOUNDARY_ENFORCEMENT_POLICY,
+            WORKER_FAILURE_EVIDENCE_POLICY,
             "Do not modify files.",
             "Do not run terminal commands.",
             "Do not call another agent.",
@@ -357,6 +366,7 @@ BUNDLED_WORKER_REQUIRED_SECTION_MARKERS: dict[str, dict[str, tuple[str, ...]]] =
         "## Delegated task contract": ("Treat the delegated request as the complete task boundary.",),
         "## Strict rules": (
             BOUNDARY_ENFORCEMENT_POLICY,
+            WORKER_FAILURE_EVIDENCE_POLICY,
             "Do not modify files.",
             "Do not run terminal commands.",
             "Do not call another agent.",
@@ -374,6 +384,7 @@ BUNDLED_WORKER_REQUIRED_SECTION_MARKERS: dict[str, dict[str, tuple[str, ...]]] =
         ),
         "## Strict rules": (
             BOUNDARY_ENFORCEMENT_POLICY,
+            WORKER_FAILURE_EVIDENCE_POLICY,
             "ordinary in-boundary access needs no additional alias proof.",
             "require tool-supported evidence that it denotes the same resource.",
             "Do not follow links to unverified or out-of-boundary targets;",
@@ -389,6 +400,7 @@ BUNDLED_WORKER_REQUIRED_SECTION_MARKERS: dict[str, dict[str, tuple[str, ...]]] =
         "## Delegated task contract": ("Treat the delegated request as the complete task boundary.",),
         "## Strict rules": (
             BOUNDARY_ENFORCEMENT_POLICY,
+            WORKER_FAILURE_EVIDENCE_POLICY,
             "ordinary in-boundary access needs no additional alias proof.",
             "require tool-supported evidence that it denotes the same resource.",
             "Do not follow links to unverified or out-of-boundary targets;",
@@ -407,6 +419,7 @@ BUNDLED_WORKER_REQUIRED_SECTION_MARKERS: dict[str, dict[str, tuple[str, ...]]] =
         ),
         "## Strict rules": (
             BOUNDARY_ENFORCEMENT_POLICY,
+            WORKER_FAILURE_EVIDENCE_POLICY,
             "ordinary in-boundary access needs no additional alias proof.",
             "require tool-supported evidence that it denotes the same resource.",
             "Do not follow links to unverified or out-of-boundary targets;",

@@ -40,7 +40,7 @@ Use GitHub Pull Requests extension read-only tools when available in the local V
 ## Strict rules
 
 - Use tools only for delegated subjects and actions. A general-purpose tool is allowed when the specific call can be scoped to the assigned subject and its effects fit the delegated boundary; the tool need not enforce the entire task policy. If a call cannot be bounded safely, return `blocked` and identify the narrower capability required.
-- Recover from ordinary tool and input failures using already delegated operations when their identity, scope, and effects remain valid. Do not repeat unchanged failures, bypass tool denials, or retry when a prior operation may have produced unknown effects; report a concrete blocker if safe in-scope recovery is exhausted.
+- Use a suitable exposed tool directly when authorized; discovery is not a prerequisite. Failed discovery, untried operations, or a single tool failure do not prove global unavailability. Report observed attempts/errors and missing exposure, with unresolved facts as unknown. Recover using already delegated operations within valid scope/effects; never repeat unchanged failures, bypass denials, or retry unknown effects.
 - Do not modify files.
 - Do not approve, merge, close, or comment on issues or pull requests.
 - Do not run terminal commands.

@@ -1091,16 +1091,16 @@ Inspect only the delegated resource. Do not call another agent.
             self.assert_invalid(repo, "code-review frontmatter contains unsupported keys")
 
     def test_all_bundled_workers_require_tool_boundary_enforcement_policy(self) -> None:
-        policy = validator.BOUNDARY_ENFORCEMENT_POLICY
-        for worker in validator.BUNDLED_WORKER_TOOLS:
-            with self.subTest(worker=worker):
-                temp, repo = self.make_repo()
-                with temp:
-                    path = repo / f".copilot/agents/{worker}.agent.md"
-                    text = path.read_text()
-                    self.assertIn(policy, text)
-                    path.write_text(text.replace(policy, "REMOVED_TOOL_BOUNDARY_POLICY", 1))
-                    self.assert_invalid(repo, "missing required bundled-worker policy")
+        for policy in (validator.BOUNDARY_ENFORCEMENT_POLICY, validator.WORKER_FAILURE_EVIDENCE_POLICY):
+            for worker in validator.BUNDLED_WORKER_TOOLS:
+                with self.subTest(worker=worker, policy=policy[:36]):
+                    temp, repo = self.make_repo()
+                    with temp:
+                        path = repo / f".copilot/agents/{worker}.agent.md"
+                        text = path.read_text()
+                        self.assertIn(policy, text)
+                        path.write_text(text.replace(policy, "REMOVED_REQUIRED_WORKER_POLICY", 1))
+                        self.assert_invalid(repo, "missing required bundled-worker policy")
 
     def test_writer_rejects_workspace_wide_problems_tool(self) -> None:
         temp, repo = self.make_repo()
