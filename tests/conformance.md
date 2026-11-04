@@ -242,7 +242,7 @@ Install DANDORI, optionally add an external Worker, and open VS Code Chat Diagno
 - Duplicate same-name definitions are absent or disabled.
 - Orchestrator allowlist entries resolve to the intended Worker definitions.
 - External Worker sources and actual tool availability are confirmed before use.
-- Missing or unrecognized tools are treated as unavailable rather than assumed to exist.
+- Missing or unrecognized individual tools are not assumed available; failed discovery alone does not prove the underlying capability unavailable.
 - When BrowserQA cannot continue, it reports the last confirmed browser state, the interaction that could not be completed, and observed errors or remaining unknowns.
 - BrowserQA does not infer an unobserved cause and does not require a framework-specific blocker taxonomy or retry recommendation.
 
@@ -368,7 +368,7 @@ Approve bounded observation of a project's available verification operations and
 
 **Input**
 
-Within an approved observation boundary, first return a filtered registered-command search with no matches even though a relevant candidate exists outside the filter. In a second Worker, return only a partial or paginated search result with no claim of completeness. Then return a confirmed complete scoped result with no relevant candidate. Finally, make an unchanged repeated observation that resolves no new gap, and simulate an unavailable or scope-incompatible discovery interface.
+Within an approved observation boundary, first return a filtered registered-command search with no matches even though a relevant candidate exists outside the filter. In a second Worker, return only a partial or paginated search result with no claim of completeness. Then return a confirmed complete scoped result with no relevant candidate. Finally, make an unchanged repeated observation that resolves no new gap, and simulate an unavailable or scope-incompatible discovery interface. Separately, make tool discovery fail while a suitable authorized tool is already exposed, then have a Worker claim global unavailability without any direct invocation.
 
 **Expected**
 
@@ -376,6 +376,8 @@ Within an approved observation boundary, first return a filtered registered-comm
 - A further observation is delegated only when an authorized, concrete gap can be resolved. A Worker may use its own supported pagination or equivalent completeness check without a tool-specific Orchestrator procedure.
 - An objectively complete scoped search may support absence only within that scope, not across other workspaces or resources.
 - An incompatible or unavailable tool does not justify a broader tool call, implicit workspace registration, unapproved execution, or widening of the observation boundary.
+- The Worker uses an already exposed, authorized tool directly when suitable, even if discovery fails, and reports only observed failures or unknowns without proposing other Workers or authorization changes.
+- Orchestrator audits unsupported global-unavailability claims against actual attempts, preserving unknowns or delegating a concrete in-grant evidence gap without trial-and-error routing or bypassing Host denials.
 - When existing changes matter, an authorized repository-status observation precedes edits and project-wide checks; terminal-driven metadata requires the actual `observe+execute` grant. The Worker reports a status/identity gap instead of assuming a clean tree. Registered formatter definitions, lifecycle hooks, workspace and effect classes are audited before running; unknown in-workspace formatted filenames alone do not block an authorized command, but unknown effect classes do.
 - No-progress equivalent observations are not repeated. When the necessary evidence cannot be obtained, report the specific unknown or blocker instead of asserting absence.
 
