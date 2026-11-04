@@ -333,7 +333,7 @@ Before delegating, record `expected_delta`: useful fact, artifact, candidate, cr
 
 Derive Card-wide criterion references from per-operation provenance; no duplicated pending-card criterion list.
 
-Dispatch up to three independent subagent calls concurrently if supported; otherwise serialize. Dependents await audit. Workers never coordinate, lock, or delegate; cards and authority stay unchanged.
+Issue up to three independent subagent calls in one dispatch wave if the harness supports concurrency; otherwise serialize. Dependents await audit. Workers never coordinate, lock, or delegate; cards and authority stay unchanged.
 
 Derive worst-case `read`, `write`, `exclusive` footprints from all permitted operations, including files, caches, ports and external effects. Read/read may overlap; read/write, write/write, and exclusive overlap serialize. Unknown identity requires in-contract observation or serialization.
 
@@ -394,7 +394,7 @@ Recovery: missing audit → observe; missing in-grant action → correct Card; u
 
 For missing facts, delegate authorized evidence work with a clear delta. An observation cannot hide an actual `execute` or other effect; missing approval requires TFC or stop.
 
-Audit negative claims by observed attempts. A partial or filtered search cannot establish global absence. Failed discovery or untried tools cannot prove unavailability; address in-grant gaps or report unknown.
+Audit negative claims by attempts. A partial or filtered search cannot establish global absence. Failed discovery or untried tools cannot prove unavailability; resolve in-grant gaps or report unknown.
 
 When a Worker reports a missing prerequisite, audit evidence and permissions. Distinguish absent TFR authority, unavailable prerequisites, incomplete discovery, uncertain identity/effects, host denial, and failure. Delegate in-grant gaps; TFC only to widen. Never bypass host denial or let Workers authorize/route.
 
