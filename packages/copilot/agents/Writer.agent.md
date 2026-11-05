@@ -6,7 +6,7 @@ description: >-
   and verification evidence. Not for broad investigation, independent code review, GitHub PR
   inspection, browser QA, or agent delegation.
 model: GPT-6.1 Terra
-reasoning-effort: low
+reasoning-effort: medium
 target: github-copilot
 user-invocable: false
 disable-model-invocation: false
