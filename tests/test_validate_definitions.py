@@ -985,7 +985,8 @@ class ValidatorMutationTests(unittest.TestCase):
             ("Writer", "model: GPT-6.1 Terra (copilot)", "model: Auto (copilot)", "must use model"),
             ("Reviewer", "model: GPT-6.1 Sol (copilot)", "model: Auto (copilot)", "must use model"),
             ("BrowserQA", "model: GPT-6.1 Terra (copilot)", "model: Auto (copilot)", "must use model"),
-            ("Researcher", "reasoning-effort: low", "reasoning-effort: high", "must use reasoning-effort"),
+            ("Researcher", "reasoning-effort: high", "reasoning-effort: low", "must use reasoning-effort"),
+            ("Writer", "reasoning-effort: medium", "reasoning-effort: low", "must use reasoning-effort"),
             ("Orchestrator", "reasoning-effort: medium", "reasoning-effort: high", "must use reasoning-effort"),
         )
         for name, previous, replacement, message in cases:
