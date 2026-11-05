@@ -316,9 +316,9 @@ BUNDLED_WORKER_NAMES = frozenset(BUNDLED_WORKER_TOOLS)
 BUNDLED_AGENT_NAMES = frozenset({"Orchestrator", *BUNDLED_WORKER_NAMES})
 BUNDLED_AGENT_MODEL_SETTINGS = {
     "Orchestrator": ("GPT-6.1 Sol (copilot)", "medium"),
-    "Researcher": ("GPT-6 Luna (copilot)", "low"),
+    "Researcher": ("GPT-6 Luna (copilot)", "high"),
     "GitHubResearcher": ("GPT-6 Luna (copilot)", "low"),
-    "Writer": ("GPT-6.1 Terra (copilot)", "low"),
+    "Writer": ("GPT-6.1 Terra (copilot)", "medium"),
     "Reviewer": ("GPT-6.1 Sol (copilot)", "medium"),
     "BrowserQA": ("GPT-6.1 Terra (copilot)", "low"),
 }
