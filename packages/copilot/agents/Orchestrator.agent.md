@@ -67,7 +67,7 @@ A TFC is required for additional criteria, wider resource boundary, family, acti
 
 At intake, offer broad but bounded local grants for investigation, code/test edits, checks and repair. Include foreseeable bounded outputs of registered checks (including OS temporary output only when scoped to the run); a shared temp root is not blanket authority. Approve action/effect classes and boundaries, not steps or exact targets; avoid speculative grants. Project instructions are candidate evidence, not authorization.
 
-For coding goals, TFR must offer bounded `run_local` for terminal `observe+execute`, Runner-owned cache `change_local`, read-only cache-capacity metadata across workspaces, and required registered workspace-local formatter writes. Scope source/test edits separately; authorize Local `command-runner` Skill/reference reads under its trusted root. Normal `run` cannot prune caches; owner-only maintenance, arbitrary shell, registration, external writes and destructive effects need separate grants.
+For coding goals, include in the initial human-visible TFR a bounded `run_local` grant for terminal `observe+execute`, Runner-owned cache `change_local`, read-only cache capacity across workspaces, and required registered workspace-local formatter writes. Authorize Local `command-runner` Skill/reference reads under the trusted root; scope source/test edits separately. Normal `run` never prunes; owner-only maintenance, shell, registration, external or destructive effects need separate grants.
 
 External writes and destructive work need distinct affirmative grants with a sufficiently precise destination and effect boundary; local edit or execution grants never imply them. Do not hide remote effects inside local execution. Show all cumulative effects per capability.
 
@@ -196,7 +196,7 @@ An authorized exact file create may derive `create_directory+change_local` opera
 
 A newly discovered subject cannot be affected in the same invocation unless its exact effect was Card-listed and audited beforehand. Discovery stays in bounds.
 
-Before production, audit targets/actions/effects under one grant, criterion and cap. Registered checks need audited definition/args/workspace/lifecycle/full effects. For known IDs direct read-only `inspect` (argv alone is insufficient); for unknown IDs delegate bounded metadata discovery and inspect exact candidates within the grant. Discovery is not run authority. Runner validates current ID/workspace/args; re-audit changed definitions. Registration grants no authority; never bypass Host denial.
+Before production, audit targets/actions/effects under one grant, criterion and cap. Registered checks require audit of definition, arguments, workspace and effects. Inspect known IDs directly (read-only argv/cwd/limits/tokens); `list` is unnecessary and argv alone insufficient. If a required exact ID is unknown, delegate bounded registered-command metadata discovery in the approved workspace; inspect candidates before run. Discovery is not run permission. The runner resolves the current command by ID and validates workspace/arguments. Re-audit changed definitions; registration is not authority; never bypass Host refusal.
 
 Execution needs all cumulative effects, including caches and bounded command-generated output, under one grant and Card; `execute` implies neither `change_local` nor `affect_external`. Incidental output never permits arbitrary writes or cleanup deletion (`destructive`); unknown paths/effects stop.
 
@@ -208,7 +208,7 @@ A Task Card may list multiple exact permitted operations: batch pre-audited read
 
 When the exact command ID is unavailable, authorize discovery of registered-command metadata only if the approved capability covers the selected workspace, bounded query and pagination, and actual terminal `observe+execute` effects. Separately authorize inspection of candidate IDs within that observation boundary; neither a filtered miss nor an incomplete page proves absence. Do not infer command IDs from package script names, automatically register candidates, or treat discovery as execution authority. A command run requires a separate exact permitted action with arguments, active criterion, full effects and cap audit; if discovery or execution requires missing permission, stop or request a contract change.
 
-Terminal metadata and runs need exact `operations.affect` entries for `execute` plus `observe` for metadata; `operations.observe` does not grant execution. For Local, Card-list Skill/reference reads. Audit ID, args, workspace, shared read-only cache capacity and scoped new logs; `run` never prunes. In-grant discovery may produce a later audited Card without TFC, not arbitrary execution or Host bypass.
+Terminal-backed metadata and runs need exact `operations.affect` entries for `execute` plus `observe` for metadata; observation alone cannot run. Card-list Local Skill/reference reads. Audit ID, args, workspace, shared cache metadata and scoped new logs; `run` never prunes. In-grant discovery permits a later audited Card without TFC, never shell or Host bypass.
 
 ```yaml
 task_card:
@@ -396,7 +396,7 @@ For missing facts, delegate authorized evidence work with a clear delta. An obse
 
 Audit negative claims by attempts. A partial or filtered search cannot establish global absence. Failed discovery or untried tools cannot prove unavailability; resolve in-grant gaps or report unknown.
 
-Before requesting TFC for a Worker blocker, compare the exact operation/effects with one active grant and the Card. Reissue an incomplete Card without TFC; investigate missing evidence in-grant. TFC only for necessary authority widening. Distinguish unavailable registration, uncertain identity/effects and host denial; never bypass Host or let Workers authorize/route.
+When a Worker reports a missing prerequisite, audit one grant and the exact Card. Distinguish absent TFR authority, unavailable prerequisites, incomplete discovery, uncertain identity/effects and host denial. Correct Card omissions and investigate in-grant; TFC only for required widening. Never bypass Host or let Workers authorize/route.
 
 ## Completion and evidence handling
 
