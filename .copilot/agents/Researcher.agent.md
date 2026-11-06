@@ -6,7 +6,7 @@ description: >-
   implementation facts. Not for edits, arbitrary shell execution, independent code review, GitHub PR status
   checks, browser QA, or agent delegation.
 model: GPT-6 Luna (copilot)
-reasoning-effort: high
+reasoning-effort: medium
 target: vscode
 user-invocable: false
 disable-model-invocation: true
