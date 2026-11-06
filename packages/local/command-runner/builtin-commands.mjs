@@ -17,17 +17,17 @@ const positional = (value) => ({ kind: 'positional', required: true, value });
 const option = (token, value) => ({ kind: 'option', token, value });
 
 const SPECS = {
-  'builtin-fs-move': { description: 'Move or rename one regular workspace file without overwriting.', arguments: { source: positional(file()), destination: positional(file(false)) } },
-  'builtin-fs-copy': { description: 'Copy one regular workspace file without overwriting.', arguments: { source: positional(file()), destination: positional(file(false)) } },
-  'builtin-fs-trash': { description: 'Move one regular workspace file to the ignored workspace trash.', arguments: { source: positional(file()) } },
-  'builtin-fs-restore': { description: 'Restore one trash item without overwriting its original path.', arguments: { itemId: positional({ type: 'string', maxLength: 36 }) } },
-  'builtin-fs-trash-list': { description: 'List restorable workspace trash items with bounded pagination.', arguments: { offset: option('--offset', { type: 'integer', min: 0, max: 100000000 }), limit: option('--limit', { type: 'integer', min: 1, max: 100 }) } },
-  'builtin-git-status': { description: 'Read repository status without optional index refresh.', arguments: {} },
-  'builtin-git-diff': { description: 'Read scoped unstaged or staged repository diff.', arguments: { scope: option('--scope', { type: 'choice', values: ['unstaged', 'staged'] }), file: option('--file', file(false)) } },
-  'builtin-git-log': { description: 'Read bounded repository history.', arguments: { count: option('--count', { type: 'integer', min: 1, max: 100 }) } },
-  'builtin-git-show': { description: 'Read one full-SHA commit without external diff execution.', arguments: { commit: positional({ type: 'string', maxLength: 40 }) } },
-  'builtin-git-ls-files': { description: 'List tracked repository files.', arguments: { file: option('--file', file(false)) } },
-  'builtin-git-branch-info': { description: 'Read the current repository branch.', arguments: {} },
+  'builtin-fs-move': { description: 'Move/rename one existing regular file between workspace-relative paths; destination parent must exist. No overwrite, symlink traversal, directory operation, or cross-filesystem fallback.', arguments: { source: positional(file()), destination: positional(file(false)) } },
+  'builtin-fs-copy': { description: 'Copy one existing regular file between workspace-relative paths; destination parent must exist. No overwrite, symlink traversal, or directory copy.', arguments: { source: positional(file()), destination: positional(file(false)) } },
+  'builtin-fs-trash': { description: 'Move one existing regular file from a workspace-relative path to workspace-local .agent-trash/<itemId>/payload (not the OS trash). Returns itemId for builtin-fs-restore. Rejects tracked trash directories; no overwrite or permanent deletion.', arguments: { source: positional(file()) } },
+  'builtin-fs-restore': { description: 'Restore a .agent-trash itemId to its original workspace-relative file path; original parent must exist. No overwrite, permanent deletion, directory restore, or symlink traversal.', arguments: { itemId: positional({ type: 'string', maxLength: 36 }) } },
+  'builtin-fs-trash-list': { description: 'Read restorable .agent-trash items (itemId, original path, createdAt) in the current workspace; offset and limit bound pagination. Read-only; does not restore or delete files.', arguments: { offset: option('--offset', { type: 'integer', min: 0, max: 100000000 }), limit: option('--limit', { type: 'integer', min: 1, max: 100 }) } },
+  'builtin-git-status': { description: 'Read Git status including tracked changes and untracked files when repository root equals current workspace. No index refresh, staging, or writes.', arguments: {} },
+  'builtin-git-diff': { description: 'Read unstaged (default) or staged Git diff, optionally for one workspace-relative file; repository root must equal current workspace. No index refresh, staging, or writes.', arguments: { scope: option('--scope', { type: 'choice', values: ['unstaged', 'staged'] }), file: option('--file', file(false)) } },
+  'builtin-git-log': { description: 'Read up to 100 Git commit summaries (default 20) in the repository rooted at the current workspace; no repository changes.', arguments: { count: option('--count', { type: 'integer', min: 1, max: 100 }) } },
+  'builtin-git-show': { description: 'Read one Git commit by full 40-character SHA in the repository rooted at the current workspace; external diff disabled, no writes.', arguments: { commit: positional({ type: 'string', maxLength: 40 }) } },
+  'builtin-git-ls-files': { description: 'List Git-tracked files, optionally restricted to a workspace-relative path; repository root must equal current workspace. Read-only.', arguments: { file: option('--file', file(false)) } },
+  'builtin-git-branch-info': { description: 'Read the current Git branch name only when repository root matches the current workspace; does not switch branches or write.', arguments: {} },
 };
 
 export function builtinDefinitions() {
