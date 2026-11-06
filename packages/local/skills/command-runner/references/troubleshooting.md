@@ -5,6 +5,7 @@
 - **Unknown command:** use delegated bounded `list` and exact `inspect`. Filtered results and partial pages are not evidence that a command does not exist.
 - **Stale listing or changed script:** re-observe and inspect within the approved scope; do not reuse stale execution authority.
 - **Missing terminal operation:** distinguish a missing human `run_local` grant from an omitted operation in the actual Worker delegation. An in-grant Card correction does not need new human approval; never invent a missing grant.
+- **Incidental output mismatch:** compare known cache/temp/report effects with the approved grant and Card. An omitted in-grant Card scope is a delegation gap; unapproved or unknown output paths/effects need investigation, additional human permission, or a stop. A shared OS temp root is not implicitly granted.
 - **Host or Hook denial:** stop; do not switch to arbitrary shell tools or a less restrictive terminal mode.
 - **`execution_cache_full`:** normal `run` preserves old logs and stops before launch. The user may explicitly prune managed caches using the separate maintenance CLI; Workers must not bypass the Hook or invoke it.
 - **Timeout/failure/unknown effects:** record the exact command ID, status, output cache ID, workspace and material effects; do not blindly retry.
