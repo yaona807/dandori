@@ -477,6 +477,7 @@ ORCHESTRATOR_REQUIRED_MARKERS = (
     "Any Task Card containing an `execute` operation must link to at least one active criterion ID",
     "under the normal verification policy",
     "pending_invocations:",
+    "reusable_observations:",
 )
 ORCHESTRATOR_FORBIDDEN_MARKERS = (
     "normalized_delta:",
@@ -489,6 +490,8 @@ ORCHESTRATOR_FORBIDDEN_MARKERS = (
     "set_limits:",
     "Keep one active invocation.",
     "pending_invocation:",
+    "Issue up to three independent subagent calls",
+    "at most three independent pending calls",
 )
 ORCHESTRATOR_REQUIRED_SECTION_MARKERS: dict[str, tuple[str, ...]] = {
     "## Invariants and interaction": (
@@ -559,7 +562,9 @@ ORCHESTRATOR_REQUIRED_SECTION_MARKERS: dict[str, tuple[str, ...]] = {
         "No delta means no call.",
         "Diagnostic progress is different:",
         "Diagnostic progress never completes a criterion.",
-        "Issue up to three independent subagent calls in one dispatch wave",
+        "Before observation delegation, match needed evidence",
+        "Reuse grants no approval or criterion completion",
+        "Dispatch all ready non-conflicting Cards without fixed DANDORI concurrency cap",
         "Derive worst-case `read`, `write`, `exclusive` footprints from all permitted operations",
         "Read/read may overlap; read/write, write/write, and exclusive overlap serialize.",
         "no oversubscription",

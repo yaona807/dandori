@@ -519,11 +519,11 @@ Install the bundled user-level agents and fixed runner in a disposable VS Code e
 
 **Input**
 
-In both Copilot and Local harnesses when available, approve three independent, read-only investigations over disjoint files with one self-contained Task Card and concrete expected delta per investigation. Provide timed Workers so overlap can be measured. Add a fourth task dependent on the first two, and repeat with a harness that cannot dispatch concurrent subagents.
+In both Copilot and Local harnesses when available, approve four independent read-only investigations over disjoint files with one self-contained Task Card and expected delta each. Record Host capacity and overlap. Add a fifth task dependent on the first two and repeat on a serial-only harness.
 
 **Expected**
 
-- On a concurrency-capable harness, at least two of the three investigations overlap in observed start/end times; no more than three are active. A harness without concurrency runs serially without an authorization change.
+- On a Host allowing four invocations, all four may overlap without a DANDORI cap of three. With lower capacity queue excess work. A serial-only harness runs serially without authorization change.
 - The dependent task starts only after both predecessor results have passed Orchestrator audit. Each result is matched to its own Task Card ID/revision even when the finish order differs.
 - No Worker is taught about DANDORI scheduling, reads another Worker's state, or delegates a sibling; each receives only its normal Task Card.
 
@@ -741,3 +741,15 @@ Under an approved local-repair contract, delegate a Card containing one pre-audi
 - Orchestrator audits performed operations against the original delegated Card, then derives current criterion status from verified evidence. Out-of-Card effects are blocked or reported as unresolved, not silently accepted.
 - Local/Copilot variations do not change the generic Worker-facing task boundary; a host that cannot enforce a specific operation is not described as providing a per-file sandbox.
 
+
+### CONF-043 — Reuse sourced observations and join equivalent requests
+
+**Input**
+
+Request the same code fact twice using different wording, then ask for one new fact. Dispatch two equivalent observations concurrently and have the producer return partial evidence. Repeat in a new approved Flow within the same chat, then change the source. Also request a production edit and independent verification.
+
+**Expected**
+
+- Current sourced facts within the active grant are reused despite different wording/Card IDs. Equivalent in-flight observation requests share one producer; only evidence gaps are re-delegated.
+- Changed/unknown source versions, conflicting evidence or a different approved scope require bounded reobservation. Reuse grants no permission or criterion completion.
+- Pre-edit current-state reads and independent post-change verification remain. Independent observations may overlap. Record duplicate searches, worker count and elapsed time before claiming speedup.

@@ -378,6 +378,29 @@ class ValidatorMutationTests(unittest.TestCase):
             )
             self.assert_invalid(repo, "missing required Orchestrator marker")
 
+    def test_reusable_evidence_is_required(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".copilot/agents/Orchestrator.agent.md"
+            path.write_text(path.read_text().replace("reusable_observations:", "missing_index:", 1))
+            self.assert_invalid(repo, "missing required Orchestrator marker")
+
+    def test_observation_dedup_is_required(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".copilot/agents/Orchestrator.agent.md"
+            path.write_text(path.read_text().replace("Before observation delegation, match needed evidence", "Always start a Worker", 1))
+            self.assert_invalid(repo, "missing required Orchestrator invariant")
+
+    def test_fixed_parallel_cap_is_rejected(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".copilot/agents/Orchestrator.agent.md"
+            path.write_text(path.read_text().replace("Dispatch all ready non-conflicting Cards without fixed DANDORI concurrency cap", "Dispatch at most three Cards", 1))
+            self.assert_invalid(repo, "missing required Orchestrator invariant")
+            path.write_text(path.read_text() + "\nIssue up to three independent subagent calls in one dispatch wave.\n")
+            self.assert_invalid(repo, "forbidden legacy marker")
+
     def test_parallel_pending_invocations_are_required(self) -> None:
         temp, repo = self.make_repo()
         with temp:
