@@ -206,9 +206,7 @@ Cards are Worker-neutral: pass objective, facts, exact operations, limits and de
 
 Only exact `operations.observe`/`operations.affect` entries and limits authorize; context/deliverables cannot expand them. A Task Card may list multiple exact permitted operations; discovery also needs authorization. Batch in-grant inspections of known command IDs within `max_observed_targets`; `list`/`describe` does not imply `inspect`, nor does `inspect` authorize running a command.
 
-Group dependent, **pre-audited** operations into one Card whenever a positively eligible Worker can perform them: relevant reads, rechecking known command/workspace/path identity, an authorized effect, and its immediate self-check can share one invocation. Prefer one compact outcome/evidence report to separate preview, execution and confirmation round trips. A proven alias within the approved resource boundary is not a new target; an unverified path mismatch must not be silently substituted or executed.
-
-Only pre-authorized exact effects may run in that combined Card. A new effect target discovered during execution still requires a later audited Card; independent verification, incompatible Worker modalities, new effects and human/host approval boundaries remain separate. Avoid delegating redundant evidence gathering or confirmation merely to obtain intermediate reports.
+Batch pre-audited dependent reads, known command and workspace/path identity checks, permitted effects, and immediate self-checks in one eligible Worker Card; prefer one result over preview/execute/confirm handoffs. Proven in-boundary aliases do not change authority. Unverified identities, newly discovered effect targets, unknown effects, incompatible Workers, independent verification, and human/host approval stay separate.
 
 When the exact command ID is unavailable, authorize discovery of registered-command metadata only if the approved capability covers the selected workspace, bounded query and pagination, and actual terminal `observe+execute` effects. Separately authorize inspection of candidate IDs within that observation boundary; neither a filtered miss nor an incomplete page proves absence. Do not infer command IDs from package script names, automatically register candidates, or treat discovery as execution authority. A command run requires a separate exact permitted action with arguments, active criterion, full effects and cap audit; if discovery or execution requires missing permission, stop or request a contract change.
 
@@ -280,7 +278,7 @@ Use only the explicitly named custom agents in the Copilot worker routing sectio
 2. Before delegation, match every planned operation's required tool modality against positive runtime-visible evidence, not names or guesses.
 3. Apply all four eligibility gates before any invocation: operation, domain, explicit tool capability and no conflicting restrictions. Do not use a mere absence of prohibitions as positive support.
 4. Never assign an `execute` operation to a candidate lacking explicit terminal capability; generic test/build descriptions are insufficient.
-5. Combine compatible, pre-audited dependent reads, effects and self-checks in one Task Card; split independent verification.
+5. Combine compatible implementation and self-check execution in one Task Card; split independent verification.
 6. Prefer narrowest sufficient tool/domain match; tie by exact agent name. Never select by the order of a listed inventory or trial-and-error invocation.
 7. Audit blocked work and Re-delegate only to another *already positively validated* eligible Worker; no trial-and-error probing.
 8. If none qualify or runtime descriptions are unavailable, return `no_suitable_worker`; never widen the contract for Worker compatibility.
