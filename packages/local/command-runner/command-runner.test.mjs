@@ -1579,6 +1579,27 @@ test('P0 built-ins are discoverable, immutable, and safely manage one file at a 
     const inspected = runInterface(fixture, fixture.alpha, ['inspect', 'builtin-fs-move']);
     assert.equal(inspected.status, 0, inspected.stderr);
     assert.equal(JSON.parse(inspected.stdout).source, 'built-in');
+    // Public descriptions must make effects and recovery clear without source-code inspection.
+    const requiredDescriptions = {
+      'builtin-fs-move': ['workspace-relative', 'No overwrite', 'symlink'],
+      'builtin-fs-copy': ['workspace-relative', 'No overwrite', 'symlink'],
+      'builtin-fs-trash': ['.agent-trash/<itemId>/payload', 'not the OS trash', 'itemId', 'no overwrite or permanent deletion'],
+      'builtin-fs-restore': ['.agent-trash', 'original workspace-relative', 'No overwrite'],
+      'builtin-fs-trash-list': ['.agent-trash', 'itemId', 'Read-only'],
+      'builtin-git-status': ['repository root equals current workspace', 'No index refresh'],
+      'builtin-git-diff': ['workspace-relative', 'staged', 'No index refresh'],
+      'builtin-git-log': ['100', 'no repository changes'],
+      'builtin-git-show': ['40-character SHA', 'no writes'],
+      'builtin-git-ls-files': ['workspace-relative', 'Read-only'],
+      'builtin-git-branch-info': ['repository root matches', 'does not switch branches'],
+    };
+    for (const [id, phrases] of Object.entries(requiredDescriptions)) {
+      const response = runInterface(fixture, fixture.alpha, ['describe', id]);
+      assert.equal(response.status, 0, response.stderr);
+      const description = JSON.parse(response.stdout).command.description;
+      assert.ok(description.length <= 500, id);
+      for (const phrase of phrases) assert.ok(description.includes(phrase), `${id}: ${phrase}`);
+    }
     const denied = runInterface(fixture, fixture.alpha, [
       'register', 'builtin-fs-move', 'definition=%7B%7D',
     ]);

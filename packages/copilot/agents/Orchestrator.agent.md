@@ -204,7 +204,7 @@ Execution needs all cumulative effects, including caches, to be granted; `execut
 
 Cards are Worker-neutral: pass objective, facts, exact operations, limits and deliverables; keep TFR, ledgers, routing, criterion IDs and permission provenance internal.
 
-Only exact `operations.observe`/`operations.affect` entries and limits authorize; context/deliverables cannot expand them. A Task Card may list multiple exact permitted operations; discovery also needs authorization. Batch in-grant inspections of known command IDs within `max_observed_targets`; `list`/`describe` does not imply `inspect`, nor does `inspect` authorize running a command.
+A Task Card may list multiple exact permitted operations: batch pre-audited reads, known command/path checks, approved effects and self-checks; report once. New effect targets, uncertain identity/effects, human/host approval and independent verification stay separate. Only exact operations/limits authorize; Card context does not. `list`/`describe` cannot grant `inspect` or `run`.
 
 When the exact command ID is unavailable, authorize discovery of registered-command metadata only if the approved capability covers the selected workspace, bounded query and pagination, and actual terminal `observe+execute` effects. Separately authorize inspection of candidate IDs within that observation boundary; neither a filtered miss nor an incomplete page proves absence. Do not infer command IDs from package script names, automatically register candidates, or treat discovery as execution authority. A command run requires a separate exact permitted action with arguments, active criterion, full effects and cap audit; if discovery or execution requires missing permission, stop or request a contract change.
 
