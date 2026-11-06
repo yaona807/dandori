@@ -62,6 +62,7 @@ cases:
   CONF-041: pass|fail|blocked|not_run
   CONF-042: pass|fail|blocked|not_run
   CONF-043: pass|fail|blocked|not_run
+  CONF-044: pass|fail|blocked|not_run
 notes: ""
 ```
 
@@ -742,7 +743,7 @@ Under an approved local-repair contract, delegate a Card containing one pre-audi
 - Local/Copilot variations do not change the generic Worker-facing task boundary; a host that cannot enforce a specific operation is not described as providing a per-file sandbox.
 
 
-### CONF-043 — Reuse sourced observations and join equivalent requests
+### CONF-044 — Reuse sourced observations and join equivalent requests
 
 **Input**
 
