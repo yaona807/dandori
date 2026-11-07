@@ -348,6 +348,41 @@ function validateArgument(spec, location) {
   validateValueSpec(spec.value, `${location}.value`);
 }
 
+
+const ALLOW_OPTION_RE = /^(?:--[A-Za-z][A-Za-z0-9-]*|-[A-Za-z0-9])$/u;
+
+// Small, deliberately bounded grammar for worker-defined commands.
+function compileAllowlist(allow, location) {
+  if (!Array.isArray(allow) || allow.length === 0 || allow.length > LIMITS.parameters) {
+    throw new RunnerError('invalid_config', location + ' must be a non-empty bounded array');
+  }
+  const rules = new Map();
+  let hasPathGroup = false;
+  for (const entry of allow) {
+    if (typeof entry !== 'string' || entry.length > 256 || CONTROL_RE.test(entry)) {
+      throw new RunnerError('invalid_config', location + ' contains an invalid rule');
+    }
+    let option = entry;
+    let kind = 'flag';
+    if (entry.endsWith(' path...')) {
+      option = entry.slice(0, -' path...'.length);
+      kind = 'files';
+    } else if (entry.endsWith('=value')) {
+      option = entry.slice(0, -'=value'.length);
+      kind = 'value';
+    } else if (entry.endsWith('=path')) {
+      option = entry.slice(0, -'=path'.length);
+      kind = 'path';
+    }
+    if (!ALLOW_OPTION_RE.test(option) || rules.has(option) || (kind === 'files' && hasPathGroup)) {
+      throw new RunnerError('invalid_config', location + ' has a duplicate or unsupported rule: ' + entry);
+    }
+    if (kind === 'files') hasPathGroup = true;
+    rules.set(option, kind);
+  }
+  return rules;
+}
+
 function validateCommands(rawCommands, defaults, location) {
   requireObject(rawCommands, location);
   const commands = {};
@@ -358,7 +393,7 @@ function validateCommands(rawCommands, defaults, location) {
     requireObject(command, `${location}.${id}`);
     requireKeys(
       command,
-      ['description', 'run', 'cwd', 'arguments', 'timeoutMs', 'maxOutputBytes', 'scriptGuard'],
+      ['description', 'run', 'cwd', 'arguments', 'allow', 'timeoutMs', 'maxOutputBytes', 'scriptGuard'],
       `${location}.${id}`,
     );
     if (
@@ -386,9 +421,15 @@ function validateCommands(rawCommands, defaults, location) {
       }
       validateArgument(spec, `${location}.${id}.arguments.${name}`);
     }
+    if (command.allow !== undefined) {
+      compileAllowlist(command.allow, location + '.' + id + '.allow');
+      if (Object.keys(args).length) {
+        throw new RunnerError('invalid_config', location + '.' + id + ' cannot mix allow and legacy arguments');
+      }
+    }
     const executable = path.basename(command.run[0]).toLowerCase();
     const first = command.run[1]?.toLowerCase();
-    if (Object.keys(args).length && INLINE_CODE.has(`${executable}\0${first}`)) {
+    if ((Object.keys(args).length || command.allow !== undefined) && INLINE_CODE.has(`${executable}\0${first}`)) {
       throw new RunnerError(
         'invalid_config',
         `${location}.${id} connects dynamic arguments to an inline-code execution form`,
@@ -404,6 +445,7 @@ function validateCommands(rawCommands, defaults, location) {
       run: [...command.run],
       cwd,
       arguments: args,
+      ...(command.allow === undefined ? {} : { allow: [...command.allow] }),
       timeoutMs: command.timeoutMs === undefined
         ? defaults.timeoutMs
         : requireInteger(
@@ -543,6 +585,7 @@ function publicCommand(id, command) {
   return {
     id,
     description: command.description,
+    ...(command.allow === undefined ? {} : { allow: [...command.allow] }),
     arguments: Object.entries(command.arguments).map(([name, spec]) => ({
       name,
       kind: spec.kind,
@@ -725,7 +768,94 @@ async function validateValue(value, spec, root, parameterName) {
   return validateWorkspacePath(value, spec, root, parameterName);
 }
 
-async function buildInvocation(command, provided, root) {
+
+async function validateAllowlistPath(value, root, cwd, fileOnly) {
+  if (path.isAbsolute(value) || path.win32.isAbsolute(value)) {
+    throw new RunnerError('invalid_argument', 'path must be relative to the command directory');
+  }
+  const candidate = path.resolve(cwd, value);
+  if (!inside(root, candidate)) {
+    throw new RunnerError('invalid_argument', 'path escapes workspace');
+  }
+  const canonical = await canonicalPotentialPath(root, candidate, true, 'path');
+  if (!inside(root, canonical)) {
+    throw new RunnerError('invalid_argument', 'path resolves outside workspace');
+  }
+  if (fileOnly && !(await stat(canonical)).isFile()) {
+    throw new RunnerError('invalid_argument', 'test path must identify an existing file');
+  }
+  return path.relative(cwd, canonical) || '.';
+}
+
+async function buildAllowlistInvocation(command, provided, root, cwd) {
+  const unknown = [...provided.keys()].filter((key) => key !== 'arg');
+  if (unknown.length) {
+    throw new RunnerError('invalid_argument', 'allowlist run accepts only arg= tokens');
+  }
+  const rules = compileAllowlist(command.allow, 'command.allow');
+  const input = provided.get('arg') ?? [];
+  const seen = new Set();
+  let acceptingFiles = false;
+  let fileCount = 0;
+  const argv = [...command.run];
+  const validated = [];
+  for (let index = 0; index < input.length; index += 1) {
+    const token = input[index];
+    if (token.startsWith('-')) {
+      const eq = token.indexOf('=');
+      const name = eq > 0 ? token.slice(0, eq) : token;
+      const kind = rules.get(name);
+      if (kind === undefined || seen.has(name) || name === '--') {
+        throw new RunnerError('invalid_argument', 'unknown or repeated option: ' + name);
+      }
+      seen.add(name);
+      if (kind === 'flag' || kind === 'files') {
+        if (eq !== -1) {
+          throw new RunnerError('invalid_argument', 'option does not take a value: ' + name);
+        }
+        argv.push(token);
+        validated.push(token);
+        if (kind === 'files') acceptingFiles = true;
+        continue;
+      }
+      let rawValue;
+      if (eq !== -1) {
+        rawValue = token.slice(eq + 1);
+      } else {
+        rawValue = input[++index];
+        if (rawValue === undefined || rawValue.startsWith('-')) {
+          throw new RunnerError('invalid_argument', 'option requires a value: ' + name);
+        }
+      }
+      if (!rawValue) throw new RunnerError('invalid_argument', 'empty option value: ' + name);
+      const value = kind === 'path'
+        ? await validateAllowlistPath(rawValue, root, cwd, false)
+        : rawValue;
+      if (eq !== -1) {
+        argv.push(name + '=' + value);
+        validated.push(name + '=' + value);
+      } else {
+        argv.push(name, value);
+        validated.push(name, value);
+      }
+    } else {
+      if (!acceptingFiles) {
+        throw new RunnerError('invalid_argument', 'positional paths require an allowed path... option');
+      }
+      const value = await validateAllowlistPath(token, root, cwd, true);
+      argv.push(value);
+      validated.push(value);
+      fileCount += 1;
+    }
+  }
+  if (acceptingFiles && fileCount === 0) {
+    throw new RunnerError('invalid_argument', 'path... requires at least one file');
+  }
+  return { argv, publicArguments: { argv: validated } };
+}
+
+async function buildInvocation(command, provided, root, cwd) {
+  if (command.allow !== undefined) return buildAllowlistInvocation(command, provided, root, cwd);
   const unknown = [...provided.keys()].filter(
     (name) => !(name in command.arguments),
   );
@@ -812,12 +942,13 @@ async function commandDirectory(workspace, command) {
 }
 
 async function execute(workspace, id, command, provided) {
+  const cwd = await commandDirectory(workspace, command);
   const { argv, publicArguments } = await buildInvocation(
     command,
     provided,
     workspace.root,
+    cwd,
   );
-  const cwd = await commandDirectory(workspace, command);
   const relativeCwd = path.relative(workspace.root, cwd) || '.';
   if (command.scriptGuard) {
     let current;

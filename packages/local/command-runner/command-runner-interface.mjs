@@ -368,6 +368,7 @@ function publicConfiguredCommand(id, command) {
   return {
     id,
     description: command.description,
+    ...(command.allow === undefined ? {} : { allow: [...command.allow] }),
     arguments: Object.entries(argumentsDefinition).map(([name, spec]) => ({
       name,
       kind: spec.kind,
@@ -718,6 +719,7 @@ async function inspectConfiguredCommand(id, expectedWorkspace) {
       maxOutputBytes: command.maxOutputBytes ?? snapshot.raw.defaults?.maxOutputBytes ?? 1_048_576,
     },
     arguments: command.arguments ?? {},
+    ...(command.allow === undefined ? {} : { allow: [...command.allow] }),
     ...(command.scriptGuard === undefined ? {} : { scriptGuard: command.scriptGuard }),
   };
 }

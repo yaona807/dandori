@@ -25,7 +25,7 @@ export function validateScriptGuard(guard, command, location = 'scriptGuard') {
   }
   if (JSON.stringify(command.run) !== JSON.stringify(scriptRunArgs(guard.manager, guard.script))
     || Object.keys(command.arguments ?? {}).length !== 0) {
-    throw new Error(location + ' must bind an exact npm-family argv without forwarded arguments');
+    throw new Error(location + ' requires a fixed npm-family launcher without legacy dynamic arguments');
   }
 }
 

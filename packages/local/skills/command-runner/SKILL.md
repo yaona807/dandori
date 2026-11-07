@@ -21,6 +21,16 @@ Use only the user-level CLI `node ~/.copilot/command-runner/command-runner-v2.mj
 
 [All nine worker operations and builtin IDs](./references/commands.md) · [Troubleshooting and permission failures](./references/troubleshooting.md)
 
+## Registered command argv allowlists (v3)
+
+Configured project commands have two modes: **Fixed** without an `allow` field, or **Allowlist** with a non-empty array of rule strings. Legacy `arguments` definitions remain valid for existing commands, but cannot be mixed with non-empty `arguments` on an Allowlist command. Builtins retain their separate contracts.
+
+Allowed rules are `--coverage` (flag), `--maxWorkers=value` (scalar), `--config=path` (existing workspace-contained path), and `--runTestsByPath path...` (one or more existing workspace-contained files). Only one `path...` group is supported; `--option=value` and `--option value` both work. Rule order is irrelevant. No bare positional files, unknown or repeated options. These strings describe permissions; they are not shell code.
+
+Worker-facing `run` transports ordered argv as repeated percent-encoded `arg=` parameters. Example: `run test arg=--coverage arg=--runTestsByPath arg=tests%2Fa.test.js`. Encode special characters, whitespace and non-ASCII characters, including apostrophes and parentheses (`encodeURIComponent` alone leaves `!'()*` unescaped; percent-encode those characters as well). Never use terminal shell quotes or interpolation. Builtins/legacy commands still use their original named parameters.
+
+To propose an allowlisted npm-family script, use `propose test allow=<percent-encoded-JSON-string-array>` with optional `script` and `packageDir`; omit `allow` for Fixed. Review each option's semantics and effects: `value` is not guaranteed to be a non-path. The inert proposal still requires separate human Host approval during `activate`. If interactive approval is unavailable, report the block to Orchestrator instead of bypassing the Hook.
+
 ## Host integration
 
 Runner terminal invocation is not permissionless, even for builtins. Never retry denied commands via shell aliases, disable Hook checks, issue `exit`/`exec`, or guess which tab belongs to the Worker. The current Hook requires synchronous foreground terminal calls; VS Code may retain tabs after they finish. Background auto-disposal is a separate harness-specific experiment and must not be enabled until output/exit code and owner-scoped cleanup are verified.

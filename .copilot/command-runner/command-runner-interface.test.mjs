@@ -1065,7 +1065,7 @@ test('hook permits only bounded execution and management interface shapes', asyn
     ]) {
       const result = runHook(fixture, { command });
       const isMutation = /command-runner-interface\.mjs (?:register|update|unregister|workspace-register|workspace-unregister) /u.test(command);
-      assert.equal(JSON.parse(result.stdout).hookSpecificOutput.permissionDecision, isMutation ? 'ask' : 'allow');
+      assert.equal(JSON.parse(result.stdout).hookSpecificOutput.permissionDecision, isMutation ? 'deny' : 'allow');
     }
 
     for (const toolInput of [

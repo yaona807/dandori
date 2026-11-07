@@ -90,9 +90,11 @@ function activationReview(id) {
     argv: item.definition.run,
     cwd: item.definition.cwd,
     scriptGuard: item.definition.scriptGuard,
+    previousAllow: item.previousAllow ?? null,
+    allow: item.definition.allow ?? null,
     scriptPreview: item.scriptPreview,
   });
-  if (display.length > 2000) throw new Error('approval details exceed bounded preview');
+  if (display.length > 6000) throw new Error('approval details exceed bounded preview');
   return 'Human approval is required for this exact command definition: ' + display;
 }
 
@@ -213,7 +215,7 @@ function validateV2Invocation(tokens) {
   }
   if (operation === 'propose') {
     if (!COMMAND_ID_PATTERN.test(tokens[3] ?? '')) throw new Error('invalid command ID');
-    for (const t of tokens.slice(4)) if (!['packageDir', 'script'].includes(validateEncodedParameter(t))) throw new Error('unsupported proposal argument');
+    for (const t of tokens.slice(4)) if (!['packageDir', 'script', 'allow'].includes(validateEncodedParameter(t))) throw new Error('unsupported proposal argument');
     return 'allow';
   }
   if (operation === 'describe' || operation === 'inspect') {
@@ -523,7 +525,10 @@ function validateTerminalInput(toolInput) {
   const words = parseCommand(toolInput.command);
   if (V2_PREFIX.every((s, i) => words[i] === s)) return validateV2Invocation(words);
   validateRunnerInvocation(words);
-  return ['register', 'update', 'unregister', 'workspace-register', 'workspace-unregister'].includes(words[2]) ? 'ask' : 'allow';
+  if (['register', 'update', 'unregister', 'workspace-register', 'workspace-unregister'].includes(words[2])) {
+    throw new Error('Worker registry mutations require the approved v2 propose/activate flow; owner management remains outside the Worker Hook');
+  }
+  return 'allow';
 }
 
 async function readInput() {

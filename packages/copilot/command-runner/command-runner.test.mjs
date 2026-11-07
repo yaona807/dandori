@@ -1786,9 +1786,9 @@ test('v2 Hook uses interactive approval for activation and rejects arbitrary she
     const rejected = invoke('node ~/.copilot/command-runner/command-runner-v2.mjs run test && npm publish');
     assert.equal(JSON.parse(rejected.stdout).permissionDecision, 'deny');
     const legacy = invoke('node ~/.copilot/command-runner/command-runner-interface.mjs register test --expected-workspace=alpha definition=%7B%7D');
-    assert.equal(JSON.parse(legacy.stdout).permissionDecision, 'ask');
+    assert.equal(JSON.parse(legacy.stdout).permissionDecision, 'deny');
     const legacyWorkspace = invoke('node ~/.copilot/command-runner/command-runner-interface.mjs workspace-register alpha');
-    assert.equal(JSON.parse(legacyWorkspace.stdout).permissionDecision, 'ask');
+    assert.equal(JSON.parse(legacyWorkspace.stdout).permissionDecision, 'deny');
   });
 });
 
@@ -1898,4 +1898,238 @@ test('documented installation copies all runtime-dependent runner modules', asyn
         doc + ' does not install ' + file);
     }
   }
+});
+
+
+test('v3 allowlist preserves argv order, flags, values and multiple workspace files', async () => {
+  await withFixture(async (fixture) => {
+    await writeFile(path.join(fixture.alpha, 'tests', 'second.test.js'), 'export {};\n');
+    const run = (...tokens) => runRunner(fixture, fixture.alpha, [
+      'run', 'allowtest', ...tokens.map(token => 'arg=' + encodeURIComponent(token)),
+    ]);
+    const result = run('--coverage', '--runTestsByPath', 'tests/sample.test.js',
+      '--maxWorkers=50%', 'tests/second.test.js', '--testNamePattern=ログイン');
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(JSON.parse(JSON.parse(result.stdout).stdout), [
+      '--coverage', '--runTestsByPath', 'tests/sample.test.js',
+      '--maxWorkers=50%', 'tests/second.test.js', '--testNamePattern=ログイン',
+    ]);
+
+    const withSpace = path.join(fixture.alpha, 'tests', 'a space.test.js');
+    await writeFile(withSpace, 'export {};\n');
+    const spaced = run('--runTestsByPath', 'tests/a space.test.js');
+    assert.equal(spaced.status, 0, spaced.stderr);
+    assert.deepEqual(JSON.parse(JSON.parse(spaced.stdout).stdout),
+      ['--runTestsByPath', 'tests/a space.test.js']);
+
+    const config = run('--config=tests/sample.test.js');
+    assert.equal(config.status, 0, config.stderr);
+    assert.deepEqual(JSON.parse(JSON.parse(config.stdout).stdout),
+      ['--config=tests/sample.test.js']);
+  }, (cfg) => {
+    cfg.workspaces[0].commands.allowtest = {
+      description: 'Allowlisted test invocation.',
+      run: [process.execPath, 'echo-args.mjs'], cwd: '.', arguments: {},
+      allow: ['--coverage', '--maxWorkers=value', '--testNamePattern=value',
+        '--config=path', '--runTestsByPath path...'],
+    };
+    return cfg;
+  });
+});
+
+test('v3 allowlist rejects undeclared options, missing values and workspace escapes', async () => {
+  await withFixture(async (fixture) => {
+    const blocked = (...tokens) => {
+      const result = runRunner(fixture, fixture.alpha, ['run', 'allowtest',
+        ...tokens.map(token => 'arg=' + encodeURIComponent(token))]);
+      assert.equal(result.status, 2, result.stdout);
+      assert.match(result.stderr, /invalid_argument/u);
+    };
+    blocked('--unknown');
+    blocked('tests/sample.test.js');
+    blocked('--runTestsByPath');
+    blocked('--runTestsByPath', '--coverage');
+    blocked('--runTestsByPath', 'tests/sample.test.js', '--unknown');
+    blocked('--runTestsByPath', '../beta/echo-args.mjs');
+    blocked('--config=/tmp/outside.json');
+    blocked('--coverage=1');
+    blocked('--coverage', '--coverage');
+    blocked('--maxWorkers', '--coverage');
+    blocked('--config', 'not-found.json');
+    blocked('--runTestsByPath', 'tests');
+  }, (cfg) => {
+    cfg.workspaces[0].commands.allowtest = {
+      description: 'Bounded test invocation.',
+      run: [process.execPath, 'echo-args.mjs'], cwd: '.', arguments: {},
+      allow: ['--coverage', '--maxWorkers=value', '--config=path', '--runTestsByPath path...'],
+    };
+    return cfg;
+  });
+});
+
+test('v3 fixed mode rejects arg= and malformed allow definitions fail closed', async () => {
+  await withFixture(async (fixture) => {
+    const fixed = runRunner(fixture, fixture.alpha, ['run', 'timeout', 'arg=--coverage']);
+    assert.equal(fixed.status, 2);
+    assert.match(fixed.stderr, /invalid_argument/u);
+  });
+  for (const invalid of [
+    ['--coverage', '--coverage=value'],
+    ['--runTestsByPath path...', '--other path...'],
+    ['--x=value', '--x=path'],
+    ['--weird=integer'],
+    [],
+  ]) {
+    await withFixture(async (fixture) => {
+      const result = runRunner(fixture, fixture.alpha, ['list']);
+      assert.equal(result.status, 2);
+      assert.match(result.stderr, /invalid_config/u);
+    }, (cfg) => {
+      cfg.workspaces[0].commands.invalid = {
+        description: 'Invalid rule.', run: [process.execPath, 'echo-args.mjs'],
+        cwd: '.', arguments: {}, allow: invalid,
+      };
+      return cfg;
+    });
+  }
+});
+
+test('v3 propose and activate bind allowlist to the approved npm script', async () => {
+  await withFixture(async (fixture) => {
+    await writeFile(path.join(fixture.alpha, 'package.json'),
+      JSON.stringify({ packageManager: 'npm@10.0.0',
+        scripts: { test: 'node echo-args.mjs' } }));
+    const allow = ['--coverage', '--runTestsByPath path...'];
+    const proposal = runV2(fixture, fixture.alpha, [
+      'propose', 'test', 'allow=' + encodeURIComponent(JSON.stringify(allow)),
+    ]);
+    assert.equal(proposal.status, 0, proposal.stderr);
+    const pending = JSON.parse(proposal.stdout);
+    assert.deepEqual(pending.arguments, {});
+    const hook = runHook(fixture, { tool_name: 'execute/runInTerminal',
+      tool_input: { command: 'node ~/.copilot/command-runner/command-runner-v2.mjs activate ' + pending.proposalId } });
+    assert.equal(hook.status, 0, hook.stderr);
+    assert.equal(JSON.parse(hook.stdout).hookSpecificOutput.permissionDecision, 'ask');
+    assert.match(hook.stdout, /--runTestsByPath path\.\.\./u);
+    const activated = runV2(fixture, fixture.alpha, ['activate', pending.proposalId]);
+    assert.equal(activated.status, 0, activated.stderr);
+    const executed = runV2(fixture, fixture.alpha, [
+      'run', 'test', 'arg=--coverage',
+    ]);
+    assert.equal(executed.status, 0, executed.stderr);
+    assert.equal(JSON.parse(executed.stdout).status, 'completed');
+    const rejected = runV2(fixture, fixture.alpha, ['run', 'test', 'arg=--updateSnapshot']);
+    assert.equal(rejected.status, 2);
+    assert.match(rejected.stderr, /invalid_argument/u);
+  });
+});
+
+
+test('v3 path arguments use the command cwd and reject external symlinks', async () => {
+  await withFixture(async (fixture) => {
+    const cwd = path.join(fixture.alpha, 'packages', 'web');
+    await mkdir(path.join(cwd, 'tests'), {recursive: true});
+    await writeFile(path.join(cwd, 'tests', 'local.test.js'), 'export {};\n');
+    await symlink(fixture.beta, path.join(cwd, 'external'), 'dir');
+
+    const invoke = (...args) => runRunner(fixture, fixture.alpha, [
+      'run', 'nestedtest', ...args.map(arg => 'arg=' + encodeURIComponent(arg)),
+    ]);
+    const allowed = invoke('--runTestsByPath', 'tests/local.test.js');
+    assert.equal(allowed.status, 0, allowed.stderr);
+    assert.deepEqual(JSON.parse(JSON.parse(allowed.stdout).stdout),
+      ['--runTestsByPath', 'tests/local.test.js']);
+
+    for (const pathArg of ['external/echo-args.mjs', '../../../beta/echo-args.mjs',
+      '/tmp/a.test.js']) {
+      const rejected = invoke('--runTestsByPath', pathArg);
+      assert.equal(rejected.status, 2, rejected.stdout);
+      assert.match(rejected.stderr, /invalid_argument/u);
+    }
+  }, cfg => {
+    cfg.workspaces[0].commands.nestedtest = {
+      description: 'Nested workspace paths.',
+      run: [process.execPath, '../../echo-args.mjs'], cwd: 'packages/web',
+      arguments: {}, allow: ['--runTestsByPath path...'],
+    };
+    return cfg;
+  });
+});
+
+test('v3 proposal update presents previous and next allowlist under exact CAS', async () => {
+  await withFixture(async fixture => {
+    await writeFile(path.join(fixture.alpha, 'package.json'), JSON.stringify({
+      packageManager: 'npm@10.0.0', scripts: { test: 'node echo-args.mjs' },
+    }));
+    const next = ['--coverage'];
+    const proposal = runV2(fixture, fixture.alpha, [
+      'propose', 'test', 'allow=' + encodeURIComponent(JSON.stringify(next)),
+    ]);
+    assert.equal(proposal.status, 0, proposal.stderr);
+    const pending = JSON.parse(proposal.stdout);
+    assert.equal(pending.action, 'update');
+    const preview = runHook(fixture, {
+      tool_name: 'execute/runInTerminal',
+      tool_input: {command: 'node ~/.copilot/command-runner/command-runner-v2.mjs activate ' + pending.proposalId},
+    });
+    assert.equal(preview.status, 0, preview.stderr);
+    const response = JSON.parse(preview.stdout);
+    assert.equal(response.hookSpecificOutput.permissionDecision, 'ask');
+    assert.match(response.hookSpecificOutput.permissionDecisionReason, /previousAllow/u);
+    assert.match(response.hookSpecificOutput.permissionDecisionReason, /--runInBand/u);
+    assert.match(response.hookSpecificOutput.permissionDecisionReason, /--coverage/u);
+
+    const updated = runV2(fixture, fixture.alpha, ['activate', pending.proposalId]);
+    assert.equal(updated.status, 0, updated.stderr);
+    const denied = runV2(fixture, fixture.alpha, ['run', 'test', 'arg=--runInBand']);
+    assert.equal(denied.status, 2);
+    assert.match(denied.stderr, /invalid_argument/u);
+    const allowed = runV2(fixture, fixture.alpha, ['run', 'test', 'arg=--coverage']);
+    assert.equal(allowed.status, 0, allowed.stderr);
+  }, cfg => {
+    cfg.workspaces[0].commands.test = {
+      description: 'Previously allowed test.', cwd: '.',
+      run: [process.execPath, 'echo-args.mjs'],
+      arguments: {}, allow: ['--runInBand'],
+    };
+    return cfg;
+  });
+});
+
+test('v3 Hook accepts ordered encoded arg tokens but rejects raw shell syntax', async () => {
+  await withFixture(async fixture => {
+    const cli = 'node ~/.copilot/command-runner/command-runner-v2.mjs';
+    const allowed = runHook(fixture, {
+      tool_name: 'execute/runInTerminal',
+      tool_input: {command: cli + ' run sample arg=--testNamePattern%3D%E8%AA%8D%E8%A8%BC%2F%E7%99%BB%E9%8C%B2'},
+    });
+    assert.equal(allowed.status, 0, allowed.stderr);
+    assert.equal(JSON.parse(allowed.stdout).hookSpecificOutput.permissionDecision, 'allow');
+    const denied = runHook(fixture, {
+      tool_name: 'execute/runInTerminal',
+      tool_input: {command: cli + ' run sample arg=--testNamePattern=hello;echo'},
+    });
+    assert.equal(denied.status, 0, denied.stderr);
+    assert.equal(JSON.parse(denied.stdout).hookSpecificOutput.permissionDecision, 'deny');
+  });
+});
+
+
+test('v3 Hook accepts fully escaped apostrophes and parentheses without shell parsing', async () => {
+  await withFixture(async fixture => {
+    const encodeSafe = value => encodeURIComponent(value).replace(/[!'()*]/gu,
+      letter => '%' + letter.charCodeAt(0).toString(16).toUpperCase());
+    const word = "--testNamePattern=it's (fine)";
+    const command = 'node ~/.copilot/command-runner/command-runner-v2.mjs run sample arg=' + encodeSafe(word);
+    const hook = runHook(fixture, {
+      tool_name: 'execute/runInTerminal', tool_input: { command },
+    });
+    assert.equal(hook.status, 0, hook.stderr);
+    assert.equal(JSON.parse(hook.stdout).permissionDecision, 'allow');
+    const raw = runHook(fixture, {
+      tool_name: 'execute/runInTerminal',
+      tool_input: { command: "node ~/.copilot/command-runner/command-runner-v2.mjs run sample arg=it's" },
+    });
+    assert.equal(JSON.parse(raw.stdout).permissionDecision, 'deny');
+  });
 });
