@@ -1786,9 +1786,9 @@ test('v2 Hook uses interactive approval for activation and rejects arbitrary she
     const rejected = invoke('node ~/.copilot/command-runner/command-runner-v2.mjs run test && npm publish');
     assert.equal(JSON.parse(rejected.stdout).permissionDecision, 'deny');
     const legacy = invoke('node ~/.copilot/command-runner/command-runner-interface.mjs register test --expected-workspace=alpha definition=%7B%7D');
-    assert.equal(JSON.parse(legacy.stdout).permissionDecision, 'ask');
+    assert.equal(JSON.parse(legacy.stdout).permissionDecision, 'deny');
     const legacyWorkspace = invoke('node ~/.copilot/command-runner/command-runner-interface.mjs workspace-register alpha');
-    assert.equal(JSON.parse(legacyWorkspace.stdout).permissionDecision, 'ask');
+    assert.equal(JSON.parse(legacyWorkspace.stdout).permissionDecision, 'deny');
   });
 });
 
@@ -2111,5 +2111,25 @@ test('v3 Hook accepts ordered encoded arg tokens but rejects raw shell syntax', 
     });
     assert.equal(denied.status, 0, denied.stderr);
     assert.equal(JSON.parse(denied.stdout).hookSpecificOutput.permissionDecision, 'deny');
+  });
+});
+
+
+test('v3 Hook accepts fully escaped apostrophes and parentheses without shell parsing', async () => {
+  await withFixture(async fixture => {
+    const encodeSafe = value => encodeURIComponent(value).replace(/[!'()*]/gu,
+      letter => '%' + letter.charCodeAt(0).toString(16).toUpperCase());
+    const word = "--testNamePattern=it's (fine)";
+    const command = 'node ~/.copilot/command-runner/command-runner-v2.mjs run sample arg=' + encodeSafe(word);
+    const hook = runHook(fixture, {
+      tool_name: 'execute/runInTerminal', tool_input: { command },
+    });
+    assert.equal(hook.status, 0, hook.stderr);
+    assert.equal(JSON.parse(hook.stdout).permissionDecision, 'allow');
+    const raw = runHook(fixture, {
+      tool_name: 'execute/runInTerminal',
+      tool_input: { command: "node ~/.copilot/command-runner/command-runner-v2.mjs run sample arg=it's" },
+    });
+    assert.equal(JSON.parse(raw.stdout).permissionDecision, 'deny');
   });
 });

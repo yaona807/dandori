@@ -107,7 +107,7 @@ Runnerが参照するのは**ターミナルのカレントディレクトリ**�
 
 `--coverage`はフラグ、`--maxWorkers=value`は任意値、`--config=path`はWorkspace内の既存パス、`--runTestsByPath path...`は1件以上の既存ファイルパスです。設定順に意味はありません。`path...`は1グループまでです。`--option=value`と`--option value`の両方を受け付け、未知・重複オプションは拒否します。パスはコマンドの`cwd`を基準に実体パスを検証します。`value`の意味や起動プログラム内部のファイルアクセスまでは保証できないため、登録時に用途・副作用を確認してください。
 
-Workerは順序付きの`arg=`トークンでargvを渡します。例：`run test arg=--coverage arg=--runTestsByPath arg=tests%2Fa.test.js`。登録候補は`propose test allow=<パーセントエンコードしたJSON文字列配列>`として作成し、Host承認付き`activate`で有効化します。Shell引用符を使わず、特殊文字や空白はエンコードします。既存の名前付き引数形式はそのまま利用できます。
+Workerは順序付きの`arg=`トークンでargvを渡します。例：`run test arg=--coverage arg=--runTestsByPath arg=tests%2Fa.test.js`。登録候補は`propose test allow=<パーセントエンコードしたJSON文字列配列>`として作成し、Host承認付き`activate`で有効化します。Shell引用符を使わず、特殊文字や空白はエンコードします。既存の名前付き引数形式はそのまま利用できます。WorkerのHookから従来の管理CLIを直接使って登録・更新・削除する操作は拒否します。オーナーがWorker Hook外で行う従来の管理操作は維持します。
 
 
 `-`から始まるpositional値は拒否します。対象プログラムが対応している場合は、positional引数より前に固定argvとして `--` を登録してください。
@@ -139,7 +139,7 @@ node ~/.copilot/command-runner/command-runner-interface.mjs output <execution-id
 
 引数値にはURI component encodingを使用します。Workspace path型の引数は、選択されたroot配下へ解決できない場合に拒否されます。`register`と`update`はURI component encodingしたJSONコマンド定義を1個だけ受け取り、decode後の定義は16 KiB以内に制限します。`update`には現在の `definitionHash` も必要です。
 
-AgentとHookが直接呼べるのは `command-runner-interface.mjs` だけです。実行時のcommand schema検証とprocess起動は、従来どおり固定 `command-runner.mjs` coreへ委譲します。管理操作でも、保存前に候補となる設定全体を同じcoreで検証します。
+Workerは承認管理を迂回しないよう、`command-runner-v2.mjs`を介して実行・提案・有効化します。オーナー向けの内部管理CLI `command-runner-interface.mjs` はWorker Hookからの直接変更を禁止します。実行時のcommand schema検証とprocess起動は、従来どおり固定 `command-runner.mjs` coreへ委譲します。管理操作でも、保存前に候補となる設定全体を同じcoreで検証します。
 
 `list`・`describe`・コマンド定義の登録/更新/削除・`run`・`output`は、委譲されたWorkspace IDを`--expected-workspace`で渡します。固定Runnerは実際の端末cwdから選択したWorkspaceと照合し、不一致なら情報返却・設定変更・コマンド起動の前に`workspace_scope_mismatch`を返します。Agentが端末cwdを調査・変更する必要はありません。実行時には承認済みの正確なコマンドID・Workspace ID・検証済み引数だけを渡し、**Workerは実行ハッシュを取得・転記しません**。実行時の登録定義を正本とするため、調査後の定義更新は実行内容を変更し得ます。登録の更新は別途権限が必要であり、司令塔は認識した変更を再監査します。移行期の旧呼出しで2つのハッシュを両方指定する場合は、従来の厳密な照合も引き続き有効です。`describe`で未登録だった場合は照会Workspace IDをエラーへ含めます。
 

@@ -525,7 +525,10 @@ function validateTerminalInput(toolInput) {
   const words = parseCommand(toolInput.command);
   if (V2_PREFIX.every((s, i) => words[i] === s)) return validateV2Invocation(words);
   validateRunnerInvocation(words);
-  return ['register', 'update', 'unregister', 'workspace-register', 'workspace-unregister'].includes(words[2]) ? 'ask' : 'allow';
+  if (['register', 'update', 'unregister', 'workspace-register', 'workspace-unregister'].includes(words[2])) {
+    throw new Error('Worker registry mutations require the approved v2 propose/activate flow; owner management remains outside the Worker Hook');
+  }
+  return 'allow';
 }
 
 async function readInput() {
