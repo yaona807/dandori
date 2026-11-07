@@ -331,7 +331,7 @@ The bundled agents pin **GPT-6.1 Sol (copilot)** with `medium` effort for Orches
 
 ## Installation
 
-DANDORI targets GitHub Copilot Custom Agents in VS Code. Copy the agents and skills into discovery paths supported by that environment.
+DANDORI targets GitHub Copilot Custom Agents in VS Code. Install from `packages/copilot/`, which contains the generated Copilot definitions. The `.copilot/agents/` files in this source repository are generator inputs, **not** the installable Copilot profiles.
 
 ### User-level installation
 
@@ -339,8 +339,8 @@ Use this when you want the same DANDORI configuration across workspaces:
 
 ```bash
 mkdir -p ~/.copilot/agents ~/.copilot/skills
-cp .copilot/agents/*.agent.md ~/.copilot/agents/
-cp -R .copilot/skills/* ~/.copilot/skills/
+cp packages/copilot/agents/*.agent.md ~/.copilot/agents/
+cp -R packages/copilot/skills/* ~/.copilot/skills/
 ```
 
 For Researcher and Writer command execution, complete the [shared runner installation](./.copilot/skills/command-runner/references/README.md) to install CLI and Hook within `~/.copilot/skills/command-runner/`.
@@ -351,15 +351,15 @@ Use VS Code's standard workspace discovery paths when the configuration should t
 
 ```bash
 mkdir -p .github/agents .github/skills
-cp .copilot/agents/*.agent.md .github/agents/
-cp -R .copilot/skills/* .github/skills/
+cp packages/copilot/agents/*.agent.md .github/agents/
+cp -R packages/copilot/skills/* .github/skills/
 ```
 
 Researcher and Writer use the user-level runner under `~/.copilot/skills/command-runner/`; no separate workspace-level runner agent is needed. Even for workspace-scoped agent installation, install the Runner Skill at this user-level path using the [shared runner installation](./.copilot/skills/command-runner/references/README.md); a workspace-only `.github/skills/` copy is not the Hook executable location.
 
-### Custom `.copilot` workspace installation
+### Custom discovery paths
 
-Keeping `.copilot/agents` and `.copilot/skills` inside a workspace requires those locations to be enabled through `chat.agentFilesLocations` and `chat.agentSkillsLocations`. Do not assume that copying `.copilot` into a repository is sufficient without the corresponding discovery settings.
+When using `chat.agentFilesLocations` and `chat.agentSkillsLocations`, populate the chosen directories from `packages/copilot/agents/` and `packages/copilot/skills/`. Do **not** enable this repository's source `.copilot/agents/` as a discovery directory: its generator-input frontmatter is not the Copilot runtime profile.
 
 ### Upgrade an existing installation
 
@@ -381,13 +381,13 @@ rm -rf .github/skills/code-review .github/skills/command-runner
 
 The legacy `PullRequestResearcher.agent.md` name is also removed during this rename migration so an obsolete Worker definition cannot remain discoverable.
 
-After cleanup, run the installation commands for the selected scope and verify discovery again. For a custom `.copilot` workspace installation, remove the same managed filenames from the configured discovery paths.
+After cleanup, run the installation commands for the selected scope and verify discovery again. For custom discovery paths, remove only the same DANDORI-managed filenames before installing the Copilot bundle.
 
 ### Verify discovery
 
 1. In the VS Code Chat view, open the context menu and select **Diagnostics**.
 2. Confirm that every DANDORI agent and the `code-review` and `command-runner` skills are loaded without errors.
-3. Check the source shown for each agent and confirm that the Orchestrator allowlist resolves to the intended definitions.
+3. Check the source shown for each agent, confirm that `target: github-copilot` profiles were installed from `packages/copilot/`, and verify that the Orchestrator uses `task` to route to the intended named Workers.
 4. Confirm that each external Worker satisfies the compatibility checklist above.
 5. Remove or disable duplicate same-name definitions from workspace, user, organization, extension, or custom discovery locations.
 

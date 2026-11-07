@@ -50,6 +50,21 @@ class ValidatorMutationTests(unittest.TestCase):
         )
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
 
+    def test_documented_installation_uses_generated_copilot_profiles(self) -> None:
+        installation_commands = (
+            "cp packages/copilot/agents/*.agent.md ~/.copilot/agents/",
+            "cp -R packages/copilot/skills/* ~/.copilot/skills/",
+            "cp packages/copilot/agents/*.agent.md .github/agents/",
+            "cp -R packages/copilot/skills/* .github/skills/",
+        )
+        for readme in ("README.md", "README_ja.md"):
+            with self.subTest(readme=readme):
+                text = (ROOT / readme).read_text(encoding="utf-8")
+                for command in installation_commands:
+                    self.assertIn(command, text)
+                self.assertNotIn("cp .copilot/agents/", text)
+                self.assertNotIn("cp -R .copilot/skills/", text)
+
     def test_local_harness_bundle_is_not_shipped(self) -> None:
         self.assertFalse((ROOT / "packages/local").exists())
         spec = importlib.util.spec_from_file_location(
