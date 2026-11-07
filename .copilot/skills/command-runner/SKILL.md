@@ -6,7 +6,7 @@ user-invocable: false
 
 # CommandRunner operations
 
-This is **method guidance, not execution permission**. Copilot declares Skill loading; Local must have a separately approved and Card-listed read of the installed Skill and any referenced guide before terminal use. Do not read outside that boundary. The human grant, exact delegated action, effects, and host permission remain authoritative.
+This is **method guidance, not execution permission**. Copilot declares Skill loading; confirm that the installed Skill and referenced guides are available within the approved boundary before terminal use. Do not read outside that boundary. The human grant, exact delegated action, effects, and host permission remain authoritative.
 
 Use only the user-level CLI `node ~/.copilot/skills/command-runner/scripts/cli.mjs` through the delegated terminal tool, **never** a raw project shell command or the internal management interface. Terminal mode is synchronous (`mode: "sync"` if supported); omit the terminal timeout or use `0` only if the tool requires it. Do not override cwd, environment, profile or shell.
 

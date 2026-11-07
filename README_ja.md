@@ -315,13 +315,13 @@ assets/
 ## 互換性と前提条件
 
 - DANDORI Agentは明示的にVS Codeを対象とします。
-- 対応するAgentは、VS Code Local／Copilot harness双方のToolエイリアス（委譲の`agent`／`task`、Researcher・Writerの`execute/runInTerminal`／`execute`など）を宣言します。これは実行可能性の保証ではありません。使用中のharnessでToolが動作するか、[conformanceケース](./tests/conformance.md)（特に`CONF-024`）で確認してください。
-- Subagent制限には、現在Experimentalである`agents` allowlistを使用します。
+- GitHub CopilotのAgent委任のみをサポートします。`task`による委譲とCopilotのターミナルToolを使用します。実際のTool・Hookの可用性は[conformanceケース](./tests/conformance.md)（特に`CONF-024`）で確認してください。
+- Copilotの委譲先は承認された名前付きCustom Agentに限定します。名前指定はHostによる認可の強制ではないため、許可範囲とTask Cardの制約を維持します。
 - `GitHubResearcher`にはGitHub Pull Requests拡張機能と、その拡張機能が公開するToolが必要です。
 - `BrowserQA`には設定済みのbrowser Tool群が必要です。
 - 利用できない、または認識されないTool名はruntimeに無視される場合があるため、実際のTool可用性を確認してください。
 - 同梱Workerは、Toolの引数とruntime挙動で委譲境界を強制できる場合だけ、そのToolを呼び出します。利用可能なToolがより広い範囲でしか動作できない場合は、実行せず`blocked`を返し、必要な狭いcapabilityを示します。
-- ResearcherとWriterは共通の固定CLIを直接利用します。`.copilot/skills/command-runner/` からRunnerをインストールし、Agent固有Hookのため `chat.useCustomAgentHooks` を有効にしてください。 Copilotプロファイルは`command-runner` Skillを読み込み、LocalではWorkerがターミナル利用前に明示的に読み取ります。Skill自体は権限ではありません。同期実行のターミナルタブが残る問題は、環境別に検証が必要です。
+- ResearcherとWriterは共通の固定CLIを直接利用します。`.copilot/skills/command-runner/` からRunnerをインストールし、Agent固有Hookのため `chat.useCustomAgentHooks` を有効にしてください。 Copilot Workerは宣言済みの`command-runner` Skillを読み込み、利用可否を確認してからターミナルを使います。Skill自体は権限ではありません。同期実行のターミナルタブが残る問題は、環境別に検証が必要です。
 - 外部Workerは、自己完結した依頼を処理し、再委譲せず、必要以上のToolを持たず、役割と作用範囲をdescriptionへ正確に記載する必要があります。
 - VS Code Chat Diagnosticsで、すべてのAgentとSkillの読み込み元を確認してください。
 
@@ -581,12 +581,12 @@ DANDORI は次のものではありません。
 
 MIT. 詳細は [LICENSE](./LICENSE) を参照してください。
 
-## ビルド済みの Local / Copilot 配布物
+## ビルド済みの Copilot 配布物
 
-GitHub の「Download ZIP」には `packages/local/` と `packages/copilot/` が含まれます。いずれも 6 つの Agent、code-review Skill、CommandRunner の実行スクリプトを収録しています。利用する Session Target に合う **片方だけ**を選択し、同名 Agent の重複を避けて配置してください。
+GitHub の「Download ZIP」には `packages/copilot/` のみが含まれます。6つのAgent、code-review Skill、CommandRunnerの実行スクリプトを収録しています。VS Code Local Agent harnessのサポートは終了します。
 
 - `agents/` と `skills/` は対応する VS Code のユーザープロファイルまたはワークスペースで有効な Agent / Skill ディレクトリへ配置します。
 - CommandRunnerの実行コードは `skills/command-runner/` に同梱されます。永続データは `~/.copilot/command-runner/` に保持します。Copilot 版のResearcher・Writerは `preToolUse` フックを利用するため、対象環境でフックが実行されることを **先に確認**してください。フックが使えない環境では Researcher・Writerに実行権限を与えないでください。
-- 配布物の検証には `python scripts/build_agent_profiles.py --check`、再生成には `--write` を使います。変更時は両方の配布物をコミットしてください。
+- 配布物の検証には `python scripts/build_agent_profiles.py --check`、再生成には `--write` を使います。変更時はCopilot配布物をコミットしてください。
 
-Copilot 用のサブエージェント呼び出し・モデル選択・ツール・フックは Local と同一仕様ではありません。Copilot 版では未確認のモデル ID を固定せず、実行時の選択モデルを継承します。ホストによる Worker 許可リストの強制は Local のみに依存するため、Copilot ではリポジトリでの権限管理も必要です。
+Copilot用のサブエージェント呼び出し・モデル選択・ツール・フックは実機で確認してください。Workerの名前付きルーティングはHostによる権限強制ではないため、許可範囲とTask Cardの監査を維持します。

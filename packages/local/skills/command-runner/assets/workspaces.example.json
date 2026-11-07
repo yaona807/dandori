@@ -1,8 +1,0 @@
-{
-  "version": 1,
-  "defaults": {
-    "timeoutMs": 300000,
-    "maxOutputBytes": 1048576
-  },
-  "workspaces": []
-}

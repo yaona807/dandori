@@ -50,6 +50,18 @@ class ValidatorMutationTests(unittest.TestCase):
         )
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
 
+    def test_local_harness_bundle_is_not_shipped(self) -> None:
+        self.assertFalse((ROOT / "packages/local").exists())
+        spec = importlib.util.spec_from_file_location(
+            "dandori_builder_local_test", ROOT / "scripts/build_agent_profiles.py"
+        )
+        assert spec and spec.loader
+        builder = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(builder)
+        source = (ROOT / ".copilot/agents/Researcher.agent.md").read_text(encoding="utf-8")
+        with self.assertRaises(ValueError):
+            builder.transform(source, "Researcher", "local")
+
     def test_copilot_profiles_normalize_model_and_preserve_effort(self) -> None:
         for name in ("Orchestrator", "Researcher", "GitHubResearcher", "Writer",
                      "Reviewer", "BrowserQA"):
@@ -84,7 +96,6 @@ class ValidatorMutationTests(unittest.TestCase):
     def test_human_approval_templates_preserve_heading_ids(self) -> None:
         for path in (
             ".copilot/agents/Orchestrator.agent.md",
-            "packages/local/agents/Orchestrator.agent.md",
             "packages/copilot/agents/Orchestrator.agent.md",
         ):
             source = (ROOT / path).read_text(encoding="utf-8")
@@ -97,7 +108,6 @@ class ValidatorMutationTests(unittest.TestCase):
         """The pending Card carries per-operation provenance, not a second writable criterion list."""
         for relative in (
             ".copilot/agents/Orchestrator.agent.md",
-            "packages/local/agents/Orchestrator.agent.md",
             "packages/copilot/agents/Orchestrator.agent.md",
         ):
             body = (ROOT / relative).read_text(encoding="utf-8")
@@ -114,7 +124,6 @@ class ValidatorMutationTests(unittest.TestCase):
     def test_flow_ledger_does_not_duplicate_contract_or_operation_authority(self) -> None:
         for relative in (
             ".copilot/agents/Orchestrator.agent.md",
-            "packages/local/agents/Orchestrator.agent.md",
             "packages/copilot/agents/Orchestrator.agent.md",
         ):
             body = (ROOT / relative).read_text(encoding="utf-8")
@@ -130,7 +139,6 @@ class ValidatorMutationTests(unittest.TestCase):
     def test_task_card_stays_self_contained_without_return_boilerplate(self) -> None:
         for relative in (
             ".copilot/agents/Orchestrator.agent.md",
-            "packages/local/agents/Orchestrator.agent.md",
             "packages/copilot/agents/Orchestrator.agent.md",
         ):
             body = (ROOT / relative).read_text(encoding="utf-8")
@@ -935,10 +943,9 @@ class ValidatorMutationTests(unittest.TestCase):
                 for marker in markers:
                     self.assertIn(marker, description)
                 self.assertIn("Not for", description)
-                for profile in ("local", "copilot"):
-                    bundled = ROOT / "packages" / profile / "agents" / f"{worker}.agent.md"
-                    _, copied_front, _ = bundled.read_text(encoding="utf-8").split("---\n", 2)
-                    self.assertEqual(description, yaml.safe_load(copied_front)["description"])
+                bundled = ROOT / "packages/copilot/agents" / f"{worker}.agent.md"
+                _, copied_front, _ = bundled.read_text(encoding="utf-8").split("---\n", 2)
+                self.assertEqual(description, yaml.safe_load(copied_front)["description"])
 
     def test_worker_routing_description_cannot_lose_capability_or_exclusion(self) -> None:
         for worker, markers in validator.WORKER_DESCRIPTION_ROUTING_MARKERS.items():
@@ -1062,7 +1069,7 @@ Inspect only the delegated resource. Do not call another agent.
             subprocess.run([sys.executable, str(repo / 'scripts/build_agent_profiles.py'), '--write'], cwd=repo, check=True)
             result = validator.validate_repository(repo)
             self.assertEqual([], result.errors, "\n".join(result.errors))
-            self.assertTrue(any("custom local worker" in warning for warning in result.warnings))
+            self.assertTrue(any("custom worker" in warning for warning in result.warnings))
 
     def test_orchestrator_has_no_arbitrary_minimum_body_length(self) -> None:
         """Safety is validated by specific policy and schema checks, not word count."""

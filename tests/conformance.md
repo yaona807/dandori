@@ -497,30 +497,26 @@ Use a disposable workspace with project instructions requiring `lint`, `unit-tes
 - A registered but unrelated `publish`, a command that is absent from the real workspace, an unverified identity or effect, or a later-injected project instruction never broadens the authorization. The blocker is classified with concrete evidence; the runtime does not substitute raw shell or guess registration.
 - A legitimate host permission denial is reported as a host/tool blocker, not disguised as a missing DANDORI permission. The agent does not attempt a bypass.
 
-### CONF-024 — Verify Local and Copilot harness tool and hook compatibility
+### CONF-024 — Verify Copilot delegated-agent tools, skills, and hooks
 
 **Input**
 
-Install the bundled user-level agents and fixed runner in a disposable VS Code environment. First select the Local harness and inspect the actual terminal tool names, arguments, discovered Worker tool lists, and `PreToolUse` envelopes. Invoke Researcher and Writer's shared fixed-interface `list` and `describe` through the available Local execution tool. Repeat through the Copilot terminal tool and native `task` delegation when available. Attempt an unrelated raw project command, a compound shell command, and a terminal cwd/environment override in each available harness. Capture effective hook input and output shapes without recording secrets.
+Install the bundled Copilot agents and fixed runner in a disposable VS Code environment. Invoke the Orchestrator's named custom workers using Copilot `task` delegation. Inspect the effective terminal tool names, arguments, discovered Worker tool lists, Skill loading and `preToolUse` hook envelopes. Have Researcher and Writer invoke the fixed runner's `list` and `describe` commands. Attempt an unrelated raw project command, a compound shell command, and a terminal cwd/environment override. Capture hook decisions and exit/output behavior without recording secrets.
 
 **Expected**
 
-- The Orchestrator delegates only to its permitted workers through a real available subagent tool. Worker lists include the needed compatible read/edit/execute capabilities without accidentally granting delegation, general terminal use, or file editing to the wrong worker.
-- The active Copilot harness resolves Orchestrator and Reviewer to GPT-6.1 Sol with medium reasoning effort, Writer to GPT-6.1 Terra with medium effort, BrowserQA to GPT-6.1 Terra with low effort, Researcher to GPT-6 Luna with medium effort, and GitHubResearcher to GPT-6 Luna with low effort; inspect each effective model and effort rather than inferring them from frontmatter alone. Report unavailable models or ignored effort fields as runtime incompatibilities.
-- The agent-scoped `PreToolUse` hook is discovered and fires on the actual Local terminal tool and on the Copilot tool when supported. It permits canonical fixed-interface invocations using mandatory `--expected-workspace=<id>` assertions through `execute`, `terminal/execute`, and observed `run_in_terminal` aliases, denying raw, compound, unscoped, or overridden execution with a decision shape the active host recognizes. A passing isolated hook test is not runtime proof.
-- Known execution aliases receive the same strict command validation across harnesses. Other unknown tool names remain denied; explicitly read-only aliases may continue, while ordinary in-boundary Worker edits are permitted and protected runner control-file edits are rejected by their shared hook.
-- Actual workspace and command identity guards still reject stale or wrong-target execution before launch. A failed host tool approval is distinguished from a DANDORI TFR authorization gap.
-- All legacy Local harness paths that are still supported continue to apply the fixed-runner policy, or the incompatibility is explicitly reported. Record VS Code/Copilot versions, selected harness, observed tool names, and pass/fail evidence.
-
-- Confirm that Copilot actually loads the declared `command-runner` Skill before an execution Worker uses the terminal, and that Local performs the explicit read before first terminal use. Without an installed Skill, the Worker returns `runner_skill_unavailable`, not a guessed raw command.
-- For an implementation goal needing Git observations and tests, the initial TFR grants installed Local Skill/reference read access, terminal metadata and registered checks, shared cache-size observation and current-workspace output-cache writes. All these operations appear in the delegated Card; a missing Local Skill grant must fail closed without shell fallback. Normal `run` never removes another workspace's cached logs. Explicit owner-only cache-prune is not Worker permission. Host rejection remains a stop.
-- Record real synchronous terminal-tab reuse/retention and exit-code/output recovery in both harnesses. Evaluate hidden background auto-dispose only as an independent isolated host experiment without modifying the shipped Hook or launching project commands; unknown ownership or missing output/exit guarantees keep the synchronous policy. Never dispose user-created terminals.
+- Named Copilot workers use the intended models and reasoning efforts or report runtime incompatibility.
+- The declared `command-runner` Skill is loaded before a command-capable Worker uses the terminal; missing Skills fail closed with `runner_skill_unavailable`.
+- The Copilot agent-scoped hook accepts approved fixed-interface runner calls with exact workspace assertions and rejects unapproved raw, compound, unscoped, or overridden commands. Isolated hook tests do not substitute for runtime evidence.
+- `task` delegation, tool discovery, sync execution, exit-code/output capture, and terminal reuse/retention are verified in the actual Copilot host.
+- Worker permissions remain bounded by the approved TFR and exact Task Card. Missing grants and Host denials are not bypassed.
+- Record VS Code/Copilot versions, observed tool IDs, hook decisions, and pass/fail evidence.
 
 ### CONF-025 — Dispatch genuinely independent work concurrently
 
 **Input**
 
-In both Copilot and Local harnesses when available, approve four independent read-only investigations over disjoint files with one self-contained Task Card and expected delta each. Record Host capacity and overlap. Add a fifth task dependent on the first two and repeat on a serial-only harness.
+In the Copilot delegated-agent harness, approve four independent read-only investigations over disjoint files with one self-contained Task Card and expected delta each. Record Host capacity and overlap. Add a fifth task dependent on the first two and repeat on a serial-only harness.
 
 **Expected**
 
@@ -594,7 +590,7 @@ Launch two independent read-only subagents with oversized results. Have the runt
 
 **Input**
 
-In Local and Copilot harnesses when available, request an implementation followed by an authorized local test. Provide runtime-visible descriptions for an implementation Worker supporting exact file edits and registered self-checks, a diagnostic Worker supporting registered checks, and a vaguely described general implementation Worker. Separately provide a custom Worker whose description explicitly supports both editing and command execution. Include an `execute+change_local` command operation and a test-required result that depends on an earlier file edit. Repeat with no positively command-capable Worker available.
+In the Copilot delegated-agent harness, request an implementation followed by an authorized local test. Provide runtime-visible descriptions for an implementation Worker supporting exact file edits and registered self-checks, a diagnostic Worker supporting registered checks, and a vaguely described general implementation Worker. Separately provide a custom Worker whose description explicitly supports both editing and command execution. Include an `execute+change_local` command operation and a test-required result that depends on an earlier file edit. Repeat with no positively command-capable Worker available.
 
 **Expected**
 

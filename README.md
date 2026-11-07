@@ -311,13 +311,13 @@ assets/
 ## Compatibility and prerequisites
 
 - DANDORI agents explicitly target VS Code.
-- Bundled agents declare both VS Code Local and Copilot harness tool aliases where supported (`agent`/`task` for delegation and `execute/runInTerminal`/`execute` for Researcher and Writer). These declarations are compatibility candidates, not proof of runtime availability. Verify the active harness and loaded tools using the [conformance cases](./tests/conformance.md), especially `CONF-024`.
-- Subagent restriction uses the `agents` allowlist, which is currently an experimental VS Code feature.
+- Only the GitHub Copilot delegated-agent harness is supported. Workers use Copilot's `task` delegation and terminal tools; confirm actual tool/hook availability with the [conformance cases](./tests/conformance.md), especially `CONF-024`.
+- Copilot worker routing names only the approved custom agents. The instruction-level routing list is not a host-enforced authorization boundary; scoped grants and Task Cards remain mandatory.
 - `GitHubResearcher` requires the GitHub Pull Requests extension and its exposed tools.
 - `BrowserQA` requires the configured browser tool set.
 - Unavailable or unrecognized tool names can be ignored by the runtime; verify actual tool availability before use.
 - A bundled Worker calls a tool only when the tool arguments and runtime behavior can enforce the delegated boundary. If the available tool can operate only on a broader scope, the Worker returns `blocked` and identifies the narrower capability required.
-- Researcher and Writer call the shared fixed runner CLI directly. Install the unified runner Skill from `.copilot/skills/command-runner/` and enable agent-scoped hooks with `chat.useCustomAgentHooks`. Copilot profiles load the declared `command-runner` Skill; Local workers explicitly read the installed Skill before terminal use. Skill availability is not execution permission. Synchronous terminal tabs may remain until host-specific cleanup is validated.
+- Researcher and Writer call the shared fixed runner CLI directly. Install the unified runner Skill from `.copilot/skills/command-runner/` and enable agent-scoped hooks with `chat.useCustomAgentHooks`. Copilot workers load the declared `command-runner` Skill and verify availability before terminal use. Skill availability is not execution permission. Synchronous terminal tabs may remain until host-specific cleanup is validated.
 - External workers must accept a self-contained request, avoid sub-delegation, use no broader tools than necessary, and describe their role and effect boundary accurately.
 - Confirm the loaded source for every agent and skill with VS Code Chat Diagnostics.
 
@@ -470,6 +470,6 @@ DANDORI is not:
 
 MIT. See [LICENSE](./LICENSE).
 
-## Prebuilt harness bundles
+## Prebuilt Copilot bundle
 
-The GitHub source ZIP includes `packages/local/` and `packages/copilot/` with seven agents, shared skills, and the fixed command runner. Choose **one** profile, then copy its `agents/` and `skills/` into the appropriate VS Code agent discovery location; install the `command-runner` Skill under `~/.copilot/skills/command-runner/` (keep persistent data under `~/.copilot/command-runner/`). Do not install both profiles simultaneously with duplicate agent names. Run `python scripts/build_agent_profiles.py --check` to verify generated files or `--write` to regenerate them. Copilot runtime delegation, model IDs and hook behavior still require verification in the target VS Code environment.
+The GitHub source ZIP includes only `packages/copilot/` with six agents, shared Skills, and the fixed command runner. Copy its `agents/` and `skills/` into the appropriate VS Code Copilot agent discovery location; install the `command-runner` Skill under `~/.copilot/skills/command-runner/` (keep persistent data under `~/.copilot/command-runner/`). VS Code Local agent harness is no longer supported. Run `python scripts/build_agent_profiles.py --check` to verify the generated bundle or `--write` to regenerate it. Copilot runtime delegation, model IDs, and hook behavior still require verification in the target VS Code environment.

@@ -282,7 +282,7 @@ $COPILOT_HOME/command-runner/executions/<workspace-id>/<UTC-timestamp>_<UUID>/
 - コマンドは `spawn(..., shell: false)` で起動します。
 - timeoutまたは出力上限による停止時は、RunnerがコマンドのPOSIX process group全体へ停止を送り、固定猶予後に `SIGTERM` から `SIGKILL` へ昇格するため、通常の子孫processをbounded runの外へ残しません。意図的にdetachされた子孫processはこの保証の対象外です。
 - 共通Hookは宣言済みの読取・検索・編集ツールを通し、ユーザーレベルRunner制御ファイルの編集を拒否し、ターミナルからは固定Runnerだけを許可します。
-- HookはLocalの`execute`・`terminal/execute`、実機で観測されたVS Code／Copilotの`run_in_terminal`、従来の`execute/runInTerminal`、Copilot harnessの`Bash`などのターミナルTool名に対して、同じ固定Runner検証を適用します。未認識ツールの拒否も維持し、両形式の許可判定フィールドを返します。ただし、静的テストだけではVS Code／Copilot実機がHookを呼び出して判定を強制するか確認できません。実際のツール名と許可・拒否を[conformanceの`CONF-024`](../../../../tests/conformance.md)で確認してください。既存インストールでは更新したHookを再配置し、Agentセッションを再読み込みします。
+- HookはCopilotの`run_in_terminal`や`Bash`などのターミナルTool名に固定Runner検証を適用します。従来の`execute`・`terminal/execute`・`execute/runInTerminal`にも保守的な拒否判定を残します。未認識ツールの拒否も維持し、両形式の許可判定フィールドを返します。ただし、静的テストだけではVS Code／Copilot実機がHookを呼び出して判定を強制するか確認できません。実際のツール名と許可・拒否を[conformanceの`CONF-024`](../../../../tests/conformance.md)で確認してください。既存インストールでは更新したHookを再配置し、Agentセッションを再読み込みします。
 - `output`は有効なexecution IDだけを受け取り、現在のWorkspaceのexecution領域配下だけを解決します。任意ファイルパスは受け付けません。
 - 実行出力は信頼できないデータとして扱い、後続コマンドの権限にはなりません。
 
@@ -313,7 +313,7 @@ node ~/.copilot/skills/command-runner/scripts/cli.mjs run test
 
 未登録Workspaceは、現在のcwdそのものに `.git` または `package.json` がある場合だけ登録します。親ディレクトリを推測して登録しません。既存のWorkspace登録とホワイトリストは維持されます。
 
-`propose` は実行せず候補のみを保存します。コマンドIDと実際のスクリプト名が違う場合は `script=<URLエンコード済み名>` を指定します。登録に伴う権限追加はCopilot/Localの `PreToolUse` の `ask` により人間が確認してください。**Hookの許可判断は永続的な承認署名ではありません**。Hookが無効、タイムアウト、または手動でバイパスされる環境での強制的承認保証はありません。未承認候補を暗黙に登録しないため、提案と有効化を分離しています。非対話セッションでの承認は失敗として処理します。
+`propose` は実行せず候補のみを保存します。コマンドIDと実際のスクリプト名が違う場合は `script=<URLエンコード済み名>` を指定します。登録に伴う権限追加はCopilotの `PreToolUse` の `ask` により人間が確認してください。**Hookの許可判断は永続的な承認署名ではありません**。Hookが無効、タイムアウト、または手動でバイパスされる環境での強制的承認保証はありません。未承認候補を暗黙に登録しないため、提案と有効化を分離しています。非対話セッションでの承認は失敗として処理します。
 
 CLIで登録したnpm系コマンドはすべてのpackage script定義とpackageManager/lockfile種別を実行直前に再照合し、変更時は `stale_script_definition` で停止します。従来形式の登録は互換性のため監視対象外です。スクリプト本文に呼び出される任意のJSや依存パッケージの挙動は保護しません。npm等の任意スクリプトはSandboxではありません。
 

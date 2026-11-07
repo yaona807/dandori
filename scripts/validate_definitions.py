@@ -1832,7 +1832,7 @@ def validate_repository(root: Path) -> ValidationResult:
         )
     for custom_name in sorted(local_workers - BUNDLED_WORKER_NAMES):
         result.warnings.append(
-            f"{relative(definitions[custom_name].path, root)}: custom local worker requires policy and Diagnostics review: {custom_name}"
+            f"{relative(definitions[custom_name].path, root)}: custom worker requires policy and Diagnostics review: {custom_name}"
         )
     for external_name in sorted(set(allowed_agents) - local_workers):
         result.warnings.append(
