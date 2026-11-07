@@ -95,7 +95,20 @@ Each workspace contains a stable ID, an absolute root, and its own command map. 
 }
 ```
 
-`run` is always an argv array, never a shell string. Dynamic executables, raw argument passthrough, user-defined regular expressions, and unrestricted arguments are unsupported.
+`run` is always an argv array, never a shell string. Dynamic executables, unvalidated raw argument passthrough, user-defined regular expressions, and unrestricted arguments are unsupported.
+
+### Fixed and Allowlist registered commands (v3)
+
+An omitted `allow` field means **Fixed** (no extra argv). A non-empty array of rules means **Allowlist**. Legacy `arguments` definitions still work, but cannot be combined with non-empty `arguments` in an allowlisted command.
+
+```json
+{"description":"Run tests","run":["npm","run","test","--"],"cwd":".","allow":["--coverage","--maxWorkers=value","--config=path","--runTestsByPath path..."]}
+```
+
+A rule describes a flag (`--coverage`), a scalar (`--maxWorkers=value`), an existing workspace-contained path (`--config=path`), or one or more existing file paths after a marker (`--runTestsByPath path...`). Rule order is irrelevant; only one `path...` group is supported. Both `--option=value` and `--option value` are accepted. Unknown/repeated options and bare paths are rejected. Explicit paths are validated against the real workspace root relative to the configured `cwd`. The `value` rule is not a filesystem sandbox: review each option's semantics and side effects before approval.
+
+Worker runs pass ordered percent-encoded argv tokens, for example `run test arg=--coverage arg=--runTestsByPath arg=tests%2Fa.test.js`. A worker can propose a script with `propose test allow=<percent-encoded-JSON-string-array>` and optional `script`/`packageDir`, then use Host-reviewed `activate`. Encode special characters including apostrophes and parentheses; never use shell quoting or interpolation. Existing named-argument commands remain unchanged.
+
 
 Positional values that begin with `-` are rejected. Add a fixed `--` element to `run` before positional arguments when the target program supports it.
 

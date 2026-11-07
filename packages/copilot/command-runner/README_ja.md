@@ -95,7 +95,20 @@ Runnerが参照するのは**ターミナルのカレントディレクトリ**�
 }
 ```
 
-`run`は必ずargv配列として定義し、shell文字列は使用しません。動的な実行ファイル、raw引数の受け渡し、利用者定義の正規表現、無制限の引数はサポートしません。
+`run`は必ずargv配列として定義し、shell文字列は使用しません。動的な実行ファイル、未検証のraw引数の受け渡し、利用者定義の正規表現、無制限の引数はサポートしません。
+
+### Fixed／Allowlistの登録コマンド（v3）
+
+`allow`を省略すると**Fixed**となり追加argvは禁止です。非空の`allow`配列があれば**Allowlist**として指定された引数のみ許可します。既存の`arguments`形式も維持しますが、`allow`と非空の`arguments`は同一コマンドで併用できません。
+
+```json
+{"description":"テスト","run":["npm","run","test","--"],"cwd":".","allow":["--coverage","--maxWorkers=value","--config=path","--runTestsByPath path..."]}
+```
+
+`--coverage`はフラグ、`--maxWorkers=value`は任意値、`--config=path`はWorkspace内の既存パス、`--runTestsByPath path...`は1件以上の既存ファイルパスです。設定順に意味はありません。`path...`は1グループまでです。`--option=value`と`--option value`の両方を受け付け、未知・重複オプションは拒否します。パスはコマンドの`cwd`を基準に実体パスを検証します。`value`の意味や起動プログラム内部のファイルアクセスまでは保証できないため、登録時に用途・副作用を確認してください。
+
+Workerは順序付きの`arg=`トークンでargvを渡します。例：`run test arg=--coverage arg=--runTestsByPath arg=tests%2Fa.test.js`。登録候補は`propose test allow=<パーセントエンコードしたJSON文字列配列>`として作成し、Host承認付き`activate`で有効化します。Shell引用符を使わず、特殊文字や空白はエンコードします。既存の名前付き引数形式はそのまま利用できます。
+
 
 `-`から始まるpositional値は拒否します。対象プログラムが対応している場合は、positional引数より前に固定argvとして `--` を登録してください。
 
