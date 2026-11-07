@@ -32,15 +32,15 @@ REQUIRED_REPOSITORY_FILES = frozenset(
         "README.md",
         "README_ja.md",
         ".github/workflows/validate.yml",
-        ".copilot/command-runner/command-runner-hook.mjs",
-        ".copilot/command-runner/command-runner-v2.mjs",
-        ".copilot/command-runner/script-guard.mjs",
-        ".copilot/command-runner/builtin-commands.mjs",
-        ".copilot/command-runner/command-runner-interface.mjs",
-        ".copilot/command-runner/command-runner-interface.test.mjs",
-        ".copilot/command-runner/command-runner.mjs",
-        ".copilot/command-runner/command-runner.test.mjs",
-        ".copilot/command-runner/workspaces.example.json",
+        ".copilot/skills/command-runner/scripts/hook.mjs",
+        ".copilot/skills/command-runner/scripts/cli.mjs",
+        ".copilot/skills/command-runner/scripts/script-guard.mjs",
+        ".copilot/skills/command-runner/scripts/builtins.mjs",
+        ".copilot/skills/command-runner/scripts/gateway.mjs",
+        ".copilot/skills/command-runner/tests/gateway.test.mjs",
+        ".copilot/skills/command-runner/scripts/runner.mjs",
+        ".copilot/skills/command-runner/tests/runner.test.mjs",
+        ".copilot/skills/command-runner/assets/workspaces.example.json",
         "scripts/validate_definitions.py",
         "scripts/validate_release_archive.py",
         "scripts/run_tests.py",
@@ -310,7 +310,7 @@ WORKER_DESCRIPTION_ROUTING_MARKERS: dict[str, tuple[str, ...]] = {
 
 SHARED_RUNNER_WORKERS = frozenset({"Researcher", "Writer"})
 SHARED_RUNNER_HOOKS = {
-    "PreToolUse": [{"type": "command", "command": "node ~/.copilot/command-runner/command-runner-hook.mjs", "timeout": 30}]
+    "PreToolUse": [{"type": "command", "command": "node ~/.copilot/skills/command-runner/scripts/hook.mjs", "timeout": 30}]
 }
 BUNDLED_WORKER_NAMES = frozenset(BUNDLED_WORKER_TOOLS)
 BUNDLED_AGENT_NAMES = frozenset({"Orchestrator", *BUNDLED_WORKER_NAMES})

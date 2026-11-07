@@ -85,12 +85,12 @@ def transform(source: str, name: str, profile: str) -> str:
     if name in {"Researcher", "Writer"}:
         original_hook = (
             "hooks:\n  PreToolUse:\n    - type: command\n"
-            "      command: node ~/.copilot/command-runner/command-runner-hook.mjs\n"
+            "      command: node ~/.copilot/skills/command-runner/scripts/hook.mjs\n"
             "      timeout: 30\n"
         )
         copilot_hook = (
             "hooks:\n  preToolUse:\n    - type: command\n"
-            "      command: node ~/.copilot/command-runner/command-runner-hook.mjs\n"
+            "      command: node ~/.copilot/skills/command-runner/scripts/hook.mjs\n"
             "      timeoutSec: 30\n"
         )
         if original_hook not in front:
@@ -106,7 +106,7 @@ def generate(destination: Path) -> None:
             output = target / "agents" / f"{name}.agent.md"
             output.parent.mkdir(parents=True, exist_ok=True)
             output.write_text(transform(original, name, profile), encoding="utf-8")
-        for directory in ("skills", "command-runner"):
+        for directory in ("skills",):
             source = ROOT / ".copilot" / directory
             if source.exists():
                 shutil.copytree(source, target / directory, dirs_exist_ok=True)

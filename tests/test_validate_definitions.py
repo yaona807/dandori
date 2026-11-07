@@ -194,7 +194,7 @@ class ValidatorMutationTests(unittest.TestCase):
             self.assertFalse(metadata["user-invocable"])
             self.assertFalse(metadata["disable-model-invocation"])
             hooks = metadata["hooks"]["preToolUse"]
-            self.assertEqual("node ~/.copilot/command-runner/command-runner-hook.mjs", hooks[0]["command"])
+            self.assertEqual("node ~/.copilot/skills/command-runner/scripts/hook.mjs", hooks[0]["command"])
             self.assertEqual(30, hooks[0]["timeoutSec"])
             self.assertFalse((ROOT / "packages/copilot/agents/CommandRunner.agent.md").exists())
 
@@ -827,7 +827,7 @@ class ValidatorMutationTests(unittest.TestCase):
                 with temp:
                     path = repo / ".copilot/agents" / f"{worker}.agent.md"
                     path.write_text(path.read_text().replace(
-                        "node ~/.copilot/command-runner/command-runner-hook.mjs",
+                        "node ~/.copilot/skills/command-runner/scripts/hook.mjs",
                         "node ./unsafe-hook.mjs", 1,
                     ))
                     self.assert_invalid(repo, "shared runner hooks must match the fixed runner hook")
