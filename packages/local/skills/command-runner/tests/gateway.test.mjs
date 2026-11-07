@@ -17,12 +17,13 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const SOURCE_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
-const CORE_SOURCE = path.join(SOURCE_DIRECTORY, 'command-runner.mjs');
-const BUILTIN_SOURCE = path.join(SOURCE_DIRECTORY, 'builtin-commands.mjs');
-const SCRIPT_GUARD_SOURCE = path.join(SOURCE_DIRECTORY, 'script-guard.mjs');
-const INTERFACE_SOURCE = path.join(SOURCE_DIRECTORY, 'command-runner-interface.mjs');
-const HOOK_SOURCE = path.join(SOURCE_DIRECTORY, 'command-runner-hook.mjs');
-const AGENT_SOURCES = ['Researcher', 'Writer'].map(name => path.join(SOURCE_DIRECTORY, '..', 'agents', `${name}.agent.md`));
+const SCRIPT_DIRECTORY = path.join(SOURCE_DIRECTORY, '..', 'scripts');
+const CORE_SOURCE = path.join(SCRIPT_DIRECTORY, 'runner.mjs');
+const BUILTIN_SOURCE = path.join(SCRIPT_DIRECTORY, 'builtins.mjs');
+const SCRIPT_GUARD_SOURCE = path.join(SCRIPT_DIRECTORY, 'script-guard.mjs');
+const INTERFACE_SOURCE = path.join(SCRIPT_DIRECTORY, 'gateway.mjs');
+const HOOK_SOURCE = path.join(SCRIPT_DIRECTORY, 'hook.mjs');
+const AGENT_SOURCES = ['Researcher', 'Writer'].map(name => path.join(SOURCE_DIRECTORY, '..', '..', '..', 'agents', `${name}.agent.md`));
 const RESPONSE_LIMIT = 12_288;
 
 const STUB_CORE = String.raw`#!/usr/bin/env node
@@ -103,13 +104,15 @@ async function makeFixture(commandCount = 3) {
   const alpha = path.join(root, 'alpha');
   const beta = path.join(root, 'beta');
   await mkdir(commandRunner, { recursive: true });
+  const scripts = path.join(home, 'skills', 'command-runner', 'scripts');
+  await mkdir(scripts, { recursive: true });
   await mkdir(alpha);
   await mkdir(beta);
-  await writeFile(path.join(commandRunner, 'builtin-commands.mjs'), await readFile(BUILTIN_SOURCE));
-  await writeFile(path.join(commandRunner, 'script-guard.mjs'), await readFile(SCRIPT_GUARD_SOURCE));
-  await writeFile(path.join(commandRunner, 'command-runner-interface.mjs'), await readFile(INTERFACE_SOURCE));
-  await writeFile(path.join(commandRunner, 'command-runner-hook.mjs'), await readFile(HOOK_SOURCE));
-  await writeFile(path.join(commandRunner, 'command-runner.mjs'), STUB_CORE);
+  await writeFile(path.join(scripts, 'builtins.mjs'), await readFile(BUILTIN_SOURCE));
+  await writeFile(path.join(scripts, 'script-guard.mjs'), await readFile(SCRIPT_GUARD_SOURCE));
+  await writeFile(path.join(scripts, 'gateway.mjs'), await readFile(INTERFACE_SOURCE));
+  await writeFile(path.join(scripts, 'hook.mjs'), await readFile(HOOK_SOURCE));
+  await writeFile(path.join(scripts, 'runner.mjs'), STUB_CORE);
 
   const commands = {};
   for (let index = 0; index < commandCount; index += 1) {
@@ -130,7 +133,7 @@ async function makeFixture(commandCount = 3) {
   };
   await writeFile(path.join(commandRunner, 'stub.json'), JSON.stringify(config));
   await writeFile(path.join(commandRunner, 'workspaces.json'), `${JSON.stringify(config, null, 2)}\n`);
-  return { root, home, alpha, beta, commandRunner };
+  return { root, home, alpha, beta, commandRunner, scripts };
 }
 
 async function makeManagementFixture() {
@@ -140,13 +143,15 @@ async function makeManagementFixture() {
   const alpha = path.join(root, 'alpha');
   const beta = path.join(root, 'beta');
   await mkdir(commandRunner, { recursive: true });
+  const scripts = path.join(home, 'skills', 'command-runner', 'scripts');
+  await mkdir(scripts, { recursive: true });
   await mkdir(alpha);
   await mkdir(beta);
-  await writeFile(path.join(commandRunner, 'builtin-commands.mjs'), await readFile(BUILTIN_SOURCE));
-  await writeFile(path.join(commandRunner, 'script-guard.mjs'), await readFile(SCRIPT_GUARD_SOURCE));
-  await writeFile(path.join(commandRunner, 'command-runner-interface.mjs'), await readFile(INTERFACE_SOURCE));
-  await writeFile(path.join(commandRunner, 'command-runner-hook.mjs'), await readFile(HOOK_SOURCE));
-  await writeFile(path.join(commandRunner, 'command-runner.mjs'), await readFile(CORE_SOURCE));
+  await writeFile(path.join(scripts, 'builtins.mjs'), await readFile(BUILTIN_SOURCE));
+  await writeFile(path.join(scripts, 'script-guard.mjs'), await readFile(SCRIPT_GUARD_SOURCE));
+  await writeFile(path.join(scripts, 'gateway.mjs'), await readFile(INTERFACE_SOURCE));
+  await writeFile(path.join(scripts, 'hook.mjs'), await readFile(HOOK_SOURCE));
+  await writeFile(path.join(scripts, 'runner.mjs'), await readFile(CORE_SOURCE));
   await writeFile(
     path.join(alpha, 'echo-args.mjs'),
     'process.stdout.write(JSON.stringify(process.argv.slice(2)));\n',
@@ -181,7 +186,7 @@ async function makeManagementFixture() {
     ],
   };
   await writeFile(path.join(commandRunner, 'workspaces.json'), `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 });
-  return { root, home, alpha, beta, commandRunner };
+  return { root, home, alpha, beta, commandRunner, scripts };
 }
 
 async function withFixture(callback, count) {
@@ -247,7 +252,7 @@ function runInterface(fixture, cwd, args) {
   const guardedArgs = guarded(fixture, cwd, scopedArgs);
   return spawnSync(
     process.execPath,
-    [path.join(fixture.commandRunner, 'command-runner-interface.mjs'), ...guardedArgs],
+    [path.join(fixture.scripts, 'gateway.mjs'), ...guardedArgs],
     { cwd, encoding: 'utf8', env: { ...process.env, COPILOT_HOME: fixture.home } },
   );
 }
@@ -255,7 +260,7 @@ function runInterface(fixture, cwd, args) {
 function runInterfaceWithoutHashes(fixture, cwd, args) {
   return spawnSync(
     process.execPath,
-    [path.join(fixture.commandRunner, 'command-runner-interface.mjs'), ...args],
+    [path.join(fixture.scripts, 'gateway.mjs'), ...args],
     { cwd, encoding: 'utf8', env: { ...process.env, COPILOT_HOME: fixture.home } },
   );
 }
@@ -263,7 +268,7 @@ function runInterfaceWithoutHashes(fixture, cwd, args) {
 function runHook(fixture, toolInput) {
   return spawnSync(
     process.execPath,
-    [path.join(fixture.commandRunner, 'command-runner-hook.mjs')],
+    [path.join(fixture.scripts, 'hook.mjs')],
     {
       cwd: fixture.alpha,
       encoding: 'utf8',
@@ -532,7 +537,7 @@ test('effectful run denies wrong workspace before executing a matching command',
 
     const raw = spawnSync(
       process.execPath,
-      [path.join(fixture.commandRunner, 'command-runner-interface.mjs'), 'run', 'keep'],
+      [path.join(fixture.scripts, 'gateway.mjs'), 'run', 'keep'],
       { cwd: fixture.alpha, encoding: 'utf8', env: { ...process.env, COPILOT_HOME: fixture.home } },
     );
     parseFailure(raw, 'invalid_argument');
@@ -1050,18 +1055,18 @@ test('full shared execution cache fails closed instead of deleting other-workspa
 test('hook permits only bounded execution and management interface shapes', async () => {
   await withFixture(async (fixture) => {
     for (const command of [
-      'node ~/.copilot/command-runner/command-runner-interface.mjs workspace-list query=alpha',
-      'node ~/.copilot/command-runner/command-runner-interface.mjs workspace-describe alpha',
-      'node ~/.copilot/command-runner/command-runner-interface.mjs workspace-register alpha',
-      `node ~/.copilot/command-runner/command-runner-interface.mjs workspace-unregister alpha expected=sha256-${'0'.repeat(64)}`,
-      'node ~/.copilot/command-runner/command-runner-interface.mjs list --expected-workspace=alpha query=test',
-      'node ~/.copilot/command-runner/command-runner-interface.mjs describe echo --expected-workspace=alpha',
-      'node ~/.copilot/command-runner/command-runner-interface.mjs inspect echo --expected-workspace=alpha',
-      'node ~/.copilot/command-runner/command-runner-interface.mjs register lint --expected-workspace=alpha definition=%7B%22description%22%3A%22Lint%22%7D',
-      `node ~/.copilot/command-runner/command-runner-interface.mjs update echo --expected-workspace=alpha expected=sha256-${'0'.repeat(64)} definition=%7B%22description%22%3A%22Echo%22%7D`,
-      `node ~/.copilot/command-runner/command-runner-interface.mjs unregister echo --expected-workspace=alpha expected=sha256-${'0'.repeat(64)}`,
-      'node ~/.copilot/command-runner/command-runner-interface.mjs run echo --expected-workspace=alpha --expected-identity=sha256-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --expected-definition=sha256-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
-      'node ~/.copilot/command-runner/command-runner-interface.mjs output 20260829T010203.004Z_00000000-0000-4000-8000-000000000000 --expected-workspace=alpha stream=stdout',
+      'node ~/.copilot/skills/command-runner/scripts/gateway.mjs workspace-list query=alpha',
+      'node ~/.copilot/skills/command-runner/scripts/gateway.mjs workspace-describe alpha',
+      'node ~/.copilot/skills/command-runner/scripts/gateway.mjs workspace-register alpha',
+      `node ~/.copilot/skills/command-runner/scripts/gateway.mjs workspace-unregister alpha expected=sha256-${'0'.repeat(64)}`,
+      'node ~/.copilot/skills/command-runner/scripts/gateway.mjs list --expected-workspace=alpha query=test',
+      'node ~/.copilot/skills/command-runner/scripts/gateway.mjs describe echo --expected-workspace=alpha',
+      'node ~/.copilot/skills/command-runner/scripts/gateway.mjs inspect echo --expected-workspace=alpha',
+      'node ~/.copilot/skills/command-runner/scripts/gateway.mjs register lint --expected-workspace=alpha definition=%7B%22description%22%3A%22Lint%22%7D',
+      `node ~/.copilot/skills/command-runner/scripts/gateway.mjs update echo --expected-workspace=alpha expected=sha256-${'0'.repeat(64)} definition=%7B%22description%22%3A%22Echo%22%7D`,
+      `node ~/.copilot/skills/command-runner/scripts/gateway.mjs unregister echo --expected-workspace=alpha expected=sha256-${'0'.repeat(64)}`,
+      'node ~/.copilot/skills/command-runner/scripts/gateway.mjs run echo --expected-workspace=alpha --expected-identity=sha256-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --expected-definition=sha256-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+      'node ~/.copilot/skills/command-runner/scripts/gateway.mjs output 20260829T010203.004Z_00000000-0000-4000-8000-000000000000 --expected-workspace=alpha stream=stdout',
     ]) {
       const result = runHook(fixture, { command });
       const isMutation = /command-runner-interface\.mjs (?:register|update|unregister|workspace-register|workspace-unregister) /u.test(command);
@@ -1069,24 +1074,24 @@ test('hook permits only bounded execution and management interface shapes', asyn
     }
 
     for (const toolInput of [
-      { command: 'node ~/.copilot/command-runner/command-runner.mjs list' },
-      { command: 'node ~/.copilot/command-runner/command-runner-interface.mjs run echo' },
-      { command: 'node ~/.copilot/command-runner/command-runner-interface.mjs cache-prune confirm=prune-managed-executions' },
-      { command: 'node ~/.copilot/command-runner/command-runner-interface.mjs list query=test' },
-      { command: 'node ~/.copilot/command-runner/command-runner-interface.mjs describe echo' },
-      { command: 'node ~/.copilot/command-runner/command-runner-interface.mjs inspect echo' },
-      { command: 'node ~/.copilot/command-runner/command-runner-interface.mjs inspect echo --expected-workspace=alpha extra=value' },
-      { command: 'node ~/.copilot/command-runner/command-runner-interface.mjs list --expected-workspace=OTHER' },
+      { command: 'node ~/.copilot/skills/command-runner/scripts/runner.mjs list' },
+      { command: 'node ~/.copilot/skills/command-runner/scripts/gateway.mjs run echo' },
+      { command: 'node ~/.copilot/skills/command-runner/scripts/gateway.mjs cache-prune confirm=prune-managed-executions' },
+      { command: 'node ~/.copilot/skills/command-runner/scripts/gateway.mjs list query=test' },
+      { command: 'node ~/.copilot/skills/command-runner/scripts/gateway.mjs describe echo' },
+      { command: 'node ~/.copilot/skills/command-runner/scripts/gateway.mjs inspect echo' },
+      { command: 'node ~/.copilot/skills/command-runner/scripts/gateway.mjs inspect echo --expected-workspace=alpha extra=value' },
+      { command: 'node ~/.copilot/skills/command-runner/scripts/gateway.mjs list --expected-workspace=OTHER' },
       { command: 'npm test' },
-      { command: 'node ~/.copilot/command-runner/command-runner-interface.mjs workspace-register alpha root=%2Ftmp%2Falpha' },
-      { command: 'node ~/.copilot/command-runner/command-runner-interface.mjs workspace-unregister alpha other=value' },
-      { command: 'node ~/.copilot/command-runner/command-runner-interface.mjs register lint other=value' },
-      { command: `node ~/.copilot/command-runner/command-runner-interface.mjs update echo definition=%7B%7D expected=sha256-${'0'.repeat(64)}` },
-      { command: `node ~/.copilot/command-runner/command-runner-interface.mjs update echo expected=sha256-${'0'.repeat(64)} other=value` },
-      { command: 'node ~/.copilot/command-runner/command-runner-interface.mjs unregister echo other=value' },
-      { command: 'node ~/.copilot/command-runner/command-runner-interface.mjs output ../../secret stream=stdout' },
-      { command: 'node ~/.copilot/command-runner/command-runner-interface.mjs list', env: { BAD: '1' } },
-      { command: 'node ~/.copilot/command-runner/command-runner-interface.mjs list', isBackground: true },
+      { command: 'node ~/.copilot/skills/command-runner/scripts/gateway.mjs workspace-register alpha root=%2Ftmp%2Falpha' },
+      { command: 'node ~/.copilot/skills/command-runner/scripts/gateway.mjs workspace-unregister alpha other=value' },
+      { command: 'node ~/.copilot/skills/command-runner/scripts/gateway.mjs register lint other=value' },
+      { command: `node ~/.copilot/skills/command-runner/scripts/gateway.mjs update echo definition=%7B%7D expected=sha256-${'0'.repeat(64)}` },
+      { command: `node ~/.copilot/skills/command-runner/scripts/gateway.mjs update echo expected=sha256-${'0'.repeat(64)} other=value` },
+      { command: 'node ~/.copilot/skills/command-runner/scripts/gateway.mjs unregister echo other=value' },
+      { command: 'node ~/.copilot/skills/command-runner/scripts/gateway.mjs output ../../secret stream=stdout' },
+      { command: 'node ~/.copilot/skills/command-runner/scripts/gateway.mjs list', env: { BAD: '1' } },
+      { command: 'node ~/.copilot/skills/command-runner/scripts/gateway.mjs list', isBackground: true },
     ]) {
       const result = runHook(fixture, toolInput);
       assert.equal(JSON.parse(result.stdout).hookSpecificOutput.permissionDecision, 'deny');
