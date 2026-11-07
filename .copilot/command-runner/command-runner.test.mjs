@@ -2023,3 +2023,93 @@ test('v3 propose and activate bind allowlist to the approved npm script', async 
     assert.match(rejected.stderr, /invalid_argument/u);
   });
 });
+
+
+test('v3 path arguments use the command cwd and reject external symlinks', async () => {
+  await withFixture(async (fixture) => {
+    const cwd = path.join(fixture.alpha, 'packages', 'web');
+    await mkdir(path.join(cwd, 'tests'), {recursive: true});
+    await writeFile(path.join(cwd, 'tests', 'local.test.js'), 'export {};\n');
+    await symlink(fixture.beta, path.join(cwd, 'external'), 'dir');
+
+    const invoke = (...args) => runRunner(fixture, fixture.alpha, [
+      'run', 'nestedtest', ...args.map(arg => 'arg=' + encodeURIComponent(arg)),
+    ]);
+    const allowed = invoke('--runTestsByPath', 'tests/local.test.js');
+    assert.equal(allowed.status, 0, allowed.stderr);
+    assert.deepEqual(JSON.parse(JSON.parse(allowed.stdout).stdout),
+      ['--runTestsByPath', 'tests/local.test.js']);
+
+    for (const pathArg of ['external/echo-args.mjs', '../../../beta/echo-args.mjs',
+      '/tmp/a.test.js']) {
+      const rejected = invoke('--runTestsByPath', pathArg);
+      assert.equal(rejected.status, 2, rejected.stdout);
+      assert.match(rejected.stderr, /invalid_argument/u);
+    }
+  }, cfg => {
+    cfg.workspaces[0].commands.nestedtest = {
+      description: 'Nested workspace paths.',
+      run: [process.execPath, '../../echo-args.mjs'], cwd: 'packages/web',
+      arguments: {}, allow: ['--runTestsByPath path...'],
+    };
+    return cfg;
+  });
+});
+
+test('v3 proposal update presents previous and next allowlist under exact CAS', async () => {
+  await withFixture(async fixture => {
+    await writeFile(path.join(fixture.alpha, 'package.json'), JSON.stringify({
+      packageManager: 'npm@10.0.0', scripts: { test: 'node echo-args.mjs' },
+    }));
+    const next = ['--coverage'];
+    const proposal = runV2(fixture, fixture.alpha, [
+      'propose', 'test', 'allow=' + encodeURIComponent(JSON.stringify(next)),
+    ]);
+    assert.equal(proposal.status, 0, proposal.stderr);
+    const pending = JSON.parse(proposal.stdout);
+    assert.equal(pending.action, 'update');
+    const preview = runHook(fixture, {
+      tool_name: 'execute/runInTerminal',
+      tool_input: {command: 'node ~/.copilot/command-runner/command-runner-v2.mjs activate ' + pending.proposalId},
+    });
+    assert.equal(preview.status, 0, preview.stderr);
+    const response = JSON.parse(preview.stdout);
+    assert.equal(response.hookSpecificOutput.permissionDecision, 'ask');
+    assert.match(response.hookSpecificOutput.permissionDecisionReason, /previousAllow/u);
+    assert.match(response.hookSpecificOutput.permissionDecisionReason, /--runInBand/u);
+    assert.match(response.hookSpecificOutput.permissionDecisionReason, /--coverage/u);
+
+    const updated = runV2(fixture, fixture.alpha, ['activate', pending.proposalId]);
+    assert.equal(updated.status, 0, updated.stderr);
+    const denied = runV2(fixture, fixture.alpha, ['run', 'test', 'arg=--runInBand']);
+    assert.equal(denied.status, 2);
+    assert.match(denied.stderr, /invalid_argument/u);
+    const allowed = runV2(fixture, fixture.alpha, ['run', 'test', 'arg=--coverage']);
+    assert.equal(allowed.status, 0, allowed.stderr);
+  }, cfg => {
+    cfg.workspaces[0].commands.test = {
+      description: 'Previously allowed test.', cwd: '.',
+      run: [process.execPath, 'echo-args.mjs'],
+      arguments: {}, allow: ['--runInBand'],
+    };
+    return cfg;
+  });
+});
+
+test('v3 Hook accepts ordered encoded arg tokens but rejects raw shell syntax', async () => {
+  await withFixture(async fixture => {
+    const cli = 'node ~/.copilot/command-runner/command-runner-v2.mjs';
+    const allowed = runHook(fixture, {
+      tool_name: 'execute/runInTerminal',
+      tool_input: {command: cli + ' run sample arg=--testNamePattern%3D%E8%AA%8D%E8%A8%BC%2F%E7%99%BB%E9%8C%B2'},
+    });
+    assert.equal(allowed.status, 0, allowed.stderr);
+    assert.equal(JSON.parse(allowed.stdout).hookSpecificOutput.permissionDecision, 'allow');
+    const denied = runHook(fixture, {
+      tool_name: 'execute/runInTerminal',
+      tool_input: {command: cli + ' run sample arg=--testNamePattern=hello;echo'},
+    });
+    assert.equal(denied.status, 0, denied.stderr);
+    assert.equal(JSON.parse(denied.stdout).hookSpecificOutput.permissionDecision, 'deny');
+  });
+});
