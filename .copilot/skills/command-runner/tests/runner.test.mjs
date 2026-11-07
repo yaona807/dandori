@@ -296,8 +296,8 @@ test('distributed Researcher and Writer share the fixed runner CLI hook', async 
     assert.match(source, /^user-invocable: false$/mu);
     assert.match(source, /^disable-model-invocation: true$/mu);
     assert.match(source, /  - execute\/runInTerminal\n  - execute\nagents: \[\]\nhooks:/u);
-    assert.match(source, /command-runner-hook\.mjs/u);
-    assert.match(source, /node ~\/\.copilot\/command-runner\/command-runner-v2\.mjs/u);
+    assert.match(source, /hook\.mjs/u);
+    assert.match(source, /node ~\/\.copilot\/skills\/command-runner\/scripts\/cli\.mjs/u);
     assert.match(source, /request synchronous execution/u);
     assert.match(source, /omit the terminal `timeout` option/u);
     assert.match(source, /Do not execute raw project commands/u);

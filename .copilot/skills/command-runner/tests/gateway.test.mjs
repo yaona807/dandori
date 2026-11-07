@@ -298,8 +298,8 @@ test('shared CLI worker agents expose the fixed runner without arbitrary shell p
   for (const agentSource of AGENT_SOURCES) {
     const source = await readFile(agentSource, 'utf8');
     assert.match(source, /execute\/runInTerminal/u);
-    assert.match(source, /command-runner-v2\.mjs/u);
-    assert.match(source, /command-runner-hook\.mjs/u);
+    assert.match(source, /cli\.mjs/u);
+    assert.match(source, /hook\.mjs/u);
     assert.match(source, /Do not execute raw project commands/u);
   }
 });
@@ -1069,7 +1069,7 @@ test('hook permits only bounded execution and management interface shapes', asyn
       'node ~/.copilot/skills/command-runner/scripts/gateway.mjs output 20260829T010203.004Z_00000000-0000-4000-8000-000000000000 --expected-workspace=alpha stream=stdout',
     ]) {
       const result = runHook(fixture, { command });
-      const isMutation = /command-runner-interface\.mjs (?:register|update|unregister|workspace-register|workspace-unregister) /u.test(command);
+      const isMutation = /gateway\.mjs (?:register|update|unregister|workspace-register|workspace-unregister) /u.test(command);
       assert.equal(JSON.parse(result.stdout).hookSpecificOutput.permissionDecision, isMutation ? 'deny' : 'allow');
     }
 

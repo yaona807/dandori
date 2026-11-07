@@ -351,7 +351,7 @@ function validateRunnerInvocation(tokens) {
 
 function installedControlRoot() {
   // COPILOT_HOME is only for runner data, not for installed code.
-  return path.dirname(path.dirname(realpathSync(fileURLToPath(import.meta.url))));
+  return path.resolve(path.dirname(realpathSync(fileURLToPath(import.meta.url))), '../../..');
 }
 
 function normalizePossiblePath(value) {
