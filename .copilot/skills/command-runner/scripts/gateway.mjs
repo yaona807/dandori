@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { createHash, randomUUID } from 'node:crypto';
-import { builtinDefinitions, isBuiltinId } from './builtin-commands.mjs';
+import { builtinDefinitions, isBuiltinId } from './builtins.mjs';
 import { spawn } from 'node:child_process';
 import {
   lstat,
@@ -60,7 +60,7 @@ function interfaceHome() {
 }
 
 function corePath() {
-  return path.join(interfaceHome(), 'command-runner.mjs');
+  return path.join(interfaceHome(), 'runner.mjs');
 }
 
 function copilotHome() {
@@ -1057,7 +1057,7 @@ async function main() {
   ].includes(operation)) {
     throw new InterfaceError(
       'usage',
-      'usage: command-runner-interface.mjs workspace-list [query=<value>] [offset=<n>] | workspace-describe <id> | workspace-register <id> | workspace-unregister <id> expected=<workspace-hash> | list --expected-workspace=<id> [query=<value>] [offset=<n>] | describe <id> --expected-workspace=<id> | inspect <id> --expected-workspace=<id> | register <id> --expected-workspace=<id> definition=<encoded-json> | update <id> --expected-workspace=<id> expected=<definition-hash> definition=<encoded-json> | unregister <id> --expected-workspace=<id> expected=<definition-hash> | run <id> --expected-workspace=<id> [name=encoded-value ...] | output <execution-id> --expected-workspace=<id> stream=stdout|stderr [offset=<n>] | cache-prune confirm=prune-managed-executions (user maintenance only)',
+      'usage: gateway.mjs workspace-list [query=<value>] [offset=<n>] | workspace-describe <id> | workspace-register <id> | workspace-unregister <id> expected=<workspace-hash> | list --expected-workspace=<id> [query=<value>] [offset=<n>] | describe <id> --expected-workspace=<id> | inspect <id> --expected-workspace=<id> | register <id> --expected-workspace=<id> definition=<encoded-json> | update <id> --expected-workspace=<id> expected=<definition-hash> definition=<encoded-json> | unregister <id> --expected-workspace=<id> expected=<definition-hash> | run <id> --expected-workspace=<id> [name=encoded-value ...] | output <execution-id> --expected-workspace=<id> stream=stdout|stderr [offset=<n>] | cache-prune confirm=prune-managed-executions (user maintenance only)',
     );
   }
 

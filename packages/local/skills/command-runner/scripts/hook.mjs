@@ -37,8 +37,8 @@ const PERMITTED_NON_TERMINAL_TOOL_NAMES = new Set([
 const COMMAND_ID_PATTERN = /^[a-z][a-z0-9_-]{0,63}$/;
 const EXECUTION_ID_PATTERN = /^\d{8}T\d{6}\.\d{3}Z_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const PARAMETER_TOKEN_PATTERN = /^[a-z][a-zA-Z0-9_-]{0,63}=[A-Za-z0-9._~%/-]*$/;
-const FIXED_PREFIX = ['node', '~/.copilot/command-runner/command-runner-interface.mjs'];
-const V2_PREFIX = ['node', '~/.copilot/command-runner/command-runner-v2.mjs'];
+const FIXED_PREFIX = ['node', '~/.copilot/skills/command-runner/scripts/gateway.mjs'];
+const CLI_PREFIX = ['node', '~/.copilot/skills/command-runner/scripts/cli.mjs'];
 const PROPOSAL_ID = /^prop-[a-f0-9]{32}$/u;
 const FORBIDDEN_CHARACTER_PATTERN = /[\u0000-\u001f\u007f'"`$&|;<>()[\]{}\\]/u;
 const MAX_COMMAND_LENGTH = 65_536;
@@ -46,12 +46,13 @@ const PROTECTED_SUFFIXES = new Set([
   '.copilot/agents/CommandRunner.agent.md', // protect legacy installed control definition
   '.copilot/agents/Researcher.agent.md',
   '.copilot/agents/Writer.agent.md',
-  '.copilot/command-runner/command-runner-hook.mjs',
-  '.copilot/command-runner/command-runner.mjs',
-  '.copilot/command-runner/command-runner-interface.mjs',
-  '.copilot/command-runner/command-runner-v2.mjs',
-  '.copilot/command-runner/script-guard.mjs',
-  '.copilot/command-runner/builtin-commands.mjs',
+  '.copilot/skills/command-runner/SKILL.md',
+  '.copilot/skills/command-runner/scripts/hook.mjs',
+  '.copilot/skills/command-runner/scripts/runner.mjs',
+  '.copilot/skills/command-runner/scripts/gateway.mjs',
+  '.copilot/skills/command-runner/scripts/cli.mjs',
+  '.copilot/skills/command-runner/scripts/script-guard.mjs',
+  '.copilot/skills/command-runner/scripts/builtins.mjs',
   '.copilot/command-runner/workspaces.json',
 ]);
 const WRITE_TOOL_NAME_PATTERN = /(?:^|[/._-])(?:edit|write|create|delete|remove|move|rename|patch)(?:$|[/._-])/iu;
@@ -198,8 +199,8 @@ function validateWorkspaceGuard(token) {
   }
 }
 
-function validateV2Invocation(tokens) {
-  if (!V2_PREFIX.every((s, i) => s === tokens[i])) throw new Error('unknown runner prefix');
+function validateCliInvocation(tokens) {
+  if (!CLI_PREFIX.every((s, i) => s === tokens[i])) throw new Error('unknown runner prefix');
   const operation = tokens[2];
   if (operation === 'workspace.ensure' || operation === 'context') {
     if (tokens.length !== 3) throw new Error('unexpected parameters');
@@ -232,7 +233,7 @@ function validateV2Invocation(tokens) {
     for (const t of tokens.slice(4)) validateEncodedParameter(t);
     return 'allow';
   }
-  throw new Error('unsupported v2 command-runner operation');
+  throw new Error('unsupported command-runner operation');
 }
 
 function validateRunnerInvocation(tokens) {
@@ -351,7 +352,7 @@ function validateRunnerInvocation(tokens) {
 
 function installedControlRoot() {
   // COPILOT_HOME is only for runner data, not for installed code.
-  return path.dirname(path.dirname(realpathSync(fileURLToPath(import.meta.url))));
+  return path.resolve(path.dirname(realpathSync(fileURLToPath(import.meta.url))), '../../..');
 }
 
 function normalizePossiblePath(value) {
@@ -456,6 +457,8 @@ function isProtectedTargetPath(value) {
   if (target === null) return false;
   const canonicalTarget = canonicalTargetPath(target);
   const root = installedControlRoot();
+  const installedSkill = canonicalTargetPath(path.join(root, 'skills', 'command-runner'));
+  if (canonicalTarget === installedSkill || canonicalTarget.startsWith(installedSkill + path.sep)) return true;
   const installedPaths = [...PROTECTED_SUFFIXES].map((suffix) =>
     path.join(root, suffix.slice('.copilot/'.length)));
   if (process.env.COPILOT_HOME) {
@@ -523,10 +526,10 @@ function validateTerminalInput(toolInput) {
     throw new Error('terminal timeout must be 0 or omitted; retry the same fixed-runner command without terminal timeout');
   }
   const words = parseCommand(toolInput.command);
-  if (V2_PREFIX.every((s, i) => words[i] === s)) return validateV2Invocation(words);
+  if (CLI_PREFIX.every((s, i) => words[i] === s)) return validateCliInvocation(words);
   validateRunnerInvocation(words);
   if (['register', 'update', 'unregister', 'workspace-register', 'workspace-unregister'].includes(words[2])) {
-    throw new Error('Worker registry mutations require the approved v2 propose/activate flow; owner management remains outside the Worker Hook');
+    throw new Error('Worker registry mutations require the approved propose/activate flow; owner management remains outside the Worker Hook');
   }
   return 'allow';
 }
@@ -579,13 +582,13 @@ try {
   } else {
     const decision = validateTerminalInput(toolInput);
     const tokens = parseCommand(toolInput.command);
-    const isV2 = V2_PREFIX.every((s, i) => tokens[i] === s);
-    if (isV2 && tokens[2] === 'workspace.ensure') {
+    const isCli = CLI_PREFIX.every((s, i) => tokens[i] === s);
+    if (isCli && tokens[2] === 'workspace.ensure') {
       const reason = workspaceEnsureReview(input);
       if (reason) ask(reason);
       else allow('Workspace is already registered and bound to this directory.');
     } else if (decision === 'ask') {
-      const isActivation = isV2 && tokens[2] === 'activate';
+      const isActivation = isCli && tokens[2] === 'activate';
       ask(isActivation ? activationReview(tokens[3]) : 'Human approval required for registry mutation; review the exact command definition.');
     } else allow('Only the fixed user-level command runner interface is permitted.');
   }

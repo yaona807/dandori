@@ -18,7 +18,7 @@ tools:
 hooks:
   preToolUse:
     - type: command
-      command: node ~/.copilot/command-runner/command-runner-hook.mjs
+      command: node ~/.copilot/skills/command-runner/scripts/hook.mjs
       timeoutSec: 30
 skills:
   - command-runner
@@ -44,7 +44,7 @@ You are a research-focused codebase investigation worker agent.
 
 ## Fixed runner operations
 
-Use the user-level fixed CLI `node ~/.copilot/command-runner/command-runner-v2.mjs` through the delegated terminal tool, never a raw project command. Supported operations are `context`, `workspace.ensure`, `list`, `describe`, `inspect`, `propose`, `activate`, `run`, and `output`.
+Use the user-level fixed CLI `node ~/.copilot/skills/command-runner/scripts/cli.mjs` through the delegated terminal tool, never a raw project command. Supported operations are `context`, `workspace.ensure`, `list`, `describe`, `inspect`, `propose`, `activate`, `run`, and `output`.
 
 Before using the terminal in each delegated task, load the [command-runner skill](../skills/command-runner/SKILL.md). Copilot's generated profile declares the skill for initial loading; Local must read its installed contents with a read-only tool. If unavailable, return `runner_skill_unavailable`; never guess CLI usage or run a terminal command to load it. The Skill teaches method only, not permission or new actions.
 

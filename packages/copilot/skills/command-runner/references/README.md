@@ -12,24 +12,21 @@ Version 1 targets macOS, Linux, and WSL2. Native Windows support is not included
 
 The hook command and the fixed runner interface use `~/.copilot/...`, which must be expanded by a POSIX-compatible shell.
 
+Bundled executables: `scripts/cli.mjs`, `scripts/runner.mjs`, `scripts/gateway.mjs`, `scripts/hook.mjs`, `scripts/builtins.mjs`, `scripts/script-guard.mjs`. The entire Skill is installed as a unit; persistent data remains under `$COPILOT_HOME/command-runner/`.
+
 ## Installation
 
 Install the agent with the other DANDORI agents, then install the fixed runner and hook:
 
 ```bash
-mkdir -p ~/.copilot/agents ~/.copilot/command-runner
+mkdir -p ~/.copilot/agents ~/.copilot/skills ~/.copilot/command-runner
 cp .copilot/agents/{Researcher,Writer}.agent.md ~/.copilot/agents/
-cp .copilot/command-runner/command-runner.mjs ~/.copilot/command-runner/
-cp .copilot/command-runner/builtin-commands.mjs ~/.copilot/command-runner/
-cp .copilot/command-runner/command-runner-interface.mjs ~/.copilot/command-runner/
-cp .copilot/command-runner/command-runner-hook.mjs ~/.copilot/command-runner/
-cp .copilot/command-runner/script-guard.mjs ~/.copilot/command-runner/
-cp .copilot/command-runner/command-runner-v2.mjs ~/.copilot/command-runner/
+cp -R .copilot/skills/command-runner ~/.copilot/skills/
 test -f ~/.copilot/command-runner/workspaces.json \
-  || cp .copilot/command-runner/workspaces.example.json ~/.copilot/command-runner/workspaces.json
+  || cp .copilot/skills/command-runner/assets/workspaces.example.json ~/.copilot/command-runner/workspaces.json
 ```
 
-The copied configuration starts with an empty workspace registry. Run `node ~/.copilot/command-runner/command-runner-v2.mjs workspace.ensure` from the exact project root (containing `.git` or `package.json`) to auto-register the workspace after the hook's first-use confirmation. The runner chooses an internal ID and canonical root; no manual `workspaces.json` edit or workspace ID is required. Legacy manual `workspace-register <id>` remains available for migration. This personal file is not part of the DANDORI repository.
+The initial configuration starts with an empty workspace registry. Run `node ~/.copilot/skills/command-runner/scripts/cli.mjs workspace.ensure` from the exact project root (containing `.git` or `package.json`) to auto-register the workspace after the hook's first-use confirmation. The runner chooses an internal ID and canonical root; no manual `workspaces.json` edit or workspace ID is required. Legacy manual `workspace-register <id>` remains available for migration. This personal file is not part of the DANDORI repository.
 
 Set `chat.useCustomAgentHooks` to `true` in VS Code because agent-scoped hooks are a preview feature. Confirm in Chat Diagnostics that both Researcher and Writer load their hooks. Remove any previously installed `CommandRunner.agent.md` from user/workspace agent directories.
 
@@ -46,7 +43,7 @@ Only regular files are moved/copied, without overwrites or symlink traversal. Tr
 Git reads require the repository root to match the selected workspace. `builtin-git-show` accepts a full 40-hex SHA only. Git staging, commits, branch changes and remote changes remain human-managed.
 npm/pnpm/Yarn/Bun scripts and all project-owned commands continue to require individually human-approved allowlist registration. They are never inferred as executable from project scripts.
 
-Example: `node ~/.copilot/command-runner/command-runner-interface.mjs run builtin-fs-trash --expected-workspace=example source=src%2Fold.ts`
+Example: `node ~/.copilot/skills/command-runner/scripts/gateway.mjs run builtin-fs-trash --expected-workspace=example source=src%2Fold.ts`
 
 ## Workspace selection
 
@@ -116,30 +113,30 @@ For `workspace-file` and `workspace-directory`, existing paths are checked after
 
 A command's public `describe` representation is also bounded. It includes a `definitionHash` for compare-and-swap replacement or removal without exposing the fixed argv or other private configuration fields. A `describe` request fails closed when the public representation would be too large to return safely.
 
-The separate read-only `inspect` operation provides the effective registered execution specification for exactly one authorized command: fixed `argv`, workspace-relative `cwd`, inherited timeout/output limits, and complete named-argument tokens/specifications. Unlike public `describe`, it reveals execution internals and must be separately permitted on the Worker Task Card. When the ID is already known, `inspect` requires no preceding `list` or preview. It does not execute, register, or update anything. Workspace selection is still checked against the delegated ID. The response is bounded to 10 KiB, and common embedded credential patterns are rejected with `inspection_sensitive` instead of being echoed. This detection is defense-in-depth, not a complete secret scanner; do not place credential literals in registered definitions. A failed/partial inspection cannot serve as a completed effects audit; fixed argv alone cannot prove all side effects. Execution remains bound to the current registered definition, not a frozen inspection snapshot.
+The separate read-only `inspect` operation provides the effective registered execution specification for exactly one authorized command: fixed `argv`, workspace-relative `cwd`, inherited timeout/output limits, and complete named-argument tokens/specifications. Unlike public `describe`, it reveals execution internals and must be separately permitted on the Worker delegated execution grant. When the ID is already known, `inspect` requires no preceding `list` or preview. It does not execute, register, or update anything. Workspace selection is still checked against the delegated ID. The response is bounded to 10 KiB, and common embedded credential patterns are rejected with `inspection_sensitive` instead of being echoed. This detection is defense-in-depth, not a complete secret scanner; do not place credential literals in registered definitions. A failed/partial inspection cannot serve as a completed effects audit; fixed argv alone cannot prove all side effects. Execution remains bound to the current registered definition, not a frozen inspection snapshot.
 
 ## Runner interface
 
 Run command operations from the active workspace. Workspace inspection/removal can also operate on stale registrations:
 
 ```bash
-node ~/.copilot/command-runner/command-runner-interface.mjs workspace-list [query=<encoded-id-fragment>] [offset=<n>]
-node ~/.copilot/command-runner/command-runner-interface.mjs workspace-describe <workspace-id>
-node ~/.copilot/command-runner/command-runner-interface.mjs workspace-register <workspace-id>
-node ~/.copilot/command-runner/command-runner-interface.mjs workspace-unregister <workspace-id> expected=<workspace-hash>
-node ~/.copilot/command-runner/command-runner-interface.mjs list --expected-workspace=example [query=<encoded-search-text>] [offset=<n>] [revision=<sha256>]
-node ~/.copilot/command-runner/command-runner-interface.mjs describe test --expected-workspace=example
-node ~/.copilot/command-runner/command-runner-interface.mjs inspect test --expected-workspace=example
-node ~/.copilot/command-runner/command-runner-interface.mjs register lint --expected-workspace=example definition=<encoded-json>
-node ~/.copilot/command-runner/command-runner-interface.mjs update lint --expected-workspace=example expected=<definition-hash> definition=<encoded-json>
-node ~/.copilot/command-runner/command-runner-interface.mjs unregister lint --expected-workspace=example expected=<definition-hash>
-node ~/.copilot/command-runner/command-runner-interface.mjs run test --expected-workspace=example runInBand=true
-node ~/.copilot/command-runner/command-runner-interface.mjs output <execution-id> --expected-workspace=example stream=stdout|stderr [offset=<n>]
+node ~/.copilot/skills/command-runner/scripts/gateway.mjs workspace-list [query=<encoded-id-fragment>] [offset=<n>]
+node ~/.copilot/skills/command-runner/scripts/gateway.mjs workspace-describe <workspace-id>
+node ~/.copilot/skills/command-runner/scripts/gateway.mjs workspace-register <workspace-id>
+node ~/.copilot/skills/command-runner/scripts/gateway.mjs workspace-unregister <workspace-id> expected=<workspace-hash>
+node ~/.copilot/skills/command-runner/scripts/gateway.mjs list --expected-workspace=example [query=<encoded-search-text>] [offset=<n>] [revision=<sha256>]
+node ~/.copilot/skills/command-runner/scripts/gateway.mjs describe test --expected-workspace=example
+node ~/.copilot/skills/command-runner/scripts/gateway.mjs inspect test --expected-workspace=example
+node ~/.copilot/skills/command-runner/scripts/gateway.mjs register lint --expected-workspace=example definition=<encoded-json>
+node ~/.copilot/skills/command-runner/scripts/gateway.mjs update lint --expected-workspace=example expected=<definition-hash> definition=<encoded-json>
+node ~/.copilot/skills/command-runner/scripts/gateway.mjs unregister lint --expected-workspace=example expected=<definition-hash>
+node ~/.copilot/skills/command-runner/scripts/gateway.mjs run test --expected-workspace=example runInBand=true
+node ~/.copilot/skills/command-runner/scripts/gateway.mjs output <execution-id> --expected-workspace=example stream=stdout|stderr [offset=<n>]
 ```
 
 Argument values use URI component encoding. Workspace path arguments are resolved under the selected root and rejected when they escape it. `register` and `update` accept one URI-component-encoded JSON command definition; the decoded definition is bounded to 16 KiB. `update` additionally requires the current `definitionHash`.
 
-The agent and hook expose only `command-runner-interface.mjs`. Execution still delegates command schema validation and process execution to the fixed `command-runner.mjs` core. Management validates the complete candidate configuration through that same core before persisting it.
+The agent and hook expose only `gateway.mjs`. Execution still delegates command schema validation and process execution to the fixed `runner.mjs` core. Management validates the complete candidate configuration through that same core before persisting it.
 
 `list`, `describe`, command-definition registration/update/removal, `run`, and `output` require the delegated workspace ID as a `--expected-workspace` assertion. The fixed runner selects the workspace from the actual terminal cwd and compares it against that ID **before exposing scoped command data, modifying definitions, or launching a command**. On mismatch it returns `workspace_scope_mismatch`; the worker neither checks the terminal cwd nor tries to change it. `run` needs only the exact authorized command ID, workspace ID, and validated named arguments. It uses the currently registered definition as the execution source of truth, without Worker-supplied hashes. An update between discovery and execution can therefore change the executed semantics; registration management remains separately authorized and the Orchestrator must re-audit known changes. Older callers supplying both well-formed `--expected-identity` and `--expected-definition` assertions remain supported during migration, with their original strict checks. A missing exact command returned by `describe` includes the selected `workspaceId` in its structured error.
 
@@ -271,7 +268,7 @@ $COPILOT_HOME/command-runner/executions/<workspace-id>/<UTC-timestamp>_<UUID>/
   stderr.log
 ```
 
-The cache is temporary observation data, not an audit log. A normal `run` checks the *global* managed cache against its 256 MiB ceiling (reserving 32 MiB per execution) and **does not delete any existing logs**, including other workspaces' logs. If the capacity check fails, `execution_cache_full` stops before command launch. Cache maintenance is separate and intentionally unavailable through the Worker v2 facade and its Hook: the owner may explicitly run `node ~/.copilot/command-runner/command-runner-interface.mjs cache-prune confirm=prune-managed-executions` directly. This deletes managed execution directories older than 24 hours, then (if capacity still requires it) oldest logs older than 61 minutes; it does not touch workspace source files. The maintenance action is destructive and must not be silently included in a Worker grant.
+The cache is temporary observation data, not an audit log. A normal `run` checks the *global* managed cache against its 256 MiB ceiling (reserving 32 MiB per execution) and **does not delete any existing logs**, including other workspaces' logs. If the capacity check fails, `execution_cache_full` stops before command launch. Cache maintenance is separate and intentionally unavailable through the Worker CLI and its Hook: the owner may explicitly run `node ~/.copilot/skills/command-runner/scripts/gateway.mjs cache-prune confirm=prune-managed-executions` directly. This deletes managed execution directories older than 24 hours, then (if capacity still requires it) oldest logs older than 61 minutes; it does not touch workspace source files. The maintenance action is destructive and must not be silently included in a Worker grant.
 
 ## Security boundary
 
@@ -287,7 +284,7 @@ The cache is temporary observation data, not an audit log. A normal `run` checks
 - Commands are started with `spawn(..., shell: false)`.
 - On timeout or output-limit termination, the runner stops the command's POSIX process group, escalating from `SIGTERM` to `SIGKILL` after a fixed grace period so ordinary descendants do not outlive the bounded run. Deliberately detached descendants are outside this guarantee.
 - The shared agent-scoped hook permits declared read, search and edit tools, guards user-level runner control files against edits, and restricts terminal calls to the fixed runner.
-- The hook validates Local execution aliases (`execute` and `terminal/execute`), the observed VS Code/Copilot `run_in_terminal` alias, and legacy `execute/runInTerminal` with the same strict fixed-interface policy as Copilot harness terminal tool names such as `Bash`; unknown tools still fail closed. It emits permission decisions in both hook envelope formats. Static tests do not establish that a particular VS Code/Copilot installation invokes or enforces the hook; inspect actual tool names and verify both allowed and denied execution with `CONF-024` in [`tests/conformance.md`](../../tests/conformance.md). Existing installations must reinstall the updated hook and reload their agent session.
+- The hook validates Local execution aliases (`execute` and `terminal/execute`), the observed VS Code/Copilot `run_in_terminal` alias, and legacy `execute/runInTerminal` with the same strict fixed-interface policy as Copilot harness terminal tool names such as `Bash`; unknown tools still fail closed. It emits permission decisions in both hook envelope formats. Static tests do not establish that a particular VS Code/Copilot installation invokes or enforces the hook; inspect actual tool names and verify both allowed and denied execution with `CONF-024` in [`tests/conformance.md`](../../../../tests/conformance.md). Existing installations must reinstall the updated hook and reload their agent session.
 - `output` accepts only a valid execution ID and only resolves output under the current workspace's execution directory; arbitrary paths are not accepted.
 - Execution output is untrusted data and does not grant authority for follow-up commands.
 
@@ -299,17 +296,17 @@ VS Code hook timeouts are fail-open. The hook uses a 30-second timeout to reduce
 
 ```bash
 node --test \
-  .copilot/command-runner/command-runner.test.mjs \
-  .copilot/command-runner/command-runner-interface.test.mjs
-COPILOT_HOME=/path/to/test-home node .copilot/command-runner/command-runner-interface.mjs list --expected-workspace=example
+  .copilot/skills/command-runner/tests/runner.test.mjs \
+  .copilot/skills/command-runner/tests/gateway.test.mjs
+COPILOT_HOME=/path/to/test-home node .copilot/skills/command-runner/scripts/gateway.mjs list --expected-workspace=example
 ```
 
-## CommandRunner v2: self-onboarding and human-approved project commands
+## CommandRunner: self-onboarding and human-approved project commands
 
-Use `node ~/.copilot/command-runner/command-runner-v2.mjs` for the Worker-facing API. It accepts `context`, `workspace.ensure`, `list`, `describe`, `inspect`, `propose <id> [packageDir=<relative>] [script=<name>]`, `activate <proposal-id>`, `run <id> [name=value]`, and `output <execution-id> stream=stdout|stderr [offset=<n>]`.
+Use `node ~/.copilot/skills/command-runner/scripts/cli.mjs` for the Worker-facing API. It accepts `context`, `workspace.ensure`, `list`, `describe`, `inspect`, `propose <id> [packageDir=<relative>] [script=<name>]`, `activate <proposal-id>`, `run <id> [name=value]`, and `output <execution-id> stream=stdout|stderr [offset=<n>]`.
 
-The worker does not send a workspace ID. The existing core selects the registered root from actual cwd and the v2 facade supplies internal workspace assertions. Hook requests first-time confirmation of the exact cwd root (already-registered roots are not prompted again). New roots are registered only when cwd is the exact directory containing `.git` or `package.json`; no parent-root inference. New command candidates are persisted but do not become executable until activation. A `PreToolUse` `ask` confirmation is requested for activation; user approval must be explicit. Unattended and untrusted hook environments do not provide a reliable human-approval attestation; **this is a prompt-level host permission, not a cryptographically enforced approval record**. The existing privileged v1 API is kept for migration and requests an interactive confirmation for registry mutations.
+The worker does not send a workspace ID. The existing core selects the registered root from actual cwd and the Worker CLI supplies internal workspace assertions. Hook requests first-time confirmation of the exact cwd root (already-registered roots are not prompted again). New roots are registered only when cwd is the exact directory containing `.git` or `package.json`; no parent-root inference. New command candidates are persisted but do not become executable until activation. A `PreToolUse` `ask` confirmation is requested for activation; user approval must be explicit. Unattended and untrusted hook environments do not provide a reliable human-approval attestation; **this is a prompt-level host permission, not a cryptographically enforced approval record**. The owner-only management API is kept for migration and requests an interactive confirmation for registry mutations.
 
-The generated argv is manager-sensitive: npm uses a terminal `--` separator, pnpm/Yarn/Bun do not. New npm/pnpm/Yarn/Bun registrations carry a `scriptGuard` fingerprint checked by the core before every execution, including through v1. All package scripts and declared package manager are hashed conservatively; this does not sandbox script contents or dependencies. Legacy entries without a guard remain supported. Do not auto-approve new candidates.
+The generated argv is manager-sensitive: npm uses a terminal `--` separator, pnpm/Yarn/Bun do not. New npm/pnpm/Yarn/Bun registrations carry a `scriptGuard` fingerprint checked by the core before every execution, including through the owner management API. All package scripts and declared package manager are hashed conservatively; this does not sandbox script contents or dependencies. Legacy entries without a guard remain supported. Do not auto-approve new candidates.
 
 For monorepos, `propose <id> packageDir=<workspace-relative-package>` inherits the closest package-manager declaration or lockfile from that package through the **registered workspace root only**. The execution guard repeats the identical resolution. The proposal response contains only the selected-script preview, never the full script catalog; the internal fingerprint still covers all package scripts.

@@ -18,13 +18,14 @@ import test from 'node:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const SOURCE_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
-const RUNNER_SOURCE = path.join(SOURCE_DIRECTORY, 'command-runner.mjs');
-const BUILTIN_SOURCE = path.join(SOURCE_DIRECTORY, 'builtin-commands.mjs');
-const SCRIPT_GUARD_SOURCE = path.join(SOURCE_DIRECTORY, 'script-guard.mjs');
-const V2_SOURCE = path.join(SOURCE_DIRECTORY, 'command-runner-v2.mjs');
-const INTERFACE_SOURCE = path.join(SOURCE_DIRECTORY, 'command-runner-interface.mjs');
-const HOOK_SOURCE = path.join(SOURCE_DIRECTORY, 'command-runner-hook.mjs');
-const AGENT_SOURCES = ['Researcher', 'Writer'].map(name => path.join(SOURCE_DIRECTORY, '..', 'agents', `${name}.agent.md`));
+const SCRIPT_DIRECTORY = path.join(SOURCE_DIRECTORY, '..', 'scripts');
+const RUNNER_SOURCE = path.join(SCRIPT_DIRECTORY, 'runner.mjs');
+const BUILTIN_SOURCE = path.join(SCRIPT_DIRECTORY, 'builtins.mjs');
+const SCRIPT_GUARD_SOURCE = path.join(SCRIPT_DIRECTORY, 'script-guard.mjs');
+const CLI_SOURCE = path.join(SCRIPT_DIRECTORY, 'cli.mjs');
+const INTERFACE_SOURCE = path.join(SCRIPT_DIRECTORY, 'gateway.mjs');
+const HOOK_SOURCE = path.join(SCRIPT_DIRECTORY, 'hook.mjs');
+const AGENT_SOURCES = ['Researcher', 'Writer'].map(name => path.join(SOURCE_DIRECTORY, '..', '..', '..', 'agents', `${name}.agent.md`));
 
 async function makeFixture(configure = (configuration) => configuration) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'command-runner-test-'));
@@ -33,26 +34,27 @@ async function makeFixture(configure = (configuration) => configuration) {
   const beta = path.join(root, 'beta');
 
   await mkdir(path.join(home, 'command-runner'), { recursive: true });
+  await mkdir(path.join(home, 'skills', 'command-runner', 'scripts'), { recursive: true });
   await mkdir(path.join(home, 'agents'), { recursive: true });
   await mkdir(path.join(alpha, 'tests'), { recursive: true });
   await mkdir(beta, { recursive: true });
 
   await writeFile(
-    path.join(home, 'command-runner', 'command-runner.mjs'),
+    path.join(home, 'skills', 'command-runner', 'scripts', 'runner.mjs'),
     await readFile(RUNNER_SOURCE),
   );
   await writeFile(
-    path.join(home, 'command-runner', 'builtin-commands.mjs'),
+    path.join(home, 'skills', 'command-runner', 'scripts', 'builtins.mjs'),
     await readFile(BUILTIN_SOURCE),
   );
-  await writeFile(path.join(home, 'command-runner', 'script-guard.mjs'), await readFile(SCRIPT_GUARD_SOURCE));
-  await writeFile(path.join(home, 'command-runner', 'command-runner-v2.mjs'), await readFile(V2_SOURCE));
+  await writeFile(path.join(home, 'skills', 'command-runner', 'scripts', 'script-guard.mjs'), await readFile(SCRIPT_GUARD_SOURCE));
+  await writeFile(path.join(home, 'skills', 'command-runner', 'scripts', 'cli.mjs'), await readFile(CLI_SOURCE));
   await writeFile(
-    path.join(home, 'command-runner', 'command-runner-interface.mjs'),
+    path.join(home, 'skills', 'command-runner', 'scripts', 'gateway.mjs'),
     await readFile(INTERFACE_SOURCE),
   );
   await writeFile(
-    path.join(home, 'command-runner', 'command-runner-hook.mjs'),
+    path.join(home, 'skills', 'command-runner', 'scripts', 'hook.mjs'),
     await readFile(HOOK_SOURCE),
   );
   for (const agentSource of AGENT_SOURCES) {
@@ -222,7 +224,7 @@ function runRunner(fixture, cwd, args) {
   const guardedArgs = guarded(fixture, cwd, args);
   return spawnSync(
     process.execPath,
-    [path.join(fixture.home, 'command-runner', 'command-runner.mjs'), ...guardedArgs],
+    [path.join(fixture.home, 'skills', 'command-runner', 'scripts', 'runner.mjs'), ...guardedArgs],
     {
       cwd,
       encoding: 'utf8',
@@ -234,7 +236,7 @@ function runRunner(fixture, cwd, args) {
 function runRunnerWithoutHashes(fixture, cwd, args) {
   return spawnSync(
     process.execPath,
-    [path.join(fixture.home, 'command-runner', 'command-runner.mjs'), ...args],
+    [path.join(fixture.home, 'skills', 'command-runner', 'scripts', 'runner.mjs'), ...args],
     { cwd, encoding: 'utf8', env: { ...process.env, COPILOT_HOME: fixture.home } },
   );
 }
@@ -257,7 +259,7 @@ function runInterface(fixture, cwd, args) {
   const guardedArgs = guarded(fixture, cwd, scopedArgs);
   return spawnSync(
     process.execPath,
-    [path.join(fixture.home, 'command-runner', 'command-runner-interface.mjs'), ...guardedArgs],
+    [path.join(fixture.home, 'skills', 'command-runner', 'scripts', 'gateway.mjs'), ...guardedArgs],
     {
       cwd,
       encoding: 'utf8',
@@ -269,7 +271,7 @@ function runInterface(fixture, cwd, args) {
 function runHook(fixture, input, envOverrides = {}) {
   return spawnSync(
     process.execPath,
-    [path.join(fixture.home, 'command-runner', 'command-runner-hook.mjs')],
+    [path.join(fixture.home, 'skills', 'command-runner', 'scripts', 'hook.mjs')],
     {
       cwd: fixture.alpha,
       encoding: 'utf8',
@@ -294,8 +296,8 @@ test('distributed Researcher and Writer share the fixed runner CLI hook', async 
     assert.match(source, /^user-invocable: false$/mu);
     assert.match(source, /^disable-model-invocation: true$/mu);
     assert.match(source, /  - execute\/runInTerminal\n  - execute\nagents: \[\]\nhooks:/u);
-    assert.match(source, /command-runner-hook\.mjs/u);
-    assert.match(source, /node ~\/\.copilot\/command-runner\/command-runner-v2\.mjs/u);
+    assert.match(source, /hook\.mjs/u);
+    assert.match(source, /node ~\/\.copilot\/skills\/command-runner\/scripts\/cli\.mjs/u);
     assert.match(source, /request synchronous execution/u);
     assert.match(source, /omit the terminal `timeout` option/u);
     assert.match(source, /Do not execute raw project commands/u);
@@ -372,7 +374,7 @@ test('delegated workspace assertion gates command discovery without requiring cw
     }
 
     const withoutScope = spawnSync(process.execPath, [
-      path.join(fixture.home, 'command-runner', 'command-runner-interface.mjs'), 'list',
+      path.join(fixture.home, 'skills', 'command-runner', 'scripts', 'gateway.mjs'), 'list',
     ], { cwd: fixture.alpha, encoding: 'utf8', env: { ...process.env, COPILOT_HOME: fixture.home } });
     assert.equal(withoutScope.status, 2);
     assert.equal(JSON.parse(withoutScope.stderr).error.code, 'invalid_argument');
@@ -518,7 +520,7 @@ test('configured symlink workspace root is canonicalized, and removing that reso
 
     // Mutate only the throwaway fixture, never repository sources. Without root
     // canonicalization this same case must fail, proving the test detects regressions.
-    const corePath = path.join(fixture.home, 'command-runner', 'command-runner.mjs');
+    const corePath = path.join(fixture.home, 'skills', 'command-runner', 'scripts', 'runner.mjs');
     const core = await readFile(corePath, 'utf8');
     const canonicalization = 'canonical = await realpath(value);';
     assert.equal(core.split(canonicalization).length, 2);
@@ -924,7 +926,7 @@ test('hook permits canonical bounded-interface calls and denies direct core or c
       cwd: fixture.alpha,
       tool_name: 'execute/runInTerminal',
       tool_input: {
-        command: 'node ~/.copilot/command-runner/command-runner-interface.mjs run sample --expected-workspace=alpha --expected-identity=sha256-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --expected-definition=sha256-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb count=4',
+        command: 'node ~/.copilot/skills/command-runner/scripts/gateway.mjs run sample --expected-workspace=alpha --expected-identity=sha256-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --expected-definition=sha256-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb count=4',
       },
     });
     assert.equal(allowed.status, 0, allowed.stderr);
@@ -938,7 +940,7 @@ test('hook permits canonical bounded-interface calls and denies direct core or c
       cwd: fixture.alpha,
       tool_name: 'execute/runInTerminal',
       tool_input: {
-        command: 'node ~/.copilot/command-runner/command-runner-interface.mjs run sample --expected-workspace=alpha count=4',
+        command: 'node ~/.copilot/skills/command-runner/scripts/gateway.mjs run sample --expected-workspace=alpha count=4',
       },
     });
     assert.equal(hashFree.status, 0, hashFree.stderr);
@@ -953,7 +955,7 @@ test('hook permits canonical bounded-interface calls and denies direct core or c
         cwd: fixture.alpha,
         tool_name: 'execute/runInTerminal',
         tool_input: {
-          command: `node ~/.copilot/command-runner/command-runner-interface.mjs run sample --expected-workspace=alpha ${partial}`,
+          command: `node ~/.copilot/skills/command-runner/scripts/gateway.mjs run sample --expected-workspace=alpha ${partial}`,
         },
       });
       assert.equal(JSON.parse(blocked.stdout).hookSpecificOutput.permissionDecision, 'deny');
@@ -963,7 +965,7 @@ test('hook permits canonical bounded-interface calls and denies direct core or c
       hook_event_name: 'PreToolUse',
       cwd: fixture.alpha,
       tool_name: 'execute/runInTerminal',
-      tool_input: { command: 'node ~/.copilot/command-runner/command-runner.mjs list' },
+      tool_input: { command: 'node ~/.copilot/skills/command-runner/scripts/runner.mjs list' },
     });
     assert.equal(
       JSON.parse(directCore.stdout).hookSpecificOutput.permissionDecision,
@@ -987,7 +989,7 @@ test('hook permits canonical bounded-interface calls and denies direct core or c
       tool_name: 'execute/runInTerminal',
       tool_input: {
         command:
-          'node ~/.copilot/command-runner/command-runner-interface.mjs list && npm publish',
+          'node ~/.copilot/skills/command-runner/scripts/gateway.mjs list && npm publish',
       },
     });
     assert.equal(
@@ -999,7 +1001,7 @@ test('hook permits canonical bounded-interface calls and denies direct core or c
 
 test('hook applies the same fixed-interface policy to the Copilot harness tool envelope', async () => {
   await withFixture(async (fixture) => {
-    const accepted = 'node ~/.copilot/command-runner/command-runner-interface.mjs list --expected-workspace=alpha';
+    const accepted = 'node ~/.copilot/skills/command-runner/scripts/gateway.mjs list --expected-workspace=alpha';
     for (const [toolName, args] of [
       ['Bash', { command: accepted }],
       ['bash', { command: accepted }],
@@ -1040,7 +1042,7 @@ test('hook applies the same fixed-interface policy to the Copilot harness tool e
 
 test('hook validates actual Local and Copilot terminal aliases instead of rejecting the fixed runner', async () => {
   await withFixture(async (fixture) => {
-    const accepted = 'node ~/.copilot/command-runner/command-runner-interface.mjs list --expected-workspace=alpha';
+    const accepted = 'node ~/.copilot/skills/command-runner/scripts/gateway.mjs list --expected-workspace=alpha';
     const localEnvelopes = [
       (command) => ({
         hook_event_name: 'PreToolUse',
@@ -1091,12 +1093,12 @@ test('hook validates actual Local and Copilot terminal aliases instead of reject
     });
     assert.equal(JSON.parse(vscodeSync.stdout).permissionDecision, 'allow');
 
-    // Reproduce the observed v2 inspect call under both Local and Copilot hook envelopes.
-    const v2Inspect = 'node ~/.copilot/command-runner/command-runner-v2.mjs inspect builtin-git-diff';
+    // Reproduce the observed CLI inspect call under both Local and Copilot hook envelopes.
+    const cliInspect = 'node ~/.copilot/skills/command-runner/scripts/cli.mjs inspect builtin-git-diff';
     for (const input of [
-      { tool_name: 'run_in_terminal', tool_input: { command: v2Inspect, mode: 'sync', explanation: 'Inspect diff' } },
-      { toolName: 'run_in_terminal', toolArgs: JSON.stringify({ command: v2Inspect, mode: 'sync' }) },
-      { tool_name: 'execute/runInTerminal', tool_input: { command: v2Inspect, mode: 'sync', timeout: 0 } },
+      { tool_name: 'run_in_terminal', tool_input: { command: cliInspect, mode: 'sync', explanation: 'Inspect diff' } },
+      { toolName: 'run_in_terminal', toolArgs: JSON.stringify({ command: cliInspect, mode: 'sync' }) },
+      { tool_name: 'execute/runInTerminal', tool_input: { command: cliInspect, mode: 'sync', timeout: 0 } },
     ]) {
       const permitted = runHook(fixture, input);
       assert.equal(permitted.status, 0, permitted.stderr);
@@ -1112,7 +1114,7 @@ test('hook validates actual Local and Copilot terminal aliases instead of reject
     ]) {
       const denied = runHook(fixture, {
         toolName: 'run_in_terminal',
-        toolArgs: JSON.stringify({ command: v2Inspect, ...options }),
+        toolArgs: JSON.stringify({ command: cliInspect, ...options }),
       });
       const payload = JSON.parse(denied.stdout);
       assert.equal(payload.permissionDecision, 'deny');
@@ -1138,15 +1140,15 @@ test('hook denies terminal execution overrides and background execution', async 
   await withFixture(async (fixture) => {
     for (const toolInput of [
       {
-        command: 'node ~/.copilot/command-runner/command-runner-interface.mjs list --expected-workspace=alpha',
+        command: 'node ~/.copilot/skills/command-runner/scripts/gateway.mjs list --expected-workspace=alpha',
         cwd: fixture.beta,
       },
       {
-        command: 'node ~/.copilot/command-runner/command-runner-interface.mjs list --expected-workspace=alpha',
+        command: 'node ~/.copilot/skills/command-runner/scripts/gateway.mjs list --expected-workspace=alpha',
         env: { TEST: '1' },
       },
       {
-        command: 'node ~/.copilot/command-runner/command-runner-interface.mjs list --expected-workspace=alpha',
+        command: 'node ~/.copilot/skills/command-runner/scripts/gateway.mjs list --expected-workspace=alpha',
         isBackground: true,
       },
     ]) {
@@ -1177,7 +1179,10 @@ test('shared hook allows ordinary read, search and edit tools while protecting r
 
     for (const protectedPath of [
       '~/.copilot/command-runner/workspaces.json',
-      '~/.copilot/command-runner/builtin-commands.mjs',
+      '~/.copilot/skills/command-runner/scripts/builtins.mjs',
+      '~/.copilot/skills/command-runner/SKILL.md',
+      '~/.copilot/skills/command-runner/references/commands.md',
+      '~/.copilot/skills/command-runner/scripts/future-tool.mjs',
     ]) {
       const localWrite = runHook(fixture, {
         hook_event_name: 'PreToolUse',
@@ -1303,8 +1308,12 @@ test('installed control identity is protected without blocking same-suffix repo 
     assert.equal(await readFile(linkedParentTraversal, 'utf8'),
       await readFile(path.join(fixture.home, 'agents', 'Writer.agent.md'), 'utf8'));
 
+    const skillSource = path.join(fixture.alpha, '.copilot', 'skills', 'command-runner', 'SKILL.md');
+    await mkdir(path.dirname(skillSource), { recursive: true });
+    await writeFile(skillSource, 'workspace skill source');
     for (const target of [
       sourceFile, '.copilot/agents/Writer.agent.md', pathToFileURL(sourceFile).href,
+      skillSource,
     ]) {
       const result = runHook(fixture, {
         sessionId: 'copilot-session', toolName: 'Edit',
@@ -1322,7 +1331,7 @@ test('installed control identity is protected without blocking same-suffix repo 
       linkedHardFile,
       linkedParentTraversal,
       path.join(linkedDirectory, 'Writer.agent.md'),
-      path.join(fixture.alpha, '..', 'copilot-home', 'command-runner', 'command-runner-hook.mjs'),
+      path.join(fixture.alpha, '..', 'copilot-home', 'skills', 'command-runner', 'scripts', 'hook.mjs'),
     ]) {
       const result = runHook(fixture, {
         sessionId: 'copilot-session', toolName: 'Edit',
@@ -1345,7 +1354,7 @@ test('custom COPILOT_HOME protects both the installed root and runner data', asy
     for (const target of [
       '~/.copilot/agents/Writer.agent.md',
       path.join(fixture.home, 'agents', 'Writer.agent.md'),
-      path.join(fixture.home, 'command-runner', 'command-runner-hook.mjs'),
+      path.join(fixture.home, 'skills', 'command-runner', 'scripts', 'hook.mjs'),
       path.join(fixture.home, 'command-runner', 'workspaces.json'),
       config,
     ]) {
@@ -1524,7 +1533,7 @@ test('native patch editing works with exact file-path protection in both hook en
 
 test('hook fails closed for unknown terminal names in both harness envelopes', async () => {
   await withFixture(async (fixture) => {
-    const accepted = 'node ~/.copilot/command-runner/command-runner-interface.mjs list --expected-workspace=alpha';
+    const accepted = 'node ~/.copilot/skills/command-runner/scripts/gateway.mjs list --expected-workspace=alpha';
     for (const input of [
       {
         hook_event_name: 'PreToolUse',
@@ -1699,11 +1708,11 @@ test('P0 Git built-ins only observe a repository rooted at the workspace', async
 
 function runV2(fixture, cwd, args) {
   return spawnSync(process.execPath,
-    [path.join(fixture.home, 'command-runner', 'command-runner-v2.mjs'), ...args],
+    [path.join(fixture.home, 'skills', 'command-runner', 'scripts', 'cli.mjs'), ...args],
     {cwd, encoding: 'utf8', env: {...process.env, COPILOT_HOME: fixture.home}});
 }
 
-test('v2 self-onboarding registers only a project root, without caller-supplied workspace ID', async () => {
+test('CLI self-onboarding registers only a project root, without caller-supplied workspace ID', async () => {
   await withFixture(async (fixture) => {
     const gamma = path.join(fixture.root, 'gamma');
     await mkdir(gamma);
@@ -1728,7 +1737,7 @@ test('v2 self-onboarding registers only a project root, without caller-supplied 
   });
 });
 
-test('v2 proposes inert npm scripts, activates exact candidate, and detects changed script definitions', async () => {
+test('CLI proposes inert npm scripts, activates exact candidate, and detects changed script definitions', async () => {
   await withFixture(async (fixture) => {
     await writeFile(path.join(fixture.alpha, 'package.json'), JSON.stringify({
       packageManager: 'npm@10.0.0', scripts: {test: 'node echo-args.mjs', pretest: 'node --version'},
@@ -1761,14 +1770,14 @@ test('v2 proposes inert npm scripts, activates exact candidate, and detects chan
   });
 });
 
-test('v2 Hook uses interactive approval for activation and rejects arbitrary shell', async () => {
+test('CLI Hook uses interactive approval for activation and rejects arbitrary shell', async () => {
   await withFixture(async (fixture) => {
     const invoke = (command) => runHook(fixture, {
       hook_event_name: 'PreToolUse', tool_name: 'execute/runInTerminal', tool_input: {command},
     });
-    const accepted = invoke('node ~/.copilot/command-runner/command-runner-v2.mjs workspace.ensure');
+    const accepted = invoke('node ~/.copilot/skills/command-runner/scripts/cli.mjs workspace.ensure');
     assert.equal(JSON.parse(accepted.stdout).permissionDecision, 'allow');
-    const proposedHook = invoke('node ~/.copilot/command-runner/command-runner-v2.mjs propose test');
+    const proposedHook = invoke('node ~/.copilot/skills/command-runner/scripts/cli.mjs propose test');
     assert.equal(JSON.parse(proposedHook.stdout).permissionDecision, 'allow');
     await writeFile(path.join(fixture.alpha, 'package.json'), JSON.stringify({
       packageManager: 'npm@10.0.0', scripts: {'test:unit': 'node echo-args.mjs'},
@@ -1777,23 +1786,23 @@ test('v2 Hook uses interactive approval for activation and rejects arbitrary she
     assert.equal(proposed.status, 0, proposed.stderr);
     const candidate = JSON.parse(proposed.stdout);
     assert.deepEqual(candidate.argv, ['npm', 'run', 'test:unit', '--']);
-    const proposalHook = invoke('node ~/.copilot/command-runner/command-runner-v2.mjs propose unit script=test%3Aunit');
+    const proposalHook = invoke('node ~/.copilot/skills/command-runner/scripts/cli.mjs propose unit script=test%3Aunit');
     assert.equal(JSON.parse(proposalHook.stdout).permissionDecision, 'allow');
-    const activate = invoke('node ~/.copilot/command-runner/command-runner-v2.mjs activate ' + candidate.proposalId);
+    const activate = invoke('node ~/.copilot/skills/command-runner/scripts/cli.mjs activate ' + candidate.proposalId);
     assert.equal(JSON.parse(activate.stdout).permissionDecision, 'ask');
     assert.match(JSON.parse(activate.stdout).permissionDecisionReason, /test:unit/u);
     assert.match(JSON.parse(activate.stdout).permissionDecisionReason, /node echo-args\.mjs/u);
-    const rejected = invoke('node ~/.copilot/command-runner/command-runner-v2.mjs run test && npm publish');
+    const rejected = invoke('node ~/.copilot/skills/command-runner/scripts/cli.mjs run test && npm publish');
     assert.equal(JSON.parse(rejected.stdout).permissionDecision, 'deny');
-    const legacy = invoke('node ~/.copilot/command-runner/command-runner-interface.mjs register test --expected-workspace=alpha definition=%7B%7D');
+    const legacy = invoke('node ~/.copilot/skills/command-runner/scripts/gateway.mjs register test --expected-workspace=alpha definition=%7B%7D');
     assert.equal(JSON.parse(legacy.stdout).permissionDecision, 'deny');
-    const legacyWorkspace = invoke('node ~/.copilot/command-runner/command-runner-interface.mjs workspace-register alpha');
+    const legacyWorkspace = invoke('node ~/.copilot/skills/command-runner/scripts/gateway.mjs workspace-register alpha');
     assert.equal(JSON.parse(legacyWorkspace.stdout).permissionDecision, 'deny');
   });
 });
 
 
-test('v2 Hook requests one-time approval for an unregistered exact project root', async () => {
+test('CLI Hook requests one-time approval for an unregistered exact project root', async () => {
   await withFixture(async (fixture) => {
     const gamma = path.join(fixture.root, 'new-project');
     await mkdir(gamma);
@@ -1801,12 +1810,12 @@ test('v2 Hook requests one-time approval for an unregistered exact project root'
       packageManager: 'npm@10.0.0', scripts: {test: 'node --version'},
     }));
     const check = (cwd, reportedCwd = cwd) => spawnSync(process.execPath,
-      [path.join(fixture.home, 'command-runner', 'command-runner-hook.mjs')], {
+      [path.join(fixture.home, 'skills', 'command-runner', 'scripts', 'hook.mjs')], {
         cwd, encoding: 'utf8', env: {...process.env, COPILOT_HOME: fixture.home},
         input: JSON.stringify({
           hook_event_name: 'PreToolUse', tool_name: 'execute/runInTerminal',
           cwd: reportedCwd,
-          tool_input: {command: 'node ~/.copilot/command-runner/command-runner-v2.mjs workspace.ensure'},
+          tool_input: {command: 'node ~/.copilot/skills/command-runner/scripts/cli.mjs workspace.ensure'},
         }),
       });
     const first = JSON.parse(check(gamma).stdout);
@@ -1821,7 +1830,7 @@ test('v2 Hook requests one-time approval for an unregistered exact project root'
   });
 });
 
-test('v2 pnpm script candidates do not pass npm-only double-dash to the underlying script', async () => {
+test('CLI pnpm script candidates do not pass npm-only double-dash to the underlying script', async () => {
   await withFixture(async (fixture) => {
     await writeFile(path.join(fixture.alpha, 'package.json'), JSON.stringify({
       packageManager: 'pnpm@10.28.1', scripts: {check: 'tsc --noEmit --project tsconfig.json'},
@@ -1840,7 +1849,7 @@ test('v2 pnpm script candidates do not pass npm-only double-dash to the underlyi
 });
 
 
-test('v2 bounded proposal succeeds with a large unrelated script catalog', async () => {
+test('CLI bounded proposal succeeds with a large unrelated script catalog', async () => {
   await withFixture(async (fixture) => {
     const scripts = { test: 'node --version' };
     for (let index = 0; index < 150; index += 1) {
@@ -1863,7 +1872,7 @@ test('v2 bounded proposal succeeds with a large unrelated script catalog', async
   });
 });
 
-test('v2 nested package inherits registered-root manager and detects parent changes', async () => {
+test('CLI nested package inherits registered-root manager and detects parent changes', async () => {
   await withFixture(async (fixture) => {
     const nested = path.join(fixture.alpha, 'packages', 'lib');
     await mkdir(nested, { recursive: true });
@@ -1889,13 +1898,12 @@ test('v2 nested package inherits registered-root manager and detects parent chan
   });
 });
 
-test('documented installation copies all runtime-dependent runner modules', async () => {
+test('documented installation includes every runner module inside the Skill', async () => {
   for (const doc of ['README.md', 'README_ja.md']) {
-    const readme = await readFile(path.join(SOURCE_DIRECTORY, doc), 'utf8');
-    for (const file of ['command-runner.mjs', 'command-runner-interface.mjs',
-      'command-runner-hook.mjs', 'script-guard.mjs', 'command-runner-v2.mjs', 'builtin-commands.mjs']) {
-      assert.ok(readme.includes('cp .copilot/command-runner/' + file + ' ~/.copilot/command-runner/'),
-        doc + ' does not install ' + file);
+    const readme = await readFile(path.join(SOURCE_DIRECTORY, '..', 'references', doc), 'utf8');
+    assert.ok(readme.includes('cp -R .copilot/skills/command-runner ~/.copilot/skills/'));
+    for (const file of ['cli.mjs', 'runner.mjs', 'gateway.mjs', 'hook.mjs', 'script-guard.mjs', 'builtins.mjs']) {
+      assert.ok(readme.includes('scripts/' + file), doc + ' does not document ' + file);
     }
   }
 });
@@ -2007,7 +2015,7 @@ test('v3 propose and activate bind allowlist to the approved npm script', async 
     const pending = JSON.parse(proposal.stdout);
     assert.deepEqual(pending.arguments, {});
     const hook = runHook(fixture, { tool_name: 'execute/runInTerminal',
-      tool_input: { command: 'node ~/.copilot/command-runner/command-runner-v2.mjs activate ' + pending.proposalId } });
+      tool_input: { command: 'node ~/.copilot/skills/command-runner/scripts/cli.mjs activate ' + pending.proposalId } });
     assert.equal(hook.status, 0, hook.stderr);
     assert.equal(JSON.parse(hook.stdout).hookSpecificOutput.permissionDecision, 'ask');
     assert.match(hook.stdout, /--runTestsByPath path\.\.\./u);
@@ -2070,7 +2078,7 @@ test('v3 proposal update presents previous and next allowlist under exact CAS', 
     assert.equal(pending.action, 'update');
     const preview = runHook(fixture, {
       tool_name: 'execute/runInTerminal',
-      tool_input: {command: 'node ~/.copilot/command-runner/command-runner-v2.mjs activate ' + pending.proposalId},
+      tool_input: {command: 'node ~/.copilot/skills/command-runner/scripts/cli.mjs activate ' + pending.proposalId},
     });
     assert.equal(preview.status, 0, preview.stderr);
     const response = JSON.parse(preview.stdout);
@@ -2098,7 +2106,7 @@ test('v3 proposal update presents previous and next allowlist under exact CAS', 
 
 test('v3 Hook accepts ordered encoded arg tokens but rejects raw shell syntax', async () => {
   await withFixture(async fixture => {
-    const cli = 'node ~/.copilot/command-runner/command-runner-v2.mjs';
+    const cli = 'node ~/.copilot/skills/command-runner/scripts/cli.mjs';
     const allowed = runHook(fixture, {
       tool_name: 'execute/runInTerminal',
       tool_input: {command: cli + ' run sample arg=--testNamePattern%3D%E8%AA%8D%E8%A8%BC%2F%E7%99%BB%E9%8C%B2'},
@@ -2120,7 +2128,7 @@ test('v3 Hook accepts fully escaped apostrophes and parentheses without shell pa
     const encodeSafe = value => encodeURIComponent(value).replace(/[!'()*]/gu,
       letter => '%' + letter.charCodeAt(0).toString(16).toUpperCase());
     const word = "--testNamePattern=it's (fine)";
-    const command = 'node ~/.copilot/command-runner/command-runner-v2.mjs run sample arg=' + encodeSafe(word);
+    const command = 'node ~/.copilot/skills/command-runner/scripts/cli.mjs run sample arg=' + encodeSafe(word);
     const hook = runHook(fixture, {
       tool_name: 'execute/runInTerminal', tool_input: { command },
     });
@@ -2128,7 +2136,7 @@ test('v3 Hook accepts fully escaped apostrophes and parentheses without shell pa
     assert.equal(JSON.parse(hook.stdout).permissionDecision, 'allow');
     const raw = runHook(fixture, {
       tool_name: 'execute/runInTerminal',
-      tool_input: { command: "node ~/.copilot/command-runner/command-runner-v2.mjs run sample arg=it's" },
+      tool_input: { command: "node ~/.copilot/skills/command-runner/scripts/cli.mjs run sample arg=it's" },
     });
     assert.equal(JSON.parse(raw.stdout).permissionDecision, 'deny');
   });

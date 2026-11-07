@@ -211,8 +211,8 @@ def run_command_runner_tests() -> bool:
             [
                 "node",
                 "--test",
-                ".copilot/command-runner/command-runner.test.mjs",
-                ".copilot/command-runner/command-runner-interface.test.mjs",
+                ".copilot/skills/command-runner/tests/runner.test.mjs",
+                ".copilot/skills/command-runner/tests/gateway.test.mjs",
             ],
             cwd=ROOT,
             check=False,
