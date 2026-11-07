@@ -12,6 +12,8 @@
 
 Hookと固定Runnerの呼び出しには `~/.copilot/...` を使用するため、POSIX互換シェルで `~` が展開される必要があります。
 
+同梱する実行コード：`scripts/cli.mjs`、`scripts/runner.mjs`、`scripts/gateway.mjs`、`scripts/hook.mjs`、`scripts/builtins.mjs`、`scripts/script-guard.mjs`。Skillは一括配置し、永続データは従来どおり`$COPILOT_HOME/command-runner/`に保持します。
+
 ## インストール
 
 Agentは他のDANDORI Agentと一緒に配置し、固定RunnerとHookを追加でインストールします。
@@ -280,7 +282,7 @@ $COPILOT_HOME/command-runner/executions/<workspace-id>/<UTC-timestamp>_<UUID>/
 - コマンドは `spawn(..., shell: false)` で起動します。
 - timeoutまたは出力上限による停止時は、RunnerがコマンドのPOSIX process group全体へ停止を送り、固定猶予後に `SIGTERM` から `SIGKILL` へ昇格するため、通常の子孫processをbounded runの外へ残しません。意図的にdetachされた子孫processはこの保証の対象外です。
 - 共通Hookは宣言済みの読取・検索・編集ツールを通し、ユーザーレベルRunner制御ファイルの編集を拒否し、ターミナルからは固定Runnerだけを許可します。
-- HookはLocalの`execute`・`terminal/execute`、実機で観測されたVS Code／Copilotの`run_in_terminal`、従来の`execute/runInTerminal`、Copilot harnessの`Bash`などのターミナルTool名に対して、同じ固定Runner検証を適用します。未認識ツールの拒否も維持し、両形式の許可判定フィールドを返します。ただし、静的テストだけではVS Code／Copilot実機がHookを呼び出して判定を強制するか確認できません。実際のツール名と許可・拒否を[conformanceの`CONF-024`](../../tests/conformance.md)で確認してください。既存インストールでは更新したHookを再配置し、Agentセッションを再読み込みします。
+- HookはLocalの`execute`・`terminal/execute`、実機で観測されたVS Code／Copilotの`run_in_terminal`、従来の`execute/runInTerminal`、Copilot harnessの`Bash`などのターミナルTool名に対して、同じ固定Runner検証を適用します。未認識ツールの拒否も維持し、両形式の許可判定フィールドを返します。ただし、静的テストだけではVS Code／Copilot実機がHookを呼び出して判定を強制するか確認できません。実際のツール名と許可・拒否を[conformanceの`CONF-024`](../../../../tests/conformance.md)で確認してください。既存インストールでは更新したHookを再配置し、Agentセッションを再読み込みします。
 - `output`は有効なexecution IDだけを受け取り、現在のWorkspaceのexecution領域配下だけを解決します。任意ファイルパスは受け付けません。
 - 実行出力は信頼できないデータとして扱い、後続コマンドの権限にはなりません。
 

@@ -5,26 +5,22 @@ description: >-
   established. Supports read/edit and exact fixed-runner execution for self-checks. Returns changed-file summaries
   and verification evidence. Not for broad investigation, independent code review, GitHub PR
   inspection, browser QA, or agent delegation.
-model: GPT-6.1 Terra (copilot)
+model: GPT-6.1 Terra
 reasoning-effort: medium
-target: vscode
+target: github-copilot
 user-invocable: false
-disable-model-invocation: true
+disable-model-invocation: false
 tools:
   - read
   - edit
-  - read/readFile
-  - edit/editFiles
-  - edit/createFile
-  - edit/createDirectory
-  - execute/runInTerminal
   - execute
-agents: []
 hooks:
-  PreToolUse:
+  preToolUse:
     - type: command
       command: node ~/.copilot/skills/command-runner/scripts/hook.mjs
-      timeout: 30
+      timeoutSec: 30
+skills:
+  - command-runner
 ---
 
 You are a write-focused implementation worker agent.

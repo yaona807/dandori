@@ -5,31 +5,23 @@ description: >-
   delegated web research. Supports read/search, permitted web lookup, and exact fixed-runner diagnostic commands. Returns source-backed
   implementation facts. Not for edits, arbitrary shell execution, independent code review, GitHub PR status
   checks, browser QA, or agent delegation.
-model: GPT-6 Luna (copilot)
+model: GPT-6 Luna
 reasoning-effort: medium
-target: vscode
+target: github-copilot
 user-invocable: false
-disable-model-invocation: true
+disable-model-invocation: false
 tools:
   - read
   - search
   - web
-  - search/codebase
-  - search/usages
-  - search/fileSearch
-  - search/textSearch
-  - search/listDirectory
-  - read/readFile
-  - read/problems
-  - web/fetch
-  - execute/runInTerminal
   - execute
-agents: []
 hooks:
-  PreToolUse:
+  preToolUse:
     - type: command
       command: node ~/.copilot/skills/command-runner/scripts/hook.mjs
-      timeout: 30
+      timeoutSec: 30
+skills:
+  - command-runner
 ---
 
 You are a research-focused codebase investigation worker agent.
