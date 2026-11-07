@@ -46,12 +46,12 @@ const PROTECTED_SUFFIXES = new Set([
   '.copilot/agents/CommandRunner.agent.md', // protect legacy installed control definition
   '.copilot/agents/Researcher.agent.md',
   '.copilot/agents/Writer.agent.md',
-  '.copilot/command-runner/hook.mjs',
-  '.copilot/command-runner/runner.mjs',
-  '.copilot/command-runner/gateway.mjs',
-  '.copilot/command-runner/cli.mjs',
-  '.copilot/command-runner/script-guard.mjs',
-  '.copilot/command-runner/builtins.mjs',
+  '.copilot/skills/command-runner/scripts/hook.mjs',
+  '.copilot/skills/command-runner/scripts/runner.mjs',
+  '.copilot/skills/command-runner/scripts/gateway.mjs',
+  '.copilot/skills/command-runner/scripts/cli.mjs',
+  '.copilot/skills/command-runner/scripts/script-guard.mjs',
+  '.copilot/skills/command-runner/scripts/builtins.mjs',
   '.copilot/command-runner/workspaces.json',
 ]);
 const WRITE_TOOL_NAME_PATTERN = /(?:^|[/._-])(?:edit|write|create|delete|remove|move|rename|patch)(?:$|[/._-])/iu;
