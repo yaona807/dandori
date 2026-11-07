@@ -17,19 +17,14 @@ Hookと固定Runnerの呼び出しには `~/.copilot/...` を使用するため�
 Agentは他のDANDORI Agentと一緒に配置し、固定RunnerとHookを追加でインストールします。
 
 ```bash
-mkdir -p ~/.copilot/agents ~/.copilot/command-runner
+mkdir -p ~/.copilot/agents ~/.copilot/skills ~/.copilot/command-runner
 cp .copilot/agents/{Researcher,Writer}.agent.md ~/.copilot/agents/
-cp .copilot/command-runner/command-runner.mjs ~/.copilot/command-runner/
-cp .copilot/command-runner/builtin-commands.mjs ~/.copilot/command-runner/
-cp .copilot/command-runner/command-runner-interface.mjs ~/.copilot/command-runner/
-cp .copilot/command-runner/command-runner-hook.mjs ~/.copilot/command-runner/
-cp .copilot/command-runner/script-guard.mjs ~/.copilot/command-runner/
-cp .copilot/command-runner/command-runner-v2.mjs ~/.copilot/command-runner/
+cp -R .copilot/skills/command-runner ~/.copilot/skills/
 test -f ~/.copilot/command-runner/workspaces.json \
-  || cp .copilot/command-runner/workspaces.example.json ~/.copilot/command-runner/workspaces.json
+  || cp .copilot/skills/command-runner/assets/workspaces.example.json ~/.copilot/command-runner/workspaces.json
 ```
 
-コピーされる初期設定は空のWorkspace registryです。対象プロジェクトのroot（`.git` または `package.json` があるディレクトリ）で `node ~/.copilot/command-runner/command-runner-v2.mjs workspace.ensure` を実行すると、Hookの初回確認後に内部IDが自動生成され登録されます。Workspace IDや `workspaces.json` の手編集は不要です。旧 `workspace-register <id>` は移行用に残します。この個人用ファイルはDANDORIリポジトリへコミットしません。
+コピーされる初期設定は空のWorkspace registryです。対象プロジェクトのroot（`.git` または `package.json` があるディレクトリ）で `node ~/.copilot/skills/command-runner/scripts/cli.mjs workspace.ensure` を実行すると、Hookの初回確認後に内部IDが自動生成され登録されます。Workspace IDや `workspaces.json` の手編集は不要です。旧 `workspace-register <id>` は移行用に残します。この個人用ファイルはDANDORIリポジトリへコミットしません。
 
 Agent固有HookはPreview機能のため、VS Codeの `chat.useCustomAgentHooks` を `true` にします。Chat DiagnosticsでResearcher・WriterのHookを確認してください。旧 `CommandRunner.agent.md` はユーザー／WorkspaceのAgentディレクトリから削除してください。
 
@@ -46,7 +41,7 @@ Workspace登録後、次の固定コマンドを利用できます。
 Git読み取りはリポジトリrootとWorkspace rootが一致する場合に限定します。`builtin-git-show` は40桁の完全SHAを要求します。ステージング・コミット・ブランチ変更・リモート操作は人間の管理対象です。
 npm/pnpm/Yarn/Bun等のプロジェクト固有コマンドは、従来どおり人間がホワイトリスト登録したコマンドのみ実行できます。
 
-例：`node ~/.copilot/command-runner/command-runner-interface.mjs run builtin-fs-trash --expected-workspace=example source=src%2Fold.ts`
+例：`node ~/.copilot/skills/command-runner/scripts/gateway.mjs run builtin-fs-trash --expected-workspace=example source=src%2Fold.ts`
 
 ## Workspaceの選択
 
@@ -123,23 +118,23 @@ Workerは順序付きの`arg=`トークンでargvを渡します。例：`run te
 command操作は現在のWorkspace内から実行します。stale Workspaceの確認・削除はruntime選択が壊れていても利用できます。
 
 ```bash
-node ~/.copilot/command-runner/command-runner-interface.mjs workspace-list [query=<encoded-id-fragment>] [offset=<n>]
-node ~/.copilot/command-runner/command-runner-interface.mjs workspace-describe <workspace-id>
-node ~/.copilot/command-runner/command-runner-interface.mjs workspace-register <workspace-id>
-node ~/.copilot/command-runner/command-runner-interface.mjs workspace-unregister <workspace-id> expected=<workspace-hash>
-node ~/.copilot/command-runner/command-runner-interface.mjs list --expected-workspace=example [query=<encoded-search-text>] [offset=<n>] [revision=<sha256>]
-node ~/.copilot/command-runner/command-runner-interface.mjs describe test --expected-workspace=example
-node ~/.copilot/command-runner/command-runner-interface.mjs inspect test --expected-workspace=example
-node ~/.copilot/command-runner/command-runner-interface.mjs register lint --expected-workspace=example definition=<encoded-json>
-node ~/.copilot/command-runner/command-runner-interface.mjs update lint --expected-workspace=example expected=<definition-hash> definition=<encoded-json>
-node ~/.copilot/command-runner/command-runner-interface.mjs unregister lint --expected-workspace=example expected=<definition-hash>
-node ~/.copilot/command-runner/command-runner-interface.mjs run test --expected-workspace=example runInBand=true
-node ~/.copilot/command-runner/command-runner-interface.mjs output <execution-id> --expected-workspace=example stream=stdout|stderr [offset=<n>]
+node ~/.copilot/skills/command-runner/scripts/gateway.mjs workspace-list [query=<encoded-id-fragment>] [offset=<n>]
+node ~/.copilot/skills/command-runner/scripts/gateway.mjs workspace-describe <workspace-id>
+node ~/.copilot/skills/command-runner/scripts/gateway.mjs workspace-register <workspace-id>
+node ~/.copilot/skills/command-runner/scripts/gateway.mjs workspace-unregister <workspace-id> expected=<workspace-hash>
+node ~/.copilot/skills/command-runner/scripts/gateway.mjs list --expected-workspace=example [query=<encoded-search-text>] [offset=<n>] [revision=<sha256>]
+node ~/.copilot/skills/command-runner/scripts/gateway.mjs describe test --expected-workspace=example
+node ~/.copilot/skills/command-runner/scripts/gateway.mjs inspect test --expected-workspace=example
+node ~/.copilot/skills/command-runner/scripts/gateway.mjs register lint --expected-workspace=example definition=<encoded-json>
+node ~/.copilot/skills/command-runner/scripts/gateway.mjs update lint --expected-workspace=example expected=<definition-hash> definition=<encoded-json>
+node ~/.copilot/skills/command-runner/scripts/gateway.mjs unregister lint --expected-workspace=example expected=<definition-hash>
+node ~/.copilot/skills/command-runner/scripts/gateway.mjs run test --expected-workspace=example runInBand=true
+node ~/.copilot/skills/command-runner/scripts/gateway.mjs output <execution-id> --expected-workspace=example stream=stdout|stderr [offset=<n>]
 ```
 
 引数値にはURI component encodingを使用します。Workspace path型の引数は、選択されたroot配下へ解決できない場合に拒否されます。`register`と`update`はURI component encodingしたJSONコマンド定義を1個だけ受け取り、decode後の定義は16 KiB以内に制限します。`update`には現在の `definitionHash` も必要です。
 
-Workerは承認管理を迂回しないよう、`command-runner-v2.mjs`を介して実行・提案・有効化します。オーナー向けの内部管理CLI `command-runner-interface.mjs` はWorker Hookからの直接変更を禁止します。実行時のcommand schema検証とprocess起動は、従来どおり固定 `command-runner.mjs` coreへ委譲します。管理操作でも、保存前に候補となる設定全体を同じcoreで検証します。
+Workerは承認管理を迂回しないよう、`cli.mjs`を介して実行・提案・有効化します。オーナー向けの内部管理CLI `gateway.mjs` はWorker Hookからの直接変更を禁止します。実行時のcommand schema検証とprocess起動は、従来どおり固定 `runner.mjs` coreへ委譲します。管理操作でも、保存前に候補となる設定全体を同じcoreで検証します。
 
 `list`・`describe`・コマンド定義の登録/更新/削除・`run`・`output`は、委譲されたWorkspace IDを`--expected-workspace`で渡します。固定Runnerは実際の端末cwdから選択したWorkspaceと照合し、不一致なら情報返却・設定変更・コマンド起動の前に`workspace_scope_mismatch`を返します。Agentが端末cwdを調査・変更する必要はありません。実行時には承認済みの正確なコマンドID・Workspace ID・検証済み引数だけを渡し、**Workerは実行ハッシュを取得・転記しません**。実行時の登録定義を正本とするため、調査後の定義更新は実行内容を変更し得ます。登録の更新は別途権限が必要であり、司令塔は認識した変更を再監査します。移行期の旧呼出しで2つのハッシュを両方指定する場合は、従来の厳密な照合も引き続き有効です。`describe`で未登録だった場合は照会Workspace IDをエラーへ含めます。
 
@@ -269,7 +264,7 @@ $COPILOT_HOME/command-runner/executions/<workspace-id>/<UTC-timestamp>_<UUID>/
   stderr.log
 ```
 
-このキャッシュは一時的な観測データであり監査ログではありません。通常の `run` は全Workspace共通の管理対象キャッシュ容量（256 MiB、実行ごとに32 MiBの予約）を検査しますが、**既存ログを一切自動削除しません**。容量不足ならコマンド起動前に `execution_cache_full` で停止します。削除はWorker v2 CLIとHookから使用できない明示的な管理操作です。ユーザー自身が `node ~/.copilot/command-runner/command-runner-interface.mjs cache-prune confirm=prune-managed-executions` を直接実行した場合のみ、管理対象の24時間超の実行結果を削除し、必要なら61分超の古い結果から容量整理します（他Workspaceのキャッシュを含む）。これは破壊的な管理操作であり、Workerの通常実行権限には含まれません。
+このキャッシュは一時的な観測データであり監査ログではありません。通常の `run` は全Workspace共通の管理対象キャッシュ容量（256 MiB、実行ごとに32 MiBの予約）を検査しますが、**既存ログを一切自動削除しません**。容量不足ならコマンド起動前に `execution_cache_full` で停止します。削除はWorker CLIとHookから使用できない明示的な管理操作です。ユーザー自身が `node ~/.copilot/skills/command-runner/scripts/gateway.mjs cache-prune confirm=prune-managed-executions` を直接実行した場合のみ、管理対象の24時間超の実行結果を削除し、必要なら61分超の古い結果から容量整理します（他Workspaceのキャッシュを含む）。これは破壊的な管理操作であり、Workerの通常実行権限には含まれません。
 
 ## セキュリティ境界
 
@@ -297,28 +292,28 @@ VS CodeのHookはタイムアウト時にfail-openとなります。偶発的な
 
 ```bash
 node --test \
-  .copilot/command-runner/command-runner.test.mjs \
-  .copilot/command-runner/command-runner-interface.test.mjs
-COPILOT_HOME=/path/to/test-home node .copilot/command-runner/command-runner-interface.mjs list --expected-workspace=example
+  .copilot/skills/command-runner/tests/runner.test.mjs \
+  .copilot/skills/command-runner/tests/gateway.test.mjs
+COPILOT_HOME=/path/to/test-home node .copilot/skills/command-runner/scripts/gateway.mjs list --expected-workspace=example
 ```
 
-## v2: Workspace ID不要の自主登録（試験導入）
+## Workspace ID不要の自主登録と登録候補承認
 
-Workerは `node ~/.copilot/command-runner/command-runner-v2.mjs` を使用します。
+Workerは `node ~/.copilot/skills/command-runner/scripts/cli.mjs` を使用します。
 
 ```bash
-node ~/.copilot/command-runner/command-runner-v2.mjs workspace.ensure
-node ~/.copilot/command-runner/command-runner-v2.mjs propose test
+node ~/.copilot/skills/command-runner/scripts/cli.mjs workspace.ensure
+node ~/.copilot/skills/command-runner/scripts/cli.mjs propose test
 # 人間に固定argvとスクリプト内容を示して承認を得る
-node ~/.copilot/command-runner/command-runner-v2.mjs activate prop-<32桁のID>
-node ~/.copilot/command-runner/command-runner-v2.mjs run test
+node ~/.copilot/skills/command-runner/scripts/cli.mjs activate prop-<32桁のID>
+node ~/.copilot/skills/command-runner/scripts/cli.mjs run test
 ```
 
 未登録Workspaceは、現在のcwdそのものに `.git` または `package.json` がある場合だけ登録します。親ディレクトリを推測して登録しません。既存のWorkspace登録とホワイトリストは維持されます。
 
 `propose` は実行せず候補のみを保存します。コマンドIDと実際のスクリプト名が違う場合は `script=<URLエンコード済み名>` を指定します。登録に伴う権限追加はCopilot/Localの `PreToolUse` の `ask` により人間が確認してください。**Hookの許可判断は永続的な承認署名ではありません**。Hookが無効、タイムアウト、または手動でバイパスされる環境での強制的承認保証はありません。未承認候補を暗黙に登録しないため、提案と有効化を分離しています。非対話セッションでの承認は失敗として処理します。
 
-v2が登録したnpm系コマンドはすべてのpackage script定義とpackageManager/lockfile種別を実行直前に再照合し、変更時は `stale_script_definition` で停止します。既存のv1登録は互換性のため監視対象外です。スクリプト本文に呼び出される任意のJSや依存パッケージの挙動は保護しません。npm等の任意スクリプトはSandboxではありません。
+CLIで登録したnpm系コマンドはすべてのpackage script定義とpackageManager/lockfile種別を実行直前に再照合し、変更時は `stale_script_definition` で停止します。従来形式の登録は互換性のため監視対象外です。スクリプト本文に呼び出される任意のJSや依存パッケージの挙動は保護しません。npm等の任意スクリプトはSandboxではありません。
 
 新しいWorkspaceの初回登録はHookがrootの実体パスを表示して確認し、登録済みrootは再確認しません。npmのみ末尾の `--` を使用し、pnpm/Yarn/Bunでは引数として渡さないようにします。
 

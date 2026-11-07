@@ -8,7 +8,7 @@ user-invocable: false
 
 This is **method guidance, not execution permission**. Copilot declares Skill loading; Local must have a separately approved and Card-listed read of the installed Skill and any referenced guide before terminal use. Do not read outside that boundary. The human grant, exact delegated action, effects, and host permission remain authoritative.
 
-Use only the user-level CLI `node ~/.copilot/command-runner/command-runner-v2.mjs` through the delegated terminal tool, **never** a raw project shell command or the internal management interface. Terminal mode is synchronous (`mode: "sync"` if supported); omit the terminal timeout or use `0` only if the tool requires it. Do not override cwd, environment, profile or shell.
+Use only the user-level CLI `node ~/.copilot/skills/command-runner/scripts/cli.mjs` through the delegated terminal tool, **never** a raw project shell command or the internal management interface. Terminal mode is synchronous (`mode: "sync"` if supported); omit the terminal timeout or use `0` only if the tool requires it. Do not override cwd, environment, profile or shell.
 
 ## Procedure
 
@@ -19,7 +19,7 @@ Use only the user-level CLI `node ~/.copilot/command-runner/command-runner-v2.mj
 4. **Execution:** call `run` only for an exact permitted registered ID with validated named arguments. Capture `executionId`, `exitCode`, signal and timeout status. A shortened preview can be completed with separately authorized `output` chunks only if `outputTruncated` is false. If `outputTruncated: true`, the Runner stopped collecting beyond its output limit: lost bytes cannot be recovered by `output`. Treat the execution as incomplete/failed, record that limitation and do not claim verification.
 5. **Missing registration:** `workspace.ensure` or `propose` requires delegated registration actions; `propose` creates only a proposal. `activate` is a separate host/human-approved registry mutation. Never use registration to evade a permission or lookup failure.
 
-[All nine worker operations and builtin IDs](./references/commands.md) · [Troubleshooting and permission failures](./references/troubleshooting.md)
+[All nine worker operations and builtin IDs](./references/commands.md) · [Installation and design](./references/README.md) · [Troubleshooting and permission failures](./references/troubleshooting.md)
 
 ## Registered command argv allowlists (v3)
 

@@ -265,17 +265,28 @@ If the current session's authorization or cumulative loop-control state cannot b
     Writer.agent.md
     Reviewer.agent.md
     BrowserQA.agent.md
-  command-runner/
-    command-runner.mjs
-    command-runner-interface.mjs
-    command-runner-hook.mjs
-    command-runner.test.mjs
-    workspaces.example.json
   skills/
     code-review/
       SKILL.md
     command-runner/
       SKILL.md
+      scripts/
+        cli.mjs
+        runner.mjs
+        gateway.mjs
+        hook.mjs
+        builtins.mjs
+        script-guard.mjs
+      references/
+        README.md
+        README_ja.md
+        commands.md
+        troubleshooting.md
+      tests/
+        runner.test.mjs
+        gateway.test.mjs
+      assets/
+        workspaces.example.json
 .github/
   workflows/
     validate.yml
@@ -306,7 +317,7 @@ assets/
 - `BrowserQA` requires the configured browser tool set.
 - Unavailable or unrecognized tool names can be ignored by the runtime; verify actual tool availability before use.
 - A bundled Worker calls a tool only when the tool arguments and runtime behavior can enforce the delegated boundary. If the available tool can operate only on a broader scope, the Worker returns `blocked` and identifies the narrower capability required.
-- Researcher and Writer call the shared fixed runner CLI directly. Install the user-level runner from `.copilot/command-runner/` and enable agent-scoped hooks with `chat.useCustomAgentHooks`. Copilot profiles load the declared `command-runner` Skill; Local workers explicitly read the installed Skill before terminal use. Skill availability is not execution permission. Synchronous terminal tabs may remain until host-specific cleanup is validated.
+- Researcher and Writer call the shared fixed runner CLI directly. Install the unified runner Skill from `.copilot/skills/command-runner/` and enable agent-scoped hooks with `chat.useCustomAgentHooks`. Copilot profiles load the declared `command-runner` Skill; Local workers explicitly read the installed Skill before terminal use. Skill availability is not execution permission. Synchronous terminal tabs may remain until host-specific cleanup is validated.
 - External workers must accept a self-contained request, avoid sub-delegation, use no broader tools than necessary, and describe their role and effect boundary accurately.
 - Confirm the loaded source for every agent and skill with VS Code Chat Diagnostics.
 
@@ -332,7 +343,7 @@ cp .copilot/agents/*.agent.md ~/.copilot/agents/
 cp -R .copilot/skills/* ~/.copilot/skills/
 ```
 
-For Researcher and Writer command execution, complete the [shared runner installation](./.copilot/command-runner/README.md) to install the fixed CLI and hook under `~/.copilot/command-runner/`.
+For Researcher and Writer command execution, complete the [shared runner installation](./.copilot/skills/command-runner/references/README.md) to install CLI and Hook within `~/.copilot/skills/command-runner/`.
 
 ### Standard workspace installation
 
@@ -344,7 +355,7 @@ cp .copilot/agents/*.agent.md .github/agents/
 cp -R .copilot/skills/* .github/skills/
 ```
 
-Researcher and Writer use the user-level runner under `~/.copilot/command-runner/`; no separate workspace-level runner agent is needed.
+Researcher and Writer use the user-level runner under `~/.copilot/skills/command-runner/`; no separate workspace-level runner agent is needed.
 
 ### Custom `.copilot` workspace installation
 
@@ -461,4 +472,4 @@ MIT. See [LICENSE](./LICENSE).
 
 ## Prebuilt harness bundles
 
-The GitHub source ZIP includes `packages/local/` and `packages/copilot/` with seven agents, shared skills, and the fixed command runner. Choose **one** profile, then copy its `agents/` and `skills/` into the appropriate VS Code agent discovery location; install `command-runner/` under `~/.copilot/command-runner/`. Do not install both profiles simultaneously with duplicate agent names. Run `python scripts/build_agent_profiles.py --check` to verify generated files or `--write` to regenerate them. Copilot runtime delegation, model IDs and hook behavior still require verification in the target VS Code environment.
+The GitHub source ZIP includes `packages/local/` and `packages/copilot/` with seven agents, shared skills, and the fixed command runner. Choose **one** profile, then copy its `agents/` and `skills/` into the appropriate VS Code agent discovery location; install the `command-runner` Skill under `~/.copilot/skills/command-runner/` (keep persistent data under `~/.copilot/command-runner/`). Do not install both profiles simultaneously with duplicate agent names. Run `python scripts/build_agent_profiles.py --check` to verify generated files or `--write` to regenerate them. Copilot runtime delegation, model IDs and hook behavior still require verification in the target VS Code environment.

@@ -1,7 +1,7 @@
-# Fixed runner v2 operation reference
+# CommandRunner operation reference
 
 Every example suffix must be preceded by the **exact** installed CLI prefix:
-`node ~/.copilot/command-runner/command-runner-v2.mjs`
+`node ~/.copilot/skills/command-runner/scripts/cli.mjs`
 
 | Operation | Example suffix | Required consideration |
 | --- | --- | --- |
@@ -17,7 +17,7 @@ Every example suffix must be preceded by the **exact** installed CLI prefix:
 
 Parameters use `key=URL-encoded-value` (no quotes, shell interpolation or unbounded arguments).
 V3 registered commands: omit `allow` for Fixed, or attach a non-empty `allow` rule array with `propose test allow=<percent-encoded-JSON-string-array>`. Rules include `--coverage`, `--maxWorkers=value`, `--config=path`, `--runTestsByPath path...`. Worker runs send repeated ordered `arg=` tokens, e.g. `run test arg=--runTestsByPath arg=tests%2Fa.test.js arg=tests%2Fb.test.js`. Encode special characters instead of quoting. Existing builtins and legacy commands keep their named parameters. An Allowlist cannot authorize unlisted options or paths that resolve outside the workspace.
- The v2 facade determines the actual terminal working directory and internally checks `--expected-workspace`; never try to select a different workspace.
+ The Worker CLI determines the actual terminal working directory and internally checks `--expected-workspace`; never try to select a different workspace.
 
 Registration-free **Git observation** builtins (execution still needs an exact grant): `builtin-git-status`, `builtin-git-diff` (optional `scope=unstaged|staged` and `file=...`), `builtin-git-log` (`count=...`), `builtin-git-show` (`commit=<full-SHA>`), `builtin-git-ls-files`, `builtin-git-branch-info`.
 
@@ -43,4 +43,4 @@ Registration-free filesystem operations: `builtin-fs-move`, `builtin-fs-copy`, `
 
 The trash is excluded by its own `.agent-trash/.gitignore` and remains in the workspace; it is not an OS-managed recycle bin and is not auto-purged by these built-ins. File moves are same-filesystem only. Built-in availability does not grant approval for destructive effects, nor does restoring or listing trash grant authority to move another file.
 
-The result of `run` includes `executionId`, `exitCode`, `signal`, `timedOut`, `outputTruncated` and bounded previews. Normal `run` only checks global cache size and never deletes old logs. The separate internal `cache-prune confirm=prune-managed-executions` operation is intentionally *not* a worker-facing v2 command; only the user may run it directly for explicit cache maintenance. Captured stdout/stderr bytes are stored under runner-owned execution cache and read via `output`. When `outputTruncated: true`, output exceeded the configured limit and missing bytes are irrecoverable; report incomplete/failed execution instead of claiming full logs or successful verification. Inspect a command's effective definition and possible writes (including package script lifecycle hooks) before execution; command names alone are not proof of safety.
+The result of `run` includes `executionId`, `exitCode`, `signal`, `timedOut`, `outputTruncated` and bounded previews. Normal `run` only checks global cache size and never deletes old logs. The separate internal `cache-prune confirm=prune-managed-executions` operation is intentionally *not* a worker-facing command; only the user may run it directly for explicit cache maintenance. Captured stdout/stderr bytes are stored under runner-owned execution cache and read via `output`. When `outputTruncated: true`, output exceeded the configured limit and missing bytes are irrecoverable; report incomplete/failed execution instead of claiming full logs or successful verification. Inspect a command's effective definition and possible writes (including package script lifecycle hooks) before execution; command names alone are not proof of safety.

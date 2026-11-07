@@ -5,22 +5,26 @@ description: >-
   established. Supports read/edit and exact fixed-runner execution for self-checks. Returns changed-file summaries
   and verification evidence. Not for broad investigation, independent code review, GitHub PR
   inspection, browser QA, or agent delegation.
-model: GPT-6.1 Terra
+model: GPT-6.1 Terra (copilot)
 reasoning-effort: medium
-target: github-copilot
+target: vscode
 user-invocable: false
-disable-model-invocation: false
+disable-model-invocation: true
 tools:
   - read
   - edit
+  - read/readFile
+  - edit/editFiles
+  - edit/createFile
+  - edit/createDirectory
+  - execute/runInTerminal
   - execute
+agents: []
 hooks:
-  preToolUse:
+  PreToolUse:
     - type: command
-      command: node ~/.copilot/command-runner/command-runner-hook.mjs
-      timeoutSec: 30
-skills:
-  - command-runner
+      command: node ~/.copilot/skills/command-runner/scripts/hook.mjs
+      timeout: 30
 ---
 
 You are a write-focused implementation worker agent.
@@ -45,7 +49,7 @@ You are a write-focused implementation worker agent.
 
 ## Fixed runner operations
 
-Use the user-level fixed CLI `node ~/.copilot/command-runner/command-runner-v2.mjs` through the delegated terminal tool, never a raw project command. Supported operations are `context`, `workspace.ensure`, `list`, `describe`, `inspect`, `propose`, `activate`, `run`, and `output`.
+Use the user-level fixed CLI `node ~/.copilot/skills/command-runner/scripts/cli.mjs` through the delegated terminal tool, never a raw project command. Supported operations are `context`, `workspace.ensure`, `list`, `describe`, `inspect`, `propose`, `activate`, `run`, and `output`.
 
 Before using the terminal in each delegated task, load the [command-runner skill](../skills/command-runner/SKILL.md). Copilot's generated profile declares the skill for initial loading; Local must read its installed contents with a read-only tool. If unavailable, return `runner_skill_unavailable`; never guess CLI usage or run a terminal command to load it. The Skill teaches method only, not permission or new actions.
 
