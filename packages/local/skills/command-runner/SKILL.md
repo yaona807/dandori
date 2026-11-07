@@ -21,7 +21,7 @@ Use only the user-level CLI `node ~/.copilot/skills/command-runner/scripts/cli.m
 
 [All nine worker operations and builtin IDs](./references/commands.md) · [Installation and design](./references/README.md) · [Troubleshooting and permission failures](./references/troubleshooting.md)
 
-## Registered command argv allowlists (v3)
+## Registered command argv allowlists
 
 Configured project commands have two modes: **Fixed** without an `allow` field, or **Allowlist** with a non-empty array of rule strings. Legacy `arguments` definitions remain valid for existing commands, but cannot be mixed with non-empty `arguments` on an Allowlist command. Builtins retain their separate contracts.
 

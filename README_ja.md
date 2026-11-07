@@ -359,7 +359,7 @@ cp .copilot/agents/*.agent.md .github/agents/
 cp -R .copilot/skills/* .github/skills/
 ```
 
-Workspace側にCommandRunner Agentを配置する必要はありません。ResearcherとWriterは同じ固定CLIを利用します。
+Workspace側にCommandRunner Agentを配置する必要はありません。ResearcherとWriterは同じ固定CLIを利用します。ただし、WorkspaceにSkillを置くだけではHookの実行ファイルは配置されないため、[Runnerインストール手順](./.copilot/skills/command-runner/references/README_ja.md)に従い、`~/.copilot/skills/command-runner/`にもSkillをインストールしてください。
 
 ### `.copilot`をworkspace内で使う場合
 

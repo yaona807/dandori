@@ -355,7 +355,7 @@ cp .copilot/agents/*.agent.md .github/agents/
 cp -R .copilot/skills/* .github/skills/
 ```
 
-Researcher and Writer use the user-level runner under `~/.copilot/skills/command-runner/`; no separate workspace-level runner agent is needed.
+Researcher and Writer use the user-level runner under `~/.copilot/skills/command-runner/`; no separate workspace-level runner agent is needed. Even for workspace-scoped agent installation, install the Runner Skill at this user-level path using the [shared runner installation](./.copilot/skills/command-runner/references/README.md); a workspace-only `.github/skills/` copy is not the Hook executable location.
 
 ### Custom `.copilot` workspace installation
 

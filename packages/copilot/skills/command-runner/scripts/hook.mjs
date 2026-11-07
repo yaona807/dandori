@@ -46,6 +46,7 @@ const PROTECTED_SUFFIXES = new Set([
   '.copilot/agents/CommandRunner.agent.md', // protect legacy installed control definition
   '.copilot/agents/Researcher.agent.md',
   '.copilot/agents/Writer.agent.md',
+  '.copilot/skills/command-runner/SKILL.md',
   '.copilot/skills/command-runner/scripts/hook.mjs',
   '.copilot/skills/command-runner/scripts/runner.mjs',
   '.copilot/skills/command-runner/scripts/gateway.mjs',
@@ -456,6 +457,8 @@ function isProtectedTargetPath(value) {
   if (target === null) return false;
   const canonicalTarget = canonicalTargetPath(target);
   const root = installedControlRoot();
+  const installedSkill = canonicalTargetPath(path.join(root, 'skills', 'command-runner'));
+  if (canonicalTarget === installedSkill || canonicalTarget.startsWith(installedSkill + path.sep)) return true;
   const installedPaths = [...PROTECTED_SUFFIXES].map((suffix) =>
     path.join(root, suffix.slice('.copilot/'.length)));
   if (process.env.COPILOT_HOME) {

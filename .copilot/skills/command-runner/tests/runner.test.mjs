@@ -1180,6 +1180,9 @@ test('shared hook allows ordinary read, search and edit tools while protecting r
     for (const protectedPath of [
       '~/.copilot/command-runner/workspaces.json',
       '~/.copilot/skills/command-runner/scripts/builtins.mjs',
+      '~/.copilot/skills/command-runner/SKILL.md',
+      '~/.copilot/skills/command-runner/references/commands.md',
+      '~/.copilot/skills/command-runner/scripts/future-tool.mjs',
     ]) {
       const localWrite = runHook(fixture, {
         hook_event_name: 'PreToolUse',
@@ -1305,8 +1308,12 @@ test('installed control identity is protected without blocking same-suffix repo 
     assert.equal(await readFile(linkedParentTraversal, 'utf8'),
       await readFile(path.join(fixture.home, 'agents', 'Writer.agent.md'), 'utf8'));
 
+    const skillSource = path.join(fixture.alpha, '.copilot', 'skills', 'command-runner', 'SKILL.md');
+    await mkdir(path.dirname(skillSource), { recursive: true });
+    await writeFile(skillSource, 'workspace skill source');
     for (const target of [
       sourceFile, '.copilot/agents/Writer.agent.md', pathToFileURL(sourceFile).href,
+      skillSource,
     ]) {
       const result = runHook(fixture, {
         sessionId: 'copilot-session', toolName: 'Edit',

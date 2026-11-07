@@ -16,8 +16,8 @@ Every example suffix must be preceded by the **exact** installed CLI prefix:
 | `output` | `output <execution-id> stream=stdout offset=0` | Bounded output chunks for an authorized execution |
 
 Parameters use `key=URL-encoded-value` (no quotes, shell interpolation or unbounded arguments).
-V3 registered commands: omit `allow` for Fixed, or attach a non-empty `allow` rule array with `propose test allow=<percent-encoded-JSON-string-array>`. Rules include `--coverage`, `--maxWorkers=value`, `--config=path`, `--runTestsByPath path...`. Worker runs send repeated ordered `arg=` tokens, e.g. `run test arg=--runTestsByPath arg=tests%2Fa.test.js arg=tests%2Fb.test.js`. Encode special characters instead of quoting. Existing builtins and legacy commands keep their named parameters. An Allowlist cannot authorize unlisted options or paths that resolve outside the workspace.
- The Worker CLI determines the actual terminal working directory and internally checks `--expected-workspace`; never try to select a different workspace.
+Registered commands: omit `allow` for Fixed, or attach a non-empty `allow` rule array with `propose test allow=<percent-encoded-JSON-string-array>`. Rules include `--coverage`, `--maxWorkers=value`, `--config=path`, `--runTestsByPath path...`. Worker runs send repeated ordered `arg=` tokens, e.g. `run test arg=--runTestsByPath arg=tests%2Fa.test.js arg=tests%2Fb.test.js`. Encode special characters instead of quoting. Existing builtins and legacy commands keep their named parameters. An Allowlist cannot authorize unlisted options or paths that resolve outside the workspace.
+The Worker CLI determines the actual terminal working directory and internally checks `--expected-workspace`; never try to select a different workspace.
 
 Registration-free **Git observation** builtins (execution still needs an exact grant): `builtin-git-status`, `builtin-git-diff` (optional `scope=unstaged|staged` and `file=...`), `builtin-git-log` (`count=...`), `builtin-git-show` (`commit=<full-SHA>`), `builtin-git-ls-files`, `builtin-git-branch-info`.
 
