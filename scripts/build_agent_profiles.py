@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build and verify committed VS Code Local / GitHub Copilot agent bundles."""
+"""Build and verify the committed GitHub Copilot agent bundle."""
 from __future__ import annotations
 import argparse
 from pathlib import Path
@@ -19,7 +19,7 @@ COPILOT_WORKER_ROUTING = (
     "- `BrowserQA`\n"
     "Never use a default or general-purpose subagent (built-in Explore/Plan/Agent or unnamed).\n"
     "If none, return `no_suitable_worker`; do not substitute any built-in or unlisted agent.\n"
-    "Keep Card scope/audit. Copilot routing is instruction-only; Local enforces `agents`.\n"
+    "Keep Card scope/audit. Routing is instruction-only; enforce the approved Task Card.\n"
     "\n"
 )
 
@@ -39,13 +39,11 @@ def transform(source: str, name: str, profile: str) -> str:
     meta = yaml.safe_load(front)
     if meta.get("name") != name:
         raise ValueError(f"{name}: name mismatch")
-    if profile == "local":
-        return source
     if profile != "copilot":
         raise ValueError(profile)
-    # Retain body and frontmatter formatting; only migrate harness-specific keys.
+    # Retain body and frontmatter formatting while producing the Copilot target.
     import re
-    # Copilot expects the model label without the Local-only " (copilot)" suffix.
+    # Copilot expects model labels without the source-template " (copilot)" suffix.
     # Keep the model and reasoning-effort fields themselves intact.
     front = re.sub(r"(?m)^(model: .+?) \(copilot\)$", r"\1", front)
     front = re.sub(r"(?m)^agents:.*\n", "", front)
@@ -80,7 +78,7 @@ def transform(source: str, name: str, profile: str) -> str:
             front,
         )
     if name in {"Researcher", "Writer"}:
-        # Copilot supports declarative skills; Local uses an explicit read.
+        # Copilot supports declarative Skill loading.
         front += "skills:\n  - command-runner\n"
     if name in {"Researcher", "Writer"}:
         original_hook = (
@@ -99,17 +97,15 @@ def transform(source: str, name: str, profile: str) -> str:
     return "---\n" + front + "---\n" + body
 
 def generate(destination: Path) -> None:
-    for profile in ("local", "copilot"):
-        target = destination / profile
-        for name in NAMES:
-            original = (AGENTS / f"{name}.agent.md").read_text(encoding="utf-8")
-            output = target / "agents" / f"{name}.agent.md"
-            output.parent.mkdir(parents=True, exist_ok=True)
-            output.write_text(transform(original, name, profile), encoding="utf-8")
-        for directory in ("skills",):
-            source = ROOT / ".copilot" / directory
-            if source.exists():
-                shutil.copytree(source, target / directory, dirs_exist_ok=True)
+    target = destination / "copilot"
+    for name in NAMES:
+        original = (AGENTS / f"{name}.agent.md").read_text(encoding="utf-8")
+        output = target / "agents" / f"{name}.agent.md"
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(transform(original, name, "copilot"), encoding="utf-8")
+    source = ROOT / ".copilot" / "skills"
+    if source.exists():
+        shutil.copytree(source, target / "skills", dirs_exist_ok=True)
 
 def compare(expected: Path, actual: Path) -> list[str]:
     errors = []
