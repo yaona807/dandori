@@ -41,8 +41,8 @@ function core(name, args) {
   try { return JSON.parse(result.stdout); }
   catch { throw error('runner_protocol_error', 'runner returned invalid JSON'); }
 }
-const runCore = (args) => core('command-runner.mjs', args);
-const runInterface = (args) => core('command-runner-interface.mjs', args);
+const runCore = (args) => core('runner.mjs', args);
+const runInterface = (args) => core('gateway.mjs', args);
 const encode = (v) => encodeURIComponent(v);
 const canonical = (v) => Array.isArray(v) ? v.map(canonical) : v && typeof v === 'object'
   ? Object.fromEntries(Object.keys(v).sort().map(k => [k, canonical(v[k])])) : v;

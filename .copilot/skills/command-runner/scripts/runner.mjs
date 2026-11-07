@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { spawn } from 'node:child_process';
-import { builtinDefinitions, isBuiltinId } from './builtin-commands.mjs';
+import { builtinDefinitions, isBuiltinId } from './builtins.mjs';
 import { validateScriptGuard, scriptFingerprint } from './script-guard.mjs';
 import { createHash } from 'node:crypto';
 import { constants as fsConstants } from 'node:fs';
@@ -1059,7 +1059,7 @@ async function main() {
   if (!['validate-config', 'list', 'describe', 'run'].includes(operation)) {
     throw new RunnerError(
       'usage',
-      'usage: command-runner.mjs validate-config | list | describe <id> | run <id> --expected-workspace=<id> [name=encoded-value ...]',
+      'usage: runner.mjs validate-config | list | describe <id> | run <id> --expected-workspace=<id> [name=encoded-value ...]',
     );
   }
 
