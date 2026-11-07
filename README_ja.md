@@ -335,7 +335,7 @@ Orchestrator は、実行方法の曖昧さと権限の曖昧さを区別し、�
 
 ## インストール
 
-VS Code上のGitHub Copilot Custom Agentsが対応する探索パスへ、AgentとSkillをコピーしてください。
+VS Code上のGitHub Copilot Custom Agentsが対応する探索パスへ、`packages/copilot/` から生成済みのAgentとSkillをコピーしてください。リポジトリ内の `.copilot/agents/` は生成元の定義であり、Copilot用のインストール成果物ではありません。
 
 ### ユーザーレベル配置
 
@@ -343,8 +343,8 @@ VS Code上のGitHub Copilot Custom Agentsが対応する探索パスへ、Agent�
 
 ```bash
 mkdir -p ~/.copilot/agents ~/.copilot/skills
-cp .copilot/agents/*.agent.md ~/.copilot/agents/
-cp -R .copilot/skills/* ~/.copilot/skills/
+cp packages/copilot/agents/*.agent.md ~/.copilot/agents/
+cp -R packages/copilot/skills/* ~/.copilot/skills/
 ```
 
 Researcher・Writerのコマンド実行には、固定Runnerを `~/.copilot/skills/command-runner/` に配置する[インストール手順](./.copilot/skills/command-runner/references/README_ja.md)が必要です。
@@ -355,15 +355,15 @@ Researcher・Writerのコマンド実行には、固定Runnerを `~/.copilot/ski
 
 ```bash
 mkdir -p .github/agents .github/skills
-cp .copilot/agents/*.agent.md .github/agents/
-cp -R .copilot/skills/* .github/skills/
+cp packages/copilot/agents/*.agent.md .github/agents/
+cp -R packages/copilot/skills/* .github/skills/
 ```
 
 Workspace側にCommandRunner Agentを配置する必要はありません。ResearcherとWriterは同じ固定CLIを利用します。ただし、WorkspaceにSkillを置くだけではHookの実行ファイルは配置されないため、[Runnerインストール手順](./.copilot/skills/command-runner/references/README_ja.md)に従い、`~/.copilot/skills/command-runner/`にもSkillをインストールしてください。
 
-### `.copilot`をworkspace内で使う場合
+### 追加の探索パスを使う場合
 
-workspace内の `.copilot/agents` と `.copilot/skills` を使うには、`chat.agentFilesLocations` と `chat.agentSkillsLocations` で追加探索先として有効にする必要があります。設定を行わずに `.copilot` をコピーするだけで認識されるとは限りません。
+`chat.agentFilesLocations` と `chat.agentSkillsLocations` で任意の探索パスを設定する場合も、配置するのは `packages/copilot/agents/` と `packages/copilot/skills/` の内容です。このリポジトリの生成元 `.copilot/agents/` をそのまま探索対象にしないでください。Copilot用のFrontmatterではありません。
 
 ### 既存インストールの更新
 
@@ -385,13 +385,13 @@ rm -rf .github/skills/code-review .github/skills/command-runner
 
 更新時は旧 `PullRequestResearcher.agent.md` と廃止した `CommandRunner.agent.md` も削除し、古いWorkerが探索対象に残らないようにします。
 
-削除後、選択した配置方法のインストールcommandを実行し、再度読み込み確認を行ってください。`.copilot`を追加探索先として使う場合も、設定した探索先から同じ管理対象ファイル名だけを削除します。
+削除後、選択した配置方法のインストールcommandを実行し、再度読み込み確認を行ってください。追加の探索先を使う場合も、管理対象ファイル名だけを削除してからCopilot配布物を配置します。
 
 ### 読み込み確認
 
 1. VS CodeのChat Viewでcontext menuを開き、**Diagnostics**を選択する
 2. すべてのDANDORI Agentと `code-review` と `command-runner` Skillがエラーなく読み込まれていることを確認する
-3. 各Agentの提供元を確認し、Orchestratorのallowlistが意図した定義を指していることを確認する
+3. 各Agentが `packages/copilot/` の `target: github-copilot` 定義から配置され、Orchestratorが `task` で意図した名前付きWorkerへ委任していることを確認する
 4. 外部Workerが上記の互換性チェックを満たすことを確認する
 5. workspace、user、organization、extension、追加探索先にある同名定義の重複を削除または無効化する
 
