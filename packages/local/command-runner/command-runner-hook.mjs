@@ -90,9 +90,11 @@ function activationReview(id) {
     argv: item.definition.run,
     cwd: item.definition.cwd,
     scriptGuard: item.definition.scriptGuard,
+    previousAllow: item.previousAllow ?? null,
+    allow: item.definition.allow ?? null,
     scriptPreview: item.scriptPreview,
   });
-  if (display.length > 2000) throw new Error('approval details exceed bounded preview');
+  if (display.length > 6000) throw new Error('approval details exceed bounded preview');
   return 'Human approval is required for this exact command definition: ' + display;
 }
 
@@ -213,7 +215,7 @@ function validateV2Invocation(tokens) {
   }
   if (operation === 'propose') {
     if (!COMMAND_ID_PATTERN.test(tokens[3] ?? '')) throw new Error('invalid command ID');
-    for (const t of tokens.slice(4)) if (!['packageDir', 'script'].includes(validateEncodedParameter(t))) throw new Error('unsupported proposal argument');
+    for (const t of tokens.slice(4)) if (!['packageDir', 'script', 'allow'].includes(validateEncodedParameter(t))) throw new Error('unsupported proposal argument');
     return 'allow';
   }
   if (operation === 'describe' || operation === 'inspect') {

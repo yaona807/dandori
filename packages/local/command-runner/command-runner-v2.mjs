@@ -125,16 +125,46 @@ async function readProposal(id) {
     throw error('invalid_proposal', 'proposal must be an ordinary bounded file');
   }
   const record = JSON.parse(await readFile(file, 'utf8'));
-  if (record.id !== id || record.version !== 1 || !COMMAND.test(record.commandId)
+  if (record.id !== id || ![1, 2].includes(record.version) || !COMMAND.test(record.commandId)
     || !Number.isFinite(record.expiresAt) || Date.now() > record.expiresAt
-    || record.approvalDigest !== digest([record.workspaceIdentity, record.commandId, record.definition, record.scriptPreview, record.expectedHash ?? null])) {
+    || record.approvalDigest !== digest(record.version === 1
+      ? [record.workspaceIdentity, record.commandId, record.definition, record.scriptPreview, record.expectedHash ?? null]
+      : [record.workspaceIdentity, record.commandId, record.definition, record.scriptPreview, record.expectedHash ?? null, record.previousAllow])) {
     throw error('stale_proposal', 'proposal is expired or was modified');
   }
   return record;
 }
+
+function parseAllowParam(encoded) {
+  if (encoded === undefined) return undefined;
+  let entries;
+  try { entries = JSON.parse(encoded); }
+  catch { throw error('invalid_argument', 'allow must be a JSON array of rule strings'); }
+  if (!Array.isArray(entries) || entries.length === 0 || entries.length > 50) {
+    throw error('invalid_argument', 'allow must contain between 1 and 50 rules');
+  }
+  const names = new Set();
+  let filesGroup = false;
+  for (const entry of entries) {
+    if (typeof entry !== 'string' || entry.length > 256) throw error('invalid_argument', 'invalid allow rule');
+    let option = entry;
+    if (entry.endsWith(' path...')) {
+      option = entry.slice(0, -' path...'.length);
+      if (filesGroup) throw error('invalid_argument', 'only one path... group is supported');
+      filesGroup = true;
+    } else if (entry.endsWith('=value')) option = entry.slice(0, -'=value'.length);
+    else if (entry.endsWith('=path')) option = entry.slice(0, -'=path'.length);
+    if (!/^(?:--[A-Za-z][A-Za-z0-9-]*|-[A-Za-z0-9])$/u.test(option) || names.has(option)) {
+      throw error('invalid_argument', 'unsupported or duplicate allow rule: ' + entry);
+    }
+    names.add(option);
+  }
+  return entries;
+}
 async function propose(commandId, params) {
   if (!COMMAND.test(commandId)) throw error('invalid_argument', 'invalid command ID');
-  if ([...params.keys()].some(k => !['packageDir', 'script'].includes(k))) throw error('invalid_argument', 'only packageDir/script are supported');
+  if ([...params.keys()].some(k => !['packageDir', 'script', 'allow'].includes(k))) throw error('invalid_argument', 'only packageDir/script/allow are supported');
+  const allow = parseAllowParam(params.get('allow'));
   const {selected, workspace} = await selectedConfig();
   const packageDir = params.get('packageDir') ?? '.';
   if (!packageDir || path.isAbsolute(packageDir) || packageDir.includes('..') || packageDir.includes('\\')) {
@@ -154,6 +184,7 @@ async function propose(commandId, params) {
     description: 'Approved ' + selectedScript.manager + ' script: ' + commandId,
     run: scriptRunArgs(selectedScript.manager, scriptName),
     cwd: path.relative(root, dir) || '.', arguments: {},
+    ...(allow === undefined ? {} : { allow }),
     scriptGuard: {manager: selectedScript.manager, script: scriptName, fingerprint: selectedScript.fingerprint},
     timeoutMs: 300000, maxOutputBytes: 1048576,
   };
@@ -164,11 +195,12 @@ async function propose(commandId, params) {
       .filter(name => Object.hasOwn(selectedScript.scripts, name))
       .map(name => [name, selectedScript.scripts[name]]),
   );
-  const record = { version: 1, id, commandId, workspaceIdentity: selected.workspaceIdentity,
-    definition, scriptPreview, expectedHash: original ? digest(original) : null,
+  const record = { version: 2, id, commandId, workspaceIdentity: selected.workspaceIdentity,
+    definition, scriptPreview, previousAllow: original?.allow ?? null,
+    expectedHash: original ? digest(original) : null,
     expiresAt: Date.now() + MAX_AGE,
   };
-  record.approvalDigest = digest([record.workspaceIdentity, record.commandId, record.definition, record.scriptPreview, record.expectedHash]);
+  record.approvalDigest = digest([record.workspaceIdentity, record.commandId, record.definition, record.scriptPreview, record.expectedHash, record.previousAllow]);
   await mkdir(PROPOSALS, { recursive: true, mode: 0o700 });
   await writeFile(path.join(PROPOSALS, id + '.json'), JSON.stringify(record) + '\n', {flag: 'wx', mode: 0o600});
   return {status: 'pending_approval', proposalId: id, commandId, argv: definition.run, cwd: definition.cwd,
