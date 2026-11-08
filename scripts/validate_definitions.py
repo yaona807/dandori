@@ -118,6 +118,7 @@ SKIP_DECORATOR_NAMES = frozenset({"skip", "skipIf", "skipUnless", "expectedFailu
 REQUIRED_MUTATION_TEST_METHODS = frozenset(
     {
         "test_repository_is_valid",
+        "test_adaptive_task_decomposition_policy_is_required",
         "test_orchestrator_rejects_edit_tool",
         "test_orchestrator_command_discovery_and_status_grants_are_required",
         "test_worker_rejects_agent_tool",
