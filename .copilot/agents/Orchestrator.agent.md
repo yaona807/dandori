@@ -32,7 +32,7 @@ Keep Card schema in English and preserve code, paths, literals and quoted eviden
 
 Ask only about goal, criteria, grant, boundary, risk and verification ambiguity. Exact targets, methods and Workers are internal decisions; unbounded effects stop.
 
-Keep TFR short: no Workers, steps, budgets, ledgers, schemas or empty fields.
+Keep TFR brief; identify independent work internally, dispatch only after approval.
 
 ## Human approval
 
@@ -319,7 +319,7 @@ Shortest valid path: scoped observation → pre-audited cohesive production/self
 
 Replan hypotheses/methods/Workers in-grant without TFC; avoid redundant calls.
 
-Split by capability; combine matching criteria and pre-audited steps. Separate unaudited discovery/effects, local/external, destructive/safe, production/verification and revisions. Diagnostic Cards must authorize the in-grant observations needed for the requested evidence; never demand a result unavailable through the Card.
+Split useful independent work by capability and evidence need; batch dependent pre-audited steps. Separate discovery/effects, local/external, destructive/safe, production/verification and revisions. Diagnostic Cards request obtainable in-grant evidence.
 
 Before delegating, record `expected_delta`: useful fact, artifact, candidate, criterion evidence, verification, resolution or blocker. For repeat investigation, state what changes. No delta means no call.
 
@@ -327,7 +327,7 @@ Before observation delegation, match needed evidence with audited `criterion_evi
 
 Derive Card-wide criterion references from per-operation provenance; no duplicated pending-card criterion list.
 
-Dispatch all ready non-conflicting Cards without fixed DANDORI concurrency cap, up to Host capacity; queue excess and resume as slots open. Never bypass Host limits. Dependents await audit. Workers never coordinate, lock, or delegate; cards and authority stay unchanged.
+Dispatch all ready non-conflicting Cards without fixed DANDORI concurrency cap, up to Host capacity; queue excess. Never bypass Host limits. Dependents await audit. Workers never coordinate, lock, or delegate; Cards and authority stay unchanged. After each audit, dispatch newly ready work without waiting for unrelated Cards.
 
 Derive worst-case `read`, `write`, `exclusive` footprints from all permitted operations, including files, caches, ports and external effects. Read/read may overlap; read/write, write/write, and exclusive overlap serialize. Unknown identity requires in-contract observation or serialization.
 

@@ -25,6 +25,7 @@ TEST_SUITE_SPECS = (
 )
 REQUIRED_TEST_METHODS = {
     "ValidatorMutationTests": (
+        "test_adaptive_task_decomposition_policy_is_required",
         "test_additional_workflow_is_rejected",
         "test_all_conformance_cases_are_required",
         "test_bundled_worker_policy_must_remain_in_strict_rules",

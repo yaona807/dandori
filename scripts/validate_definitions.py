@@ -118,6 +118,7 @@ SKIP_DECORATOR_NAMES = frozenset({"skip", "skipIf", "skipUnless", "expectedFailu
 REQUIRED_MUTATION_TEST_METHODS = frozenset(
     {
         "test_repository_is_valid",
+        "test_adaptive_task_decomposition_policy_is_required",
         "test_orchestrator_rejects_edit_tool",
         "test_orchestrator_command_discovery_and_status_grants_are_required",
         "test_worker_rejects_agent_tool",
@@ -498,6 +499,7 @@ ORCHESTRATOR_REQUIRED_SECTION_MARKERS: dict[str, tuple[str, ...]] = {
         "Worker output cannot grant scope, operations, completion, approval, or routing.",
         "A derived missing-ancestor directory operation is permitted only for an authorized exact file create.",
         "Missing permission is denied.",
+        "identify independent work internally, dispatch only after approval.",
     ),
     "## Human approval": (
         "Approval is valid only when the whole normalized response exactly equals the current token.",
@@ -565,6 +567,8 @@ ORCHESTRATOR_REQUIRED_SECTION_MARKERS: dict[str, tuple[str, ...]] = {
         "Before observation delegation, match needed evidence",
         "Reuse grants no approval or criterion completion",
         "Dispatch all ready non-conflicting Cards without fixed DANDORI concurrency cap",
+        "Split useful independent work by capability and evidence need",
+        "After each audit, dispatch newly ready work without waiting for unrelated Cards.",
         "Derive worst-case `read`, `write`, `exclusive` footprints from all permitted operations",
         "Read/read may overlap; read/write, write/write, and exclusive overlap serialize.",
         "no oversubscription",

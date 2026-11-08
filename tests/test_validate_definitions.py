@@ -415,6 +415,22 @@ class ValidatorMutationTests(unittest.TestCase):
             path.write_text(path.read_text().replace("Before observation delegation, match needed evidence", "Always start a Worker", 1))
             self.assert_invalid(repo, "missing required Orchestrator invariant")
 
+    def test_adaptive_task_decomposition_policy_is_required(self) -> None:
+        required_markers = (
+            "identify independent work internally, dispatch only after approval.",
+            "Split useful independent work by capability and evidence need",
+            "After each audit, dispatch newly ready work without waiting for unrelated Cards.",
+        )
+        for marker in required_markers:
+            with self.subTest(marker=marker):
+                temp, repo = self.make_repo()
+                with temp:
+                    path = repo / ".copilot/agents/Orchestrator.agent.md"
+                    content = path.read_text()
+                    self.assertIn(marker, content)
+                    path.write_text(content.replace(marker, "unsafe serial-only policy", 1))
+                    self.assert_invalid(repo, "missing required Orchestrator invariant")
+
     def test_fixed_parallel_cap_is_rejected(self) -> None:
         temp, repo = self.make_repo()
         with temp:
