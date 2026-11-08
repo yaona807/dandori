@@ -516,12 +516,14 @@ Install the bundled Copilot agents and fixed runner in a disposable VS Code envi
 
 **Input**
 
-In the Copilot delegated-agent harness, approve four independent read-only investigations over disjoint files with one self-contained Task Card and expected delta each. Record Host capacity and overlap. Add a fifth task dependent on the first two and repeat on a serial-only harness.
+In the Copilot delegated-agent harness, approve four independent read-only investigations over disjoint files with one self-contained Task Card and expected delta each. Record Host capacity and overlap. Add a fifth task dependent on the first two and repeat on a serial-only harness. Let A finish and pass audit while B remains running; introduce a new Card C needing only A's evidence with disjoint effects and another Card D needing both A and B.
 
 **Expected**
 
 - On a Host allowing four invocations, all four may overlap without a DANDORI cap of three. With lower capacity queue excess work. A serial-only harness runs serially without authorization change.
 - The dependent task starts only after both predecessor results have passed Orchestrator audit. Each result is matched to its own Task Card ID/revision even when the finish order differs.
+- C becomes ready after A's audit and can start immediately if Host capacity and effect isolation permit, without waiting for B or a whole dispatch wave; D waits for both A and B.
+- TFR may internally identify independent evidence needs, but the human-facing approval remains goal/capability-scoped and no Task Card executes before approval.
 - No Worker is taught about DANDORI scheduling, reads another Worker's state, or delegates a sibling; each receives only its normal Task Card.
 
 ### CONF-026 — Serialize overlapping file identities and preserve independent edits
