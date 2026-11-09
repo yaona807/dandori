@@ -83,11 +83,24 @@ function activationReview(id) {
   const fixed = item.version === 3 && item.kind === 'fixed'
     && item.definition?.scriptGuard === undefined && item.scriptPreview === null;
   const packageScript = [1, 2].includes(item.version) && !!item.definition?.scriptGuard;
+  const descriptionUpdate = item.version === 4 && item.kind === 'description'
+    && item.scriptPreview === null && typeof item.previousDescription === 'string'
+    && /^sha256-[0-9a-f]{64}$/u.test(item.expectedHash);
   if (item.id !== id || !item.definition || !Array.isArray(item.definition.run)
-    || typeof item.definition.cwd !== 'string' || (!fixed && !packageScript)
+    || typeof item.definition.cwd !== 'string' || (!fixed && !packageScript && !descriptionUpdate)
     || typeof item.definition.description !== 'string'
     || !Number.isFinite(item.expiresAt) || Date.now() > item.expiresAt) {
     throw new Error('invalid or expired approval proposal');
+  }
+  if (descriptionUpdate) {
+    if (item.previousDescription === item.definition.description) throw new Error('unchanged description');
+    const summary = JSON.stringify({
+      action: 'update_description', commandId: item.commandId,
+      workspaceIdentity: item.workspaceIdentity, previousDescription: item.previousDescription,
+      description: item.definition.description, expectedDefinitionHash: item.expectedHash,
+    });
+    if (summary.length > 6000) throw new Error('approval details exceed bounded preview');
+    return 'Human approval is required for a description-only update: ' + summary;
   }
   const display = JSON.stringify({
     action: item.expectedHash ? 'update' : 'register',
@@ -222,6 +235,13 @@ function validateCliInvocation(tokens) {
   if (operation === 'activate') {
     if (tokens.length !== 4 || !PROPOSAL_ID.test(tokens[3])) throw new Error('invalid proposal');
     return 'ask';
+  }
+  if (operation === 'propose.description') {
+    if (tokens.length !== 5 || !COMMAND_ID_PATTERN.test(tokens[3] ?? '')
+      || validateEncodedParameter(tokens[4]) !== 'description') {
+      throw new Error('propose.description requires one encoded description');
+    }
+    return 'allow';
   }
   if (operation === 'propose') {
     if (!COMMAND_ID_PATTERN.test(tokens[3] ?? '')) throw new Error('invalid command ID');
