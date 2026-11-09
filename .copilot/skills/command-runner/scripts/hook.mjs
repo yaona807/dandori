@@ -80,17 +80,26 @@ function activationReview(id) {
   const stat = lstatSync(file);
   if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 32768) throw new Error('unreadable approval proposal');
   const item = JSON.parse(readFileSync(file, 'utf8'));
+  const fixed = item.version === 3 && item.kind === 'fixed'
+    && item.definition?.scriptGuard === undefined && item.scriptPreview === null;
+  const packageScript = [1, 2].includes(item.version) && !!item.definition?.scriptGuard;
   if (item.id !== id || !item.definition || !Array.isArray(item.definition.run)
-    || typeof item.definition.cwd !== 'string' || !item.definition.scriptGuard
+    || typeof item.definition.cwd !== 'string' || (!fixed && !packageScript)
+    || typeof item.definition.description !== 'string'
     || !Number.isFinite(item.expiresAt) || Date.now() > item.expiresAt) {
     throw new Error('invalid or expired approval proposal');
   }
   const display = JSON.stringify({
     action: item.expectedHash ? 'update' : 'register',
     commandId: item.commandId,
+    type: fixed ? 'fixed' : 'package',
+    description: item.definition.description,
     argv: item.definition.run,
     cwd: item.definition.cwd,
-    scriptGuard: item.definition.scriptGuard,
+    arguments: item.definition.arguments ?? {},
+    timeoutMs: item.definition.timeoutMs,
+    maxOutputBytes: item.definition.maxOutputBytes,
+    scriptGuard: item.definition.scriptGuard ?? null,
     previousAllow: item.previousAllow ?? null,
     allow: item.definition.allow ?? null,
     scriptPreview: item.scriptPreview,
@@ -216,7 +225,7 @@ function validateCliInvocation(tokens) {
   }
   if (operation === 'propose') {
     if (!COMMAND_ID_PATTERN.test(tokens[3] ?? '')) throw new Error('invalid command ID');
-    for (const t of tokens.slice(4)) if (!['packageDir', 'script', 'allow'].includes(validateEncodedParameter(t))) throw new Error('unsupported proposal argument');
+    for (const t of tokens.slice(4)) if (!['packageDir', 'script', 'allow', 'description', 'definition'].includes(validateEncodedParameter(t))) throw new Error('unsupported proposal argument');
     return 'allow';
   }
   if (operation === 'describe' || operation === 'inspect') {
