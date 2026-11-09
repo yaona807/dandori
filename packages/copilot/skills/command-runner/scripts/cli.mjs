@@ -125,14 +125,19 @@ async function readProposal(id) {
     throw error('invalid_proposal', 'proposal must be an ordinary bounded file');
   }
   const record = JSON.parse(await readFile(file, 'utf8'));
-  if (record.id !== id || ![1, 2, 3].includes(record.version) || !COMMAND.test(record.commandId)
+  if (record.id !== id || ![1, 2, 3, 4].includes(record.version) || !COMMAND.test(record.commandId)
     || (record.version === 3 && record.kind !== 'fixed')
+    || (record.version === 4 && (record.kind !== 'description' || record.scriptPreview !== null
+      || typeof record.previousDescription !== 'string'
+      || !/^sha256-[0-9a-f]{64}$/u.test(record.expectedHash)))
     || !Number.isFinite(record.expiresAt) || Date.now() > record.expiresAt
     || record.approvalDigest !== digest(record.version === 1
       ? [record.workspaceIdentity, record.commandId, record.definition, record.scriptPreview, record.expectedHash ?? null]
       : record.version === 2
         ? [record.workspaceIdentity, record.commandId, record.definition, record.scriptPreview, record.expectedHash ?? null, record.previousAllow]
-        : [record.workspaceIdentity, record.commandId, record.definition, record.scriptPreview, record.expectedHash ?? null, record.previousAllow, record.kind])) {
+        : record.version === 3
+          ? [record.workspaceIdentity, record.commandId, record.definition, record.scriptPreview, record.expectedHash ?? null, record.previousAllow, record.kind]
+          : [record.workspaceIdentity, record.commandId, record.definition, record.scriptPreview, record.expectedHash, record.previousAllow, record.kind, record.previousDescription])) {
     throw error('stale_proposal', 'proposal is expired or was modified');
   }
   return record;
@@ -330,13 +335,59 @@ async function propose(commandId, params) {
     ...(fixed ? {} : {scriptGuard: definition.scriptGuard, scriptPreview}),
     approvalDigest: record.approvalDigest, action: original ? 'update' : 'register'};
 }
+async function proposeDescription(commandId, params) {
+  if (!COMMAND.test(commandId)) throw error('invalid_argument', 'invalid command ID');
+  if (commandId.startsWith('builtin-')) throw error('builtin_immutable', 'built-in descriptions are immutable');
+  if (params.size !== 1 || !params.has('description')) {
+    throw error('invalid_argument', 'propose.description accepts only description=<encoded-text>');
+  }
+  const description = checkedDescription(params.get('description'), true);
+  const {selected, workspace} = await selectedConfig();
+  const original = workspace.commands?.[commandId];
+  if (!original) throw error('command_not_registered', 'a description update requires an existing registered command');
+  if (original.description === description) throw error('unchanged_description', 'description has not changed');
+
+  // Copy the entire current definition, including legacy arguments, guards and custom limits.
+  // The activation path verifies that description is the sole changed field.
+  const definition = {...original, description};
+  const id = 'prop-' + randomUUID().replaceAll('-', '');
+  const record = {version: 4, kind: 'description', id, commandId,
+    workspaceIdentity: selected.workspaceIdentity, definition, scriptPreview: null,
+    previousDescription: original.description, previousAllow: original.allow ?? null,
+    expectedHash: digest(original), expiresAt: Date.now() + MAX_AGE};
+  record.approvalDigest = digest([
+    record.workspaceIdentity, record.commandId, record.definition, record.scriptPreview,
+    record.expectedHash, record.previousAllow, record.kind, record.previousDescription,
+  ]);
+  if (Buffer.byteLength(JSON.stringify(record)) > 32_768) {
+    throw error('invalid_definition', 'description proposal exceeds the bounded proposal size');
+  }
+  await mkdir(PROPOSALS, {recursive: true, mode: 0o700});
+  await writeFile(path.join(PROPOSALS, id + '.json'), JSON.stringify(record) + '\n', {flag: 'wx', mode: 0o600});
+  return {status: 'pending_approval', proposalId: id, commandId,
+    proposalType: 'description', action: 'update',
+    previousDescription: record.previousDescription, description, approvalDigest: record.approvalDigest};
+}
+
 async function activate(id) {
   const record = await readProposal(id);
   const {selected, workspace} = await selectedConfig();
   if (selected.workspaceIdentity !== record.workspaceIdentity) throw error('workspace_identity_changed', 'proposal workspace has changed');
   const cwd = await realpath(path.join(workspace.root, record.definition.cwd));
   if (!within(await realpath(workspace.root), cwd)) throw error('path_escape', 'candidate script directory escaped workspace');
-  if (record.version === 3 && record.kind === 'fixed') {
+  const existing = workspace.commands[record.commandId] ?? null;
+  if ((existing ? digest(existing) : null) !== record.expectedHash) {
+    throw error('stale_proposal', 'registered command changed since proposal');
+  }
+  if (record.version === 4 && record.kind === 'description') {
+    // Never accept an executable change from a metadata-only proposal,
+    // even if its proposal digest was recomputed after tampering.
+    if (!existing || record.previousDescription !== existing.description
+      || record.previousAllow !== (existing.allow ?? null)
+      || digest({...existing, description: checkedDescription(record.definition.description, true)}) !== digest(record.definition)) {
+      throw error('stale_proposal', 'description proposal must preserve every execution field');
+    }
+  } else if (record.version === 3 && record.kind === 'fixed') {
     if (record.definition.scriptGuard !== undefined || record.scriptPreview !== null
       || digest(await fixedDefinition(record.definition, await realpath(workspace.root))) !== digest(record.definition)) {
       throw error('stale_proposal', 'fixed proposal is invalid or was modified');
@@ -346,10 +397,6 @@ async function activate(id) {
     if (currentFingerprint.fingerprint !== record.definition.scriptGuard.fingerprint) {
       throw error('stale_script_definition', 'package scripts changed before activation');
     }
-  }
-  const existing = workspace.commands[record.commandId] ?? null;
-  if ((existing ? digest(existing) : null) !== record.expectedHash) {
-    throw error('stale_proposal', 'registered command changed since proposal');
   }
   const args = [existing ? 'update' : 'register', record.commandId, '--expected-workspace=' + selected.workspaceId];
   if (existing) args.push('expected=' + encode(record.expectedHash));
@@ -368,6 +415,7 @@ async function main() {
     return ensure();
   }
   if (op === 'propose') return propose(id, safeParams(tokens));
+  if (op === 'propose.description') return proposeDescription(id, safeParams(tokens));
   if (op === 'activate') {
     if (tokens.length) throw error('invalid_argument', 'activate accepts one proposal ID');
     return activate(id);
