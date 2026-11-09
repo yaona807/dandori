@@ -125,11 +125,14 @@ async function readProposal(id) {
     throw error('invalid_proposal', 'proposal must be an ordinary bounded file');
   }
   const record = JSON.parse(await readFile(file, 'utf8'));
-  if (record.id !== id || ![1, 2].includes(record.version) || !COMMAND.test(record.commandId)
+  if (record.id !== id || ![1, 2, 3].includes(record.version) || !COMMAND.test(record.commandId)
+    || (record.version === 3 && record.kind !== 'fixed')
     || !Number.isFinite(record.expiresAt) || Date.now() > record.expiresAt
     || record.approvalDigest !== digest(record.version === 1
       ? [record.workspaceIdentity, record.commandId, record.definition, record.scriptPreview, record.expectedHash ?? null]
-      : [record.workspaceIdentity, record.commandId, record.definition, record.scriptPreview, record.expectedHash ?? null, record.previousAllow])) {
+      : record.version === 2
+        ? [record.workspaceIdentity, record.commandId, record.definition, record.scriptPreview, record.expectedHash ?? null, record.previousAllow]
+        : [record.workspaceIdentity, record.commandId, record.definition, record.scriptPreview, record.expectedHash ?? null, record.previousAllow, record.kind])) {
     throw error('stale_proposal', 'proposal is expired or was modified');
   }
   return record;
@@ -186,57 +189,142 @@ function scriptDiscoveryError(cause) {
   }
 }
 
-async function propose(commandId, params) {
-  if (!COMMAND.test(commandId)) throw error('invalid_argument', 'invalid command ID');
-  if ([...params.keys()].some(k => !['packageDir', 'script', 'allow'].includes(k))) throw error('invalid_argument', 'only packageDir/script/allow are supported');
-  const allow = parseAllowParam(params.get('allow'));
-  const {selected, workspace} = await selectedConfig();
-  const packageDir = params.get('packageDir') ?? '.';
-  if (!packageDir || path.isAbsolute(packageDir) || packageDir.includes('..') || packageDir.includes('\\')) {
-    throw error('invalid_argument', 'packageDir must be a workspace-relative directory');
+function checkedDescription(value, required = false) {
+  if (value === undefined && !required) return undefined;
+  if (typeof value !== 'string' || value.trim() !== value || value.length < 20
+    || value.length > 500 || /[\u0000-\u001f\u007f]/u.test(value)) {
+    throw error('invalid_description', 'description must be a specific 20-500 character single-line explanation of purpose, scope, effects, and result');
   }
-  const dir = await realpath(path.resolve(workspace.root, packageDir));
-  const root = await realpath(workspace.root);
-  if (!within(root, dir)) throw error('path_escape', 'packageDir escapes workspace');
-  const scriptName = params.get('script') ?? commandId;
-  let selectedScript;
-  for (const manager of ['npm', 'pnpm', 'yarn', 'bun']) {
-    try { selectedScript = { manager, ...(await scriptFingerprint(dir, manager, scriptName, root)) }; break; }
-    catch (cause) {
-      // A manager mismatch is the only expected reason to try another candidate.
-      if (cause?.message !== 'package manager changed since command approval') {
-        throw scriptDiscoveryError(cause);
-      }
+  return value;
+}
+
+// The fixed proposal is deliberately smaller than the owner management schema.
+// No dynamic arguments, shell wrappers, or alternate package-script launchers.
+async function fixedDefinition(input, root) {
+  let candidate = input;
+  if (typeof input === 'string') {
+    try { candidate = JSON.parse(input); }
+    catch { throw error('invalid_definition', 'definition must be a JSON object'); }
+  }
+  if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)
+    || Object.keys(candidate).some(k => !['description', 'run', 'cwd', 'arguments', 'timeoutMs', 'maxOutputBytes'].includes(k))) {
+    throw error('invalid_definition', 'fixed definition accepts only description, run, cwd, empty arguments, timeoutMs and maxOutputBytes');
+  }
+  const description = checkedDescription(candidate.description, true);
+  if (!Array.isArray(candidate.run) || candidate.run.length < 1 || candidate.run.length > 32
+    || candidate.run.some(v => typeof v !== 'string' || !v || v.length > 1024 || /[\u0000-\u001f\u007f]/u.test(v))) {
+    throw error('invalid_definition', 'run must be a bounded non-empty fixed argv array');
+  }
+  const argv = candidate.run;
+  const executable = path.basename(argv[0]).toLowerCase();
+  if (new Set(['sh', 'bash', 'dash', 'zsh', 'fish', 'ksh', 'cmd', 'cmd.exe', 'powershell', 'powershell.exe',
+    'pwsh', 'pwsh.exe', 'env', 'sudo', 'su', 'npx', 'npm', 'pnpm', 'yarn', 'bun', 'corepack']).has(executable)) {
+    throw error('unsupported_fixed_launcher', 'shell/proxy launchers and package script managers are not supported by fixed proposals');
+  }
+  const inline = argv.slice(1);
+  if ((/^node(?:js)?(?:\.exe)?$/u.test(executable)
+      && inline.some(v => ['-e', '-p', '--eval', '--print', '-r', '--require'].includes(v)
+        || /^(?:--eval|--print|--require)=/u.test(v)))
+    || (/^python(?:\d+(?:\.\d+)?)?(?:\.exe)?$/u.test(executable)
+      && inline.some(v => v === '-c' || v === '-'))
+    || (/^(?:ruby|perl|php)(?:\.exe)?$/u.test(executable)
+      && inline.some(v => ['-e', '-r', '-c'].includes(v)))) {
+    throw error('unsupported_fixed_launcher', 'inline interpreter execution is not supported by fixed proposals');
+  }
+  if (candidate.arguments !== undefined && (candidate.arguments === null
+    || typeof candidate.arguments !== 'object' || Array.isArray(candidate.arguments)
+    || Object.keys(candidate.arguments).length !== 0)) {
+    throw error('invalid_definition', 'fixed proposals cannot accept variable arguments');
+  }
+  const requestedCwd = candidate.cwd ?? '.';
+  if (typeof requestedCwd !== 'string' || !requestedCwd || path.isAbsolute(requestedCwd)
+    || requestedCwd.includes('\\') || requestedCwd.split('/').includes('..')
+    || /[\u0000-\u001f\u007f]/u.test(requestedCwd)) {
+    throw error('invalid_definition', 'cwd must be a workspace-relative existing directory');
+  }
+  let cwd;
+  try { cwd = await realpath(path.resolve(root, requestedCwd)); }
+  catch { throw error('invalid_definition', 'cwd must identify an existing directory'); }
+  if (!within(root, cwd)) throw error('path_escape', 'fixed command cwd escapes workspace');
+  if (!(await lstat(cwd)).isDirectory()) throw error('invalid_definition', 'cwd must identify a directory');
+  for (const [key, ceiling] of [['timeoutMs', 3_600_000], ['maxOutputBytes', 16_777_216]]) {
+    if (candidate[key] !== undefined && (!Number.isInteger(candidate[key]) || candidate[key] < 1 || candidate[key] > ceiling)) {
+      throw error('invalid_definition', key + ' must be a bounded positive integer');
     }
   }
-  if (!selectedScript) throw error('script_discovery_failed', 'unable to identify a supported package manager');
-  const definition = {
-    description: 'Approved ' + selectedScript.manager + ' script: ' + commandId,
-    run: scriptRunArgs(selectedScript.manager, scriptName),
-    cwd: path.relative(root, dir) || '.', arguments: {},
-    ...(allow === undefined ? {} : { allow }),
-    scriptGuard: {manager: selectedScript.manager, script: scriptName, fingerprint: selectedScript.fingerprint},
-    timeoutMs: 300000, maxOutputBytes: 1048576,
-  };
+  return {description, run: [...argv], cwd: path.relative(root, cwd) || '.', arguments: {},
+    timeoutMs: candidate.timeoutMs ?? 300000, maxOutputBytes: candidate.maxOutputBytes ?? 1048576};
+}
+
+async function propose(commandId, params) {
+  if (!COMMAND.test(commandId)) throw error('invalid_argument', 'invalid command ID');
+  const fixed = params.has('definition');
+  const allowedKeys = fixed ? ['definition'] : ['packageDir', 'script', 'allow', 'description'];
+  if ([...params.keys()].some(k => !allowedKeys.includes(k))) {
+    throw error('invalid_argument', fixed ? 'definition cannot be combined with package-script parameters'
+      : 'only packageDir/script/allow/description are supported');
+  }
+  const {selected, workspace} = await selectedConfig();
+  const root = await realpath(workspace.root);
+  let definition;
+  let scriptPreview = null;
+  let kind = 'fixed';
+  if (fixed) {
+    definition = await fixedDefinition(params.get('definition'), root);
+  } else {
+    kind = 'package';
+    const allow = parseAllowParam(params.get('allow'));
+    const packageDir = params.get('packageDir') ?? '.';
+    if (!packageDir || path.isAbsolute(packageDir) || packageDir.includes('..') || packageDir.includes('\\')) {
+      throw error('invalid_argument', 'packageDir must be a workspace-relative directory');
+    }
+    const dir = await realpath(path.resolve(workspace.root, packageDir));
+    if (!within(root, dir)) throw error('path_escape', 'packageDir escapes workspace');
+    const scriptName = params.get('script') ?? commandId;
+    let selectedScript;
+    for (const manager of ['npm', 'pnpm', 'yarn', 'bun']) {
+      try { selectedScript = { manager, ...(await scriptFingerprint(dir, manager, scriptName, root)) }; break; }
+      catch (cause) {
+        if (cause?.message !== 'package manager changed since command approval') {
+          throw scriptDiscoveryError(cause);
+        }
+      }
+    }
+    if (!selectedScript) throw error('script_discovery_failed', 'unable to identify a supported package manager');
+    const cwd = path.relative(root, dir) || '.';
+    // Legacy callers without description remain supported, but agents must supply
+    // an evidence-based description instead of relying on this limited fallback.
+    const description = checkedDescription(params.get('description'))
+      ?? `Run ${selectedScript.manager} package script "${scriptName}" in ${cwd}. Review script lifecycle hooks and effects before execution.`;
+    definition = {
+      description,
+      run: scriptRunArgs(selectedScript.manager, scriptName),
+      cwd, arguments: {},
+      ...(allow === undefined ? {} : { allow }),
+      scriptGuard: {manager: selectedScript.manager, script: scriptName, fingerprint: selectedScript.fingerprint},
+      timeoutMs: 300000, maxOutputBytes: 1048576,
+    };
+    scriptPreview = Object.fromEntries(
+      [`pre${scriptName}`, scriptName, `post${scriptName}`]
+        .filter(name => Object.hasOwn(selectedScript.scripts, name))
+        .map(name => [name, selectedScript.scripts[name]]),
+    );
+  }
   const original = workspace.commands[commandId] ?? null;
   const id = 'prop-' + randomUUID().replaceAll('-', '');
-  const scriptPreview = Object.fromEntries(
-    [`pre${scriptName}`, scriptName, `post${scriptName}`]
-      .filter(name => Object.hasOwn(selectedScript.scripts, name))
-      .map(name => [name, selectedScript.scripts[name]]),
-  );
-  const record = { version: 2, id, commandId, workspaceIdentity: selected.workspaceIdentity,
-    definition, scriptPreview, previousAllow: original?.allow ?? null,
-    expectedHash: original ? digest(original) : null,
-    expiresAt: Date.now() + MAX_AGE,
-  };
-  record.approvalDigest = digest([record.workspaceIdentity, record.commandId, record.definition, record.scriptPreview, record.expectedHash, record.previousAllow]);
-  await mkdir(PROPOSALS, { recursive: true, mode: 0o700 });
+  const record = {version: fixed ? 3 : 2, id, commandId, workspaceIdentity: selected.workspaceIdentity,
+    ...(fixed ? {kind} : {}), definition, scriptPreview, previousAllow: original?.allow ?? null,
+    expectedHash: original ? digest(original) : null, expiresAt: Date.now() + MAX_AGE};
+  const subject = [record.workspaceIdentity, record.commandId, record.definition, record.scriptPreview,
+    record.expectedHash, record.previousAllow];
+  record.approvalDigest = digest(fixed ? [...subject, kind] : subject);
+  await mkdir(PROPOSALS, {recursive: true, mode: 0o700});
   await writeFile(path.join(PROPOSALS, id + '.json'), JSON.stringify(record) + '\n', {flag: 'wx', mode: 0o600});
-  return {status: 'pending_approval', proposalId: id, commandId, argv: definition.run, cwd: definition.cwd,
-    arguments: definition.arguments, timeoutMs: definition.timeoutMs, scriptGuard: definition.scriptGuard,
-    scriptPreview, approvalDigest: record.approvalDigest,
-    action: original ? 'update' : 'register'};
+  return {status: 'pending_approval', proposalId: id, commandId, proposalType: kind,
+    description: definition.description, argv: definition.run, cwd: definition.cwd,
+    arguments: definition.arguments, timeoutMs: definition.timeoutMs, maxOutputBytes: definition.maxOutputBytes,
+    ...(fixed ? {} : {scriptGuard: definition.scriptGuard, scriptPreview}),
+    approvalDigest: record.approvalDigest, action: original ? 'update' : 'register'};
 }
 async function activate(id) {
   const record = await readProposal(id);
@@ -244,9 +332,16 @@ async function activate(id) {
   if (selected.workspaceIdentity !== record.workspaceIdentity) throw error('workspace_identity_changed', 'proposal workspace has changed');
   const cwd = await realpath(path.join(workspace.root, record.definition.cwd));
   if (!within(await realpath(workspace.root), cwd)) throw error('path_escape', 'candidate script directory escaped workspace');
-  const currentFingerprint = await scriptFingerprint(cwd, record.definition.scriptGuard.manager, record.definition.scriptGuard.script, workspace.root);
-  if (currentFingerprint.fingerprint !== record.definition.scriptGuard.fingerprint) {
-    throw error('stale_script_definition', 'package scripts changed before activation');
+  if (record.version === 3 && record.kind === 'fixed') {
+    if (record.definition.scriptGuard !== undefined || record.scriptPreview !== null
+      || digest(await fixedDefinition(record.definition, await realpath(workspace.root))) !== digest(record.definition)) {
+      throw error('stale_proposal', 'fixed proposal is invalid or was modified');
+    }
+  } else {
+    const currentFingerprint = await scriptFingerprint(cwd, record.definition.scriptGuard.manager, record.definition.scriptGuard.script, workspace.root);
+    if (currentFingerprint.fingerprint !== record.definition.scriptGuard.fingerprint) {
+      throw error('stale_script_definition', 'package scripts changed before activation');
+    }
   }
   const existing = workspace.commands[record.commandId] ?? null;
   if ((existing ? digest(existing) : null) !== record.expectedHash) {
