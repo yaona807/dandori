@@ -299,6 +299,15 @@ node --test \
 COPILOT_HOME=/path/to/test-home node .copilot/skills/command-runner/scripts/gateway.mjs list --expected-workspace=example
 ```
 
+
+### 一般Fixedコマンドの提案（Worker）
+
+既存のnpm系`propose`は、`description=<URLエンコードした説明>`を任意で受け付けます。旧呼出しは互換維持しますが、Workerは実際のスクリプトやpre/postスクリプトを調査し、用途・対象・副作用・結果の分かる具体的なDescription（20〜500文字）を付けます。
+
+一般の固定argvは`propose check definition=<URLエンコードしたJSON>`で提案します。JSONの例：`{"description":"プロジェクトのテストを実行する。テストキャッシュを生成する場合があり、終了コードと診断ログで結果を確認する。","run":["python","-m","pytest"],"cwd":".","arguments":{}}`。ここで示す副作用は例であり、実際の対象コマンドごとに確認します。
+
+一般Fixedの`definition`は固定argv、説明、Workspace内の既存cwd、任意のtimeout/output上限だけを受け付けます。`allow`や可変`arguments`は使えず、Shell/Proxy実行、インラインコード、npm系マネージャーをこの経路で登録できません。`propose`は実行せず候補ファイルだけを作成し、承認の`activate`で定義と説明を表示します。登録後も実行権限とは別であり、参照するコードや依存が更新され得るため、利用時に効果を監査します。
+
 ## Workspace ID不要の自主登録と登録候補承認
 
 Workerは `node ~/.copilot/skills/command-runner/scripts/cli.mjs` を使用します。
