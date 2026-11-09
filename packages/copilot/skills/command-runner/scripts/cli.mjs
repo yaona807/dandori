@@ -258,6 +258,7 @@ async function fixedDefinition(input, root) {
 
 async function propose(commandId, params) {
   if (!COMMAND.test(commandId)) throw error('invalid_argument', 'invalid command ID');
+  if (commandId.startsWith('builtin-')) throw error('builtin_immutable', 'built-in command IDs cannot be proposed');
   const fixed = params.has('definition');
   const allowedKeys = fixed ? ['definition'] : ['packageDir', 'script', 'allow', 'description'];
   if ([...params.keys()].some(k => !allowedKeys.includes(k))) {
@@ -309,6 +310,9 @@ async function propose(commandId, params) {
         .filter(name => Object.hasOwn(selectedScript.scripts, name))
         .map(name => [name, selectedScript.scripts[name]]),
     );
+  }
+  if (fixed && Buffer.byteLength(JSON.stringify(definition)) > 5000) {
+    throw error('invalid_definition', 'fixed proposal is too large for a complete human approval preview');
   }
   const original = workspace.commands[commandId] ?? null;
   const id = 'prop-' + randomUUID().replaceAll('-', '');
