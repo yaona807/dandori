@@ -383,7 +383,6 @@ async function activate(id) {
     // Never accept an executable change from a metadata-only proposal,
     // even if its proposal digest was recomputed after tampering.
     if (!existing || record.previousDescription !== existing.description
-      || record.previousAllow !== (existing.allow ?? null)
       || digest({...existing, description: checkedDescription(record.definition.description, true)}) !== digest(record.definition)) {
       throw error('stale_proposal', 'description proposal must preserve every execution field');
     }
