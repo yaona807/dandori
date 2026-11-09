@@ -88,7 +88,7 @@ function activationReview(id) {
     && item.previous && typeof item.previous === 'object' && !Array.isArray(item.previous)
     && /^sha256-[0-9a-f]{64}$/u.test(item.expectedHash);
   if (item.id !== id || !item.definition || !Array.isArray(item.definition.run)
-    || typeof item.definition.cwd !== 'string' || (!fixed && !packageScript && !commandUpdate)
+    || typeof (item.definition.cwd ?? '.') !== 'string' || (!fixed && !packageScript && !commandUpdate)
     || typeof item.definition.description !== 'string'
     || !Number.isFinite(item.expiresAt) || Date.now() > item.expiresAt) {
     throw new Error('invalid or expired approval proposal');
@@ -99,7 +99,7 @@ function activationReview(id) {
       workspaceIdentity: item.workspaceIdentity, previous: item.previous,
       changes: item.patch, effectiveDefinition: {
         description: item.definition.description, argv: item.definition.run,
-        cwd: item.definition.cwd, arguments: item.definition.arguments ?? {},
+        cwd: item.definition.cwd ?? '.', arguments: item.definition.arguments ?? {},
         allow: item.definition.allow ?? null, scriptGuard: item.definition.scriptGuard ?? null,
         timeoutMs: item.definition.timeoutMs, maxOutputBytes: item.definition.maxOutputBytes,
       }, scriptPreview: item.scriptPreview, expectedDefinitionHash: item.expectedHash,
