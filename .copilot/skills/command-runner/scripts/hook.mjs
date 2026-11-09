@@ -83,11 +83,43 @@ function activationReview(id) {
   const fixed = item.version === 3 && item.kind === 'fixed'
     && item.definition?.scriptGuard === undefined && item.scriptPreview === null;
   const packageScript = [1, 2].includes(item.version) && !!item.definition?.scriptGuard;
+  const commandUpdate = item.version === 4 && item.kind === 'update'
+    && item.patch && typeof item.patch === 'object' && !Array.isArray(item.patch)
+    && item.previous && typeof item.previous === 'object' && !Array.isArray(item.previous)
+    && /^sha256-[0-9a-f]{64}$/u.test(item.expectedHash);
   if (item.id !== id || !item.definition || !Array.isArray(item.definition.run)
-    || typeof item.definition.cwd !== 'string' || (!fixed && !packageScript)
+    || typeof (item.definition.cwd ?? '.') !== 'string' || (!fixed && !packageScript && !commandUpdate)
     || typeof item.definition.description !== 'string'
     || !Number.isFinite(item.expiresAt) || Date.now() > item.expiresAt) {
     throw new Error('invalid or expired approval proposal');
+  }
+  if (commandUpdate) {
+    // Do not disclose unrelated registered argv/legacy arguments during a
+    // metadata-only edit; show the exact execution details for execution changes.
+    const executableChanged = ['run', 'cwd', 'script', 'packageDir']
+      .some(key => Object.hasOwn(item.patch, key));
+    const summary = JSON.stringify({
+      action: 'update_command', commandId: item.commandId,
+      workspaceIdentity: item.workspaceIdentity, previous: item.previous,
+      changes: item.patch, effectiveDefinition: {
+        description: item.definition.description,
+        ...(executableChanged ? {
+          argv: item.definition.run, cwd: item.definition.cwd ?? '.',
+          arguments: item.definition.arguments ?? {},
+          scriptGuard: item.definition.scriptGuard ?? null,
+        } : {}),
+        ...(executableChanged || Object.hasOwn(item.patch, 'allow')
+          ? {allow: item.definition.allow ?? null} : {}),
+        ...(executableChanged || Object.hasOwn(item.patch, 'timeoutMs')
+          ? {timeoutMs: item.definition.timeoutMs} : {}),
+        ...(executableChanged || Object.hasOwn(item.patch, 'maxOutputBytes')
+          ? {maxOutputBytes: item.definition.maxOutputBytes} : {}),
+      },
+      ...(item.scriptPreview === null ? {} : {scriptPreview: item.scriptPreview}),
+      expectedDefinitionHash: item.expectedHash,
+    });
+    if (summary.length > 6000) throw new Error('approval details exceed bounded preview');
+    return 'Human approval is required for an exact command update: ' + summary;
   }
   const display = JSON.stringify({
     action: item.expectedHash ? 'update' : 'register',
@@ -222,6 +254,13 @@ function validateCliInvocation(tokens) {
   if (operation === 'activate') {
     if (tokens.length !== 4 || !PROPOSAL_ID.test(tokens[3])) throw new Error('invalid proposal');
     return 'ask';
+  }
+  if (operation === 'propose.update') {
+    if (tokens.length !== 5 || !COMMAND_ID_PATTERN.test(tokens[3] ?? '')
+      || validateEncodedParameter(tokens[4]) !== 'patch') {
+      throw new Error('propose.update requires one encoded patch');
+    }
+    return 'allow';
   }
   if (operation === 'propose') {
     if (!COMMAND_ID_PATTERN.test(tokens[3] ?? '')) throw new Error('invalid command ID');

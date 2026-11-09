@@ -1813,6 +1813,230 @@ test('CLI fixed proposals require an explicit description and host approval befo
   });
 });
 
+
+
+test('CLI update proposals change only requested fields and require Host approval', async () => {
+  await withFixture(async (fixture) => {
+    const registry = path.join(fixture.home, 'command-runner', 'workspaces.json');
+    const original = JSON.parse(await readFile(registry, 'utf8'));
+    const before = structuredClone(original.workspaces[0].commands.sample);
+    const description = 'Echo the existing validated arguments without changing execution settings; report arguments in the command output.';
+    const patch = {description};
+    const token = 'patch=' + encodeURIComponent(JSON.stringify(patch));
+    const proposal = runV2(fixture, fixture.alpha, ['propose.update', 'sample', token]);
+    assert.equal(proposal.status, 0, proposal.stderr);
+    const candidate = JSON.parse(proposal.stdout);
+    assert.equal(candidate.proposalType, 'update');
+    assert.equal(candidate.previous.description, before.description);
+    assert.equal(candidate.changes.description, description);
+    assert.deepEqual(JSON.parse(await readFile(registry, 'utf8')), original);
+
+    const invoke = command => runHook(fixture, {
+      hook_event_name: 'PreToolUse', tool_name: 'execute/runInTerminal', tool_input: {command},
+    });
+    const prefix = 'node ~/.copilot/skills/command-runner/scripts/cli.mjs ';
+    const pending = invoke(prefix + 'propose.update sample ' + token);
+    assert.equal(JSON.parse(pending.stdout).permissionDecision, 'allow');
+    const review = invoke(prefix + 'activate ' + candidate.proposalId);
+    assert.equal(JSON.parse(review.stdout).permissionDecision, 'ask');
+    const reason = JSON.parse(review.stdout).permissionDecisionReason;
+    assert.match(reason, /update_command/u);
+    assert.match(reason, /Echo validated arguments/u);
+    assert.match(reason, /Echo the existing validated arguments/u);
+    assert.match(reason, /effectiveDefinition/u);
+
+    const activated = runV2(fixture, fixture.alpha, ['activate', candidate.proposalId]);
+    assert.equal(activated.status, 0, activated.stderr);
+    const updated = JSON.parse(await readFile(registry, 'utf8'));
+    assert.deepEqual(updated.workspaces[0].commands.sample, {...before, description});
+    assert.equal(executionHash(updated.workspaces[0].commands.sample, updated.defaults),
+      executionHash(before, original.defaults));
+    const described = runV2(fixture, fixture.alpha, ['describe', 'sample']);
+    assert.equal(described.status, 0, described.stderr);
+    assert.equal(JSON.parse(described.stdout).command.description, description);
+    const executed = runV2(fixture, fixture.alpha, ['run', 'sample', 'enabled=true']);
+    assert.equal(executed.status, 0, executed.stderr);
+    assert.equal(JSON.parse(executed.stdout).status, 'completed');
+  });
+});
+
+test('CLI update keeps omitted cwd implicit for existing commands', async () => {
+  await withFixture(async (fixture) => {
+    const registry = path.join(fixture.home, 'command-runner', 'workspaces.json');
+    const config = JSON.parse(await readFile(registry, 'utf8'));
+    delete config.workspaces[0].commands.sample.cwd;
+    delete config.workspaces[0].commands.timeout.cwd;
+    await writeFile(registry, JSON.stringify(config, null, 2) + '\n');
+
+    const description = 'Describe validation of optional command arguments without changing the registered working directory.';
+    const request = runV2(fixture, fixture.alpha,
+      ['propose.update', 'sample', 'patch=' + encodeURIComponent(JSON.stringify({description}))]);
+    assert.equal(request.status, 0, request.stderr);
+    const proposalId = JSON.parse(request.stdout).proposalId;
+    const hook = runHook(fixture, {hook_event_name: 'PreToolUse', tool_name: 'execute/runInTerminal',
+      tool_input: {command: 'node ~/.copilot/skills/command-runner/scripts/cli.mjs activate ' + proposalId}});
+    assert.equal(JSON.parse(hook.stdout).permissionDecision, 'ask');
+    const applied = runV2(fixture, fixture.alpha, ['activate', proposalId]);
+    assert.equal(applied.status, 0, applied.stderr);
+    let after = JSON.parse(await readFile(registry, 'utf8'));
+    assert.equal(Object.hasOwn(after.workspaces[0].commands.sample, 'cwd'), false);
+    assert.equal(after.workspaces[0].commands.sample.description, description);
+
+    const fixedPatch = {run: ['node', '--version'],
+      description: 'Query the Node runtime version and report its result with no project file writes.'};
+    const update = runV2(fixture, fixture.alpha, ['propose.update', 'timeout',
+      'patch=' + encodeURIComponent(JSON.stringify(fixedPatch))]);
+    assert.equal(update.status, 0, update.stderr);
+    assert.equal(runV2(fixture, fixture.alpha, ['activate', JSON.parse(update.stdout).proposalId]).status, 0);
+    after = JSON.parse(await readFile(registry, 'utf8'));
+    assert.equal(Object.hasOwn(after.workspaces[0].commands.timeout, 'cwd'), false);
+    assert.equal(runV2(fixture, fixture.alpha, ['run', 'timeout']).status, 0);
+  });
+});
+
+test('CLI update proposals preserve npm guards and unrelated custom settings', async () => {
+  await withFixture(async (fixture) => {
+    await writeFile(path.join(fixture.alpha, 'package.json'), JSON.stringify({
+      packageManager: 'npm@10.0.0', scripts: {check: 'node --version'},
+    }));
+    const proposed = runV2(fixture, fixture.alpha,
+      ['propose', 'check', 'description=' + encodeURIComponent('Execute the project package check script and report its exit status without changing source files.'),
+        'allow=' + encodeURIComponent(JSON.stringify(['--coverage']))]);
+    assert.equal(proposed.status, 0, proposed.stderr);
+    const activated = runV2(fixture, fixture.alpha, ['activate', JSON.parse(proposed.stdout).proposalId]);
+    assert.equal(activated.status, 0, activated.stderr);
+    const registry = path.join(fixture.home, 'command-runner', 'workspaces.json');
+    const config = JSON.parse(await readFile(registry, 'utf8'));
+    config.workspaces[0].commands.check.timeoutMs = 123456;
+    config.workspaces[0].commands.check.maxOutputBytes = 234567;
+    await writeFile(registry, JSON.stringify(config, null, 2) + '\n');
+    const before = structuredClone(config.workspaces[0].commands.check);
+    const description = 'Execute the existing package script without resetting custom execution limits or its guarded argument allowlist.';
+    const request = runV2(fixture, fixture.alpha,
+      ['propose.update', 'check', 'patch=' + encodeURIComponent(JSON.stringify({description}))]);
+    assert.equal(request.status, 0, request.stderr);
+    const updated = runV2(fixture, fixture.alpha, ['activate', JSON.parse(request.stdout).proposalId]);
+    assert.equal(updated.status, 0, updated.stderr);
+    let after = JSON.parse(await readFile(registry, 'utf8')).workspaces[0].commands.check;
+    assert.deepEqual(after, {...before, description});
+    assert.equal(executionHash(after), executionHash(before));
+
+    const patch = {allow: ['--coverage', '--watch'], timeoutMs: 45000, maxOutputBytes: 13579};
+    const changed = runV2(fixture, fixture.alpha,
+      ['propose.update', 'check', 'patch=' + encodeURIComponent(JSON.stringify(patch))]);
+    assert.equal(changed.status, 0, changed.stderr);
+    assert.equal(runV2(fixture, fixture.alpha, ['activate', JSON.parse(changed.stdout).proposalId]).status, 0);
+    after = JSON.parse(await readFile(registry, 'utf8')).workspaces[0].commands.check;
+    assert.deepEqual(after, {...before, description, allow: patch.allow,
+      timeoutMs: patch.timeoutMs, maxOutputBytes: patch.maxOutputBytes});
+    assert.deepEqual(after.scriptGuard, before.scriptGuard);
+  });
+});
+
+test('CLI update proposals support safe fixed argv changes and reviewed package-script refresh', async () => {
+  await withFixture(async (fixture) => {
+    const fixedPatch = {description: 'Show the installed Node runtime version for project diagnostics without modifying the workspace.',
+      run: ['node', '--version'], timeoutMs: 60000};
+    const fixed = runV2(fixture, fixture.alpha, ['propose.update', 'timeout',
+      'patch=' + encodeURIComponent(JSON.stringify(fixedPatch))]);
+    assert.equal(fixed.status, 0, fixed.stderr);
+    const fixedProposal = JSON.parse(fixed.stdout);
+    assert.deepEqual(fixedProposal.previous.run, [process.execPath, 'sleep.mjs']);
+    assert.deepEqual(fixedProposal.argv, ['node', '--version']);
+    assert.equal(runV2(fixture, fixture.alpha, ['activate', fixedProposal.proposalId]).status, 0);
+    const fixedRun = runV2(fixture, fixture.alpha, ['run', 'timeout']);
+    assert.equal(fixedRun.status, 0, fixedRun.stderr);
+    assert.equal(JSON.parse(fixedRun.stdout).status, 'completed');
+
+    const manifest = path.join(fixture.alpha, 'package.json');
+    await writeFile(manifest, JSON.stringify({
+      packageManager: 'npm@10.0.0', scripts: {check: 'node --version'},
+    }));
+    const initial = runV2(fixture, fixture.alpha, ['propose', 'check']);
+    assert.equal(initial.status, 0, initial.stderr);
+    assert.equal(runV2(fixture, fixture.alpha, ['activate', JSON.parse(initial.stdout).proposalId]).status, 0);
+    await writeFile(manifest, JSON.stringify({
+      packageManager: 'npm@10.0.0', scripts: {check: 'node echo-args.mjs'},
+    }));
+    const stopped = runV2(fixture, fixture.alpha, ['run', 'check']);
+    assert.equal(stopped.status, 2);
+    assert.match(stopped.stderr, /stale_script_definition/u);
+    const refresh = runV2(fixture, fixture.alpha,
+      ['propose.update', 'check', 'patch=' + encodeURIComponent(JSON.stringify({script: 'check'}))]);
+    assert.equal(refresh.status, 0, refresh.stderr);
+    const candidate = JSON.parse(refresh.stdout);
+    assert.equal(candidate.scriptPreview.check, 'node echo-args.mjs');
+    const invoke = runHook(fixture, {hook_event_name: 'PreToolUse', tool_name: 'execute/runInTerminal',
+      tool_input: {command: 'node ~/.copilot/skills/command-runner/scripts/cli.mjs activate ' + candidate.proposalId}});
+    assert.equal(JSON.parse(invoke.stdout).permissionDecision, 'ask');
+    assert.match(JSON.parse(invoke.stdout).permissionDecisionReason, /node echo-args.mjs/u);
+    const accepted = runV2(fixture, fixture.alpha, ['activate', candidate.proposalId]);
+    assert.equal(accepted.status, 0, accepted.stderr);
+    const executed = runV2(fixture, fixture.alpha, ['run', 'check']);
+    assert.equal(executed.status, 0, executed.stderr);
+    assert.equal(JSON.parse(executed.stdout).status, 'completed');
+  });
+});
+
+test('CLI update proposals reject invalid, stale, and tampered command definitions', async () => {
+  await withFixture(async (fixture) => {
+    const update = (id, patch, extras = []) => runV2(fixture, fixture.alpha,
+      ['propose.update', id, 'patch=' + encodeURIComponent(JSON.stringify(patch)), ...extras]);
+    const description = 'Explain the existing command more precisely while retaining its exact runtime configuration.';
+    for (const [id, patch, extras, code] of [
+      ['builtin-git-status', {description}, [], 'builtin_immutable'],
+      ['missing-command', {description}, [], 'command_not_registered'],
+      ['sample', {description: 'short'}, [], 'invalid_description'],
+      ['sample', {description}, ['script=test'], 'invalid_argument'],
+      ['sample', {unknown: true}, [], 'invalid_argument'],
+      ['sample', {run: ['node', '--version'], description}, [], 'invalid_definition'],
+      ['sample', {timeoutMs: -5}, [], 'invalid_argument'],
+      ['sample', {allow: ['--verbose']}, [], 'invalid_argument'],
+      ['timeout', {description, run: ['node', '-e', 'process.exit(0)']}, [], 'unsupported_fixed_launcher'],
+      ['timeout', {description, run: ['bash', '-c', 'true']}, [], 'unsupported_fixed_launcher'],
+    ]) {
+      const result = update(id, patch, extras);
+      assert.equal(result.status, 2);
+      assert.equal(JSON.parse(result.stderr).error.code, code);
+    }
+    const noPatch = runV2(fixture, fixture.alpha, ['propose.update', 'sample']);
+    assert.equal(noPatch.status, 2);
+    const noChange = update('sample', {description: 'Echo validated arguments.'});
+    assert.equal(noChange.status, 2);
+    assert.match(noChange.stderr, /unchanged_definition/u);
+
+    const invalidHook = runHook(fixture, {
+      hook_event_name: 'PreToolUse', tool_name: 'execute/runInTerminal',
+      tool_input: {command: 'node ~/.copilot/skills/command-runner/scripts/cli.mjs propose.update sample script=test'},
+    });
+    assert.equal(JSON.parse(invalidHook.stdout).permissionDecision, 'deny');
+
+    const candidate = JSON.parse(update('sample', {description}).stdout);
+    const proposalFile = path.join(fixture.home, 'command-runner', 'proposals', candidate.proposalId + '.json');
+    const tampered = JSON.parse(await readFile(proposalFile, 'utf8'));
+    tampered.definition.run = ['node', '--version'];
+    tampered.approvalDigest = digest([
+      tampered.workspaceIdentity, tampered.commandId, tampered.definition, tampered.scriptPreview,
+      tampered.expectedHash, tampered.previousAllow, tampered.kind, tampered.patch, tampered.previous,
+    ]);
+    await writeFile(proposalFile, JSON.stringify(tampered));
+    const rejected = runV2(fixture, fixture.alpha, ['activate', candidate.proposalId]);
+    assert.equal(rejected.status, 2);
+    assert.match(rejected.stderr, /stale_proposal/u);
+
+    const first = JSON.parse(update('sample', {description}).stdout);
+    const nextDescription = 'Describe the original command another way without altering its executable specification or permission surface.';
+    const second = JSON.parse(update('sample', {description: nextDescription}).stdout);
+    assert.equal(runV2(fixture, fixture.alpha, ['activate', second.proposalId]).status, 0);
+    const stale = runV2(fixture, fixture.alpha, ['activate', first.proposalId]);
+    assert.equal(stale.status, 2);
+    assert.match(stale.stderr, /stale_proposal/u);
+    const replay = runV2(fixture, fixture.alpha, ['activate', second.proposalId]);
+    assert.equal(replay.status, 2);
+    assert.match(replay.stderr, /stale_proposal/u);
+  });
+});
+
 test('CLI fixed proposals reject dynamic arguments and unsafe launcher forms', async () => {
   await withFixture(async (fixture) => {
     const description = 'Run a bounded project verification command, returning its diagnostics without changing project source files.';
