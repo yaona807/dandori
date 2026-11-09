@@ -1770,6 +1770,89 @@ test('CLI proposes inert npm scripts, activates exact candidate, and detects cha
   });
 });
 
+test('CLI registers scripts using oversized lockfiles without reading lockfile contents', async () => {
+  await withFixture(async (fixture) => {
+    await writeFile(path.join(fixture.alpha, 'package.json'), JSON.stringify({
+      scripts: {'type-check': 'node --version'},
+    }));
+    const lockfile = path.join(fixture.alpha, 'package-lock.json');
+    const largeLock = JSON.stringify({
+      name: 'test-project', lockfileVersion: 3, requires: true,
+      packages: {'': {name: 'test-project', version: '1.0.0'}},
+      padding: 'x'.repeat(1_048_576),
+    });
+    assert.ok(Buffer.byteLength(largeLock) > 1_048_576);
+    await writeFile(lockfile, largeLock);
+
+    const proposed = runV2(fixture, fixture.alpha, ['propose', 'type-check']);
+    assert.equal(proposed.status, 0, proposed.stderr);
+    const candidate = JSON.parse(proposed.stdout);
+    assert.equal(candidate.status, 'pending_approval');
+    assert.deepEqual(candidate.argv, ['npm', 'run', 'type-check', '--']);
+
+    const activated = runV2(fixture, fixture.alpha, ['activate', candidate.proposalId]);
+    assert.equal(activated.status, 0, activated.stderr);
+    const executed = runV2(fixture, fixture.alpha, ['run', 'type-check']);
+    assert.equal(executed.status, 0, executed.stderr);
+
+    // The manager family remains part of the fingerprint; switching it blocks execution.
+    await rm(lockfile);
+    await writeFile(path.join(fixture.alpha, 'yarn.lock'), '# alternate manager\n');
+    const stale = runV2(fixture, fixture.alpha, ['run', 'type-check']);
+    assert.equal(stale.status, 2);
+    assert.match(stale.stderr, /stale_script_definition/u);
+  });
+});
+
+test('CLI preserves package metadata security and reports specific discovery errors', async (t) => {
+  await withFixture(async (fixture) => {
+    const manifest = path.join(fixture.alpha, 'package.json');
+    const npmLock = path.join(fixture.alpha, 'package-lock.json');
+    const yarnLock = path.join(fixture.alpha, 'yarn.lock');
+    const script = {scripts: {'type-check': 'node --version'}};
+    const failedAs = (code) => {
+      const result = runV2(fixture, fixture.alpha, ['propose', 'type-check']);
+      assert.equal(result.status, 2, result.stdout);
+      assert.equal(JSON.parse(result.stderr).error.code, code);
+    };
+
+    await writeFile(manifest, JSON.stringify({scripts: {lint: 'node --version'}}));
+    failedAs('script_missing');
+
+    await writeFile(manifest, JSON.stringify(script));
+    failedAs('package_manager_undetermined');
+
+    await writeFile(npmLock, '{}');
+    await writeFile(yarnLock, '# lock');
+    failedAs('package_manager_ambiguous');
+    await rm(npmLock);
+    await rm(yarnLock);
+
+    await writeFile(manifest, '{not-json');
+    failedAs('invalid_package_json');
+
+    await writeFile(manifest, 'x'.repeat(1_048_577));
+    failedAs('invalid_package_metadata');
+
+    await writeFile(manifest, JSON.stringify({...script, packageManager: 'unknown@1.0.0'}));
+    failedAs('invalid_package_manager');
+
+    await writeFile(manifest, JSON.stringify(script));
+    const externalLock = path.join(fixture.beta, 'external-lock.json');
+    await writeFile(externalLock, '{}');
+    try {
+      await symlink(externalLock, npmLock);
+    } catch (err) {
+      if (['EPERM', 'EACCES', 'ENOTSUP'].includes(err?.code)) {
+        t.diagnostic('lockfile symlink check skipped on this platform');
+        return;
+      }
+      throw err;
+    }
+    failedAs('invalid_package_metadata');
+  });
+});
+
 test('CLI Hook uses interactive approval for activation and rejects arbitrary shell', async () => {
   await withFixture(async (fixture) => {
     const invoke = (command) => runHook(fixture, {
