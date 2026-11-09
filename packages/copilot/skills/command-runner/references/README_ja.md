@@ -302,6 +302,8 @@ COPILOT_HOME=/path/to/test-home node .copilot/skills/command-runner/scripts/gate
 
 ### 一般Fixedコマンドの提案（Worker）
 
+登録済みコマンドの説明文だけを修正する場合は `propose.description <id> description=<URLエンコードした説明>` を使います。既存の固定argv・可変引数・allowlist・scriptGuard・cwd・timeout・出力上限を維持し、`activate`で変更前後の説明文をHostが人間へ表示して承認を求めます。登録済み定義が提案後に変化した場合は拒否します。Built-inは対象外であり、説明文の変更自体は実行権限を付与しません。
+
 既存のnpm系`propose`は、`description=<URLエンコードした説明>`を任意で受け付けます。旧呼出しは互換維持しますが、Workerは実際のスクリプトやpre/postスクリプトを調査し、用途・対象・副作用・結果の分かる具体的なDescription（20〜500文字）を付けます。
 
 一般の固定argvは`propose check definition=<URLエンコードしたJSON>`で提案します。JSONの例：`{"description":"プロジェクトのテストを実行する。テストキャッシュを生成する場合があり、終了コードと診断ログで結果を確認する。","run":["python","-m","pytest"],"cwd":".","arguments":{}}`。ここで示す副作用は例であり、実際の対象コマンドごとに確認します。
@@ -315,6 +317,7 @@ Workerは `node ~/.copilot/skills/command-runner/scripts/cli.mjs` を使用し�
 ```bash
 node ~/.copilot/skills/command-runner/scripts/cli.mjs workspace.ensure
 node ~/.copilot/skills/command-runner/scripts/cli.mjs propose test
+node ~/.copilot/skills/command-runner/scripts/cli.mjs propose.description test description=<URLエンコードした新しい説明文>
 # 人間に固定argvとスクリプト内容を示して承認を得る
 node ~/.copilot/skills/command-runner/scripts/cli.mjs activate prop-<32桁のID>
 node ~/.copilot/skills/command-runner/scripts/cli.mjs run test
