@@ -34,14 +34,23 @@ const inside = (root, target) => {
   return relative === '' || (relative !== '..' && !relative.startsWith('..' + path.sep) && !path.isAbsolute(relative));
 };
 
-async function optionalFile(full) {
+async function optionalRegularFile(full) {
   let state;
   try { state = await lstat(full); }
   catch (error) {
     if (error?.code === 'ENOENT') return null;
     throw error;
   }
-  if (!state.isFile() || state.isSymbolicLink() || state.size > 1_048_576) {
+  if (!state.isFile() || state.isSymbolicLink()) {
+    throw new Error('invalid package manager metadata path: ' + path.basename(full));
+  }
+  return state;
+}
+
+async function optionalFile(full) {
+  const state = await optionalRegularFile(full);
+  if (state === null) return null;
+  if (state.size > 1_048_576) {
     throw new Error('invalid package manager metadata path: ' + path.basename(full));
   }
   return await readFile(full, 'utf8');
@@ -75,7 +84,9 @@ async function resolveManager(directory, workspaceRoot) {
     for (const [manager, files] of Object.entries(lockfiles)) {
       let present = false;
       for (const lock of files) {
-        if (await optionalFile(path.join(cursor, lock)) !== null) present = true;
+        // Only the lockfile's presence and regular-file identity select the manager.
+        // Its contents are neither parsed nor size-bounded.
+        if (await optionalRegularFile(path.join(cursor, lock)) !== null) present = true;
       }
       if (present) found.push(manager);
     }
