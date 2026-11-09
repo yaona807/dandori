@@ -94,15 +94,29 @@ function activationReview(id) {
     throw new Error('invalid or expired approval proposal');
   }
   if (commandUpdate) {
+    // Do not disclose unrelated registered argv/legacy arguments during a
+    // metadata-only edit; show the exact execution details for execution changes.
+    const executableChanged = ['run', 'cwd', 'script', 'packageDir']
+      .some(key => Object.hasOwn(item.patch, key));
     const summary = JSON.stringify({
       action: 'update_command', commandId: item.commandId,
       workspaceIdentity: item.workspaceIdentity, previous: item.previous,
       changes: item.patch, effectiveDefinition: {
-        description: item.definition.description, argv: item.definition.run,
-        cwd: item.definition.cwd ?? '.', arguments: item.definition.arguments ?? {},
-        allow: item.definition.allow ?? null, scriptGuard: item.definition.scriptGuard ?? null,
-        timeoutMs: item.definition.timeoutMs, maxOutputBytes: item.definition.maxOutputBytes,
-      }, scriptPreview: item.scriptPreview, expectedDefinitionHash: item.expectedHash,
+        description: item.definition.description,
+        ...(executableChanged ? {
+          argv: item.definition.run, cwd: item.definition.cwd ?? '.',
+          arguments: item.definition.arguments ?? {},
+          scriptGuard: item.definition.scriptGuard ?? null,
+        } : {}),
+        ...(executableChanged || Object.hasOwn(item.patch, 'allow')
+          ? {allow: item.definition.allow ?? null} : {}),
+        ...(executableChanged || Object.hasOwn(item.patch, 'timeoutMs')
+          ? {timeoutMs: item.definition.timeoutMs} : {}),
+        ...(executableChanged || Object.hasOwn(item.patch, 'maxOutputBytes')
+          ? {maxOutputBytes: item.definition.maxOutputBytes} : {}),
+      },
+      ...(item.scriptPreview === null ? {} : {scriptPreview: item.scriptPreview}),
+      expectedDefinitionHash: item.expectedHash,
     });
     if (summary.length > 6000) throw new Error('approval details exceed bounded preview');
     return 'Human approval is required for an exact command update: ' + summary;
