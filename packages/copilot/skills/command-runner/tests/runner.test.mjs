@@ -1831,6 +1831,12 @@ test('CLI fixed proposals reject dynamic arguments and unsafe launcher forms', a
     rejected({description, run: ['node', '--version'], cwd: '..'}, 'invalid_definition');
     rejected({description, run: ['node', '--version'], cwd: fixture.beta}, 'invalid_definition');
     rejected({description, run: ['node', '--version'], allow: ['--anything=value']}, 'invalid_definition');
+    const builtin = runV2(fixture, fixture.alpha, [
+      'propose', 'builtin-git-status',
+      'definition=' + encodeURIComponent(JSON.stringify({description, run: ['node', '--version']})),
+    ]);
+    assert.equal(builtin.status, 2);
+    assert.equal(JSON.parse(builtin.stderr).error.code, 'builtin_immutable');
     const mixed = runV2(fixture, fixture.alpha, [
       'propose', 'check', 'definition=' + encodeURIComponent(JSON.stringify({description, run: ['node', '--version']})),
       'script=test',
