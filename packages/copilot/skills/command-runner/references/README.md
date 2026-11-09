@@ -303,7 +303,7 @@ COPILOT_HOME=/path/to/test-home node .copilot/skills/command-runner/scripts/gate
 
 ## CommandRunner: self-onboarding and human-approved project commands
 
-Use `node ~/.copilot/skills/command-runner/scripts/cli.mjs` for the Worker-facing API. It accepts `context`, `workspace.ensure`, `list`, `describe`, `inspect`, `propose <id> [packageDir=<relative>] [script=<name>]`, `activate <proposal-id>`, `run <id> [name=value]`, and `output <execution-id> stream=stdout|stderr [offset=<n>]`.
+Use `node ~/.copilot/skills/command-runner/scripts/cli.mjs` for the Worker-facing API. It accepts `context`, `workspace.ensure`, `list`, `describe`, `inspect`, `propose.description <id> description=<encoded-text>`, `propose <id> [packageDir=<relative>] [script=<name>]`, `activate <proposal-id>`, `run <id> [name=value]`, and `output <execution-id> stream=stdout|stderr [offset=<n>]`.
 
 The worker does not send a workspace ID. The existing core selects the registered root from actual cwd and the Worker CLI supplies internal workspace assertions. Hook requests first-time confirmation of the exact cwd root (already-registered roots are not prompted again). New roots are registered only when cwd is the exact directory containing `.git` or `package.json`; no parent-root inference. New command candidates are persisted but do not become executable until activation. A `PreToolUse` `ask` confirmation is requested for activation; user approval must be explicit. Unattended and untrusted hook environments do not provide a reliable human-approval attestation; **this is a prompt-level host permission, not a cryptographically enforced approval record**. The owner-only management API is kept for migration and requests an interactive confirmation for registry mutations.
 
@@ -313,6 +313,8 @@ For monorepos, `propose <id> packageDir=<workspace-relative-package>` inherits t
 
 
 ### General Fixed argv proposals (Worker)
+
+For an existing registered command, `propose.description <id> description=<percent-encoded-text>` updates only its human-readable explanation. It preserves argv, argument schema, allowlist, script guard, cwd and custom resource limits; the separate `activate` action shows the old and new descriptions for Host approval. A changed registry definition causes the proposal to fail closed. Built-in commands are immutable, and changing metadata never grants execution permission.
 
 Existing npm-family `propose` accepts an optional `description=<percent-encoded-text>` for backward compatibility; Workers must supply a researched description (20-500 characters) covering purpose, scope, effects and result, including pre/post scripts. Generic fixed argv commands use `propose check definition=<percent-encoded-JSON-object>`, for example: `{"description":"Run the project test suite after edits; test caches may be generated and exit code plus diagnostics report the result.","run":["python","-m","pytest"],"cwd":".","arguments":{}}`. Investigate actual command behavior before making any assertion about effects.
 
