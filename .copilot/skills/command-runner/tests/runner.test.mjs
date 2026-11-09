@@ -1770,6 +1770,131 @@ test('CLI proposes inert npm scripts, activates exact candidate, and detects cha
   });
 });
 
+test('CLI fixed proposals require an explicit description and host approval before reuse', async () => {
+  await withFixture(async (fixture) => {
+    const description = 'Check the Node.js runtime version without changing project files; stdout reports the version and the exit code indicates success.';
+    const definition = {description, run: ['node', '--version'], cwd: '.', arguments: {},
+      timeoutMs: 300000, maxOutputBytes: 1048576};
+    const encoded = 'definition=' + encodeURIComponent(JSON.stringify(definition));
+    const source = await readFile(path.join(fixture.home, 'command-runner', 'workspaces.json'), 'utf8');
+    const proposed = runV2(fixture, fixture.alpha, ['propose', 'node-version', encoded]);
+    assert.equal(proposed.status, 0, proposed.stderr);
+    const candidate = JSON.parse(proposed.stdout);
+    assert.equal(candidate.proposalType, 'fixed');
+    assert.equal(candidate.description, description);
+    assert.deepEqual(candidate.argv, ['node', '--version']);
+    assert.equal(candidate.status, 'pending_approval');
+    assert.equal(await readFile(path.join(fixture.home, 'command-runner', 'workspaces.json'), 'utf8'), source);
+    const beforeActivation = runV2(fixture, fixture.alpha, ['run', 'node-version']);
+    assert.equal(beforeActivation.status, 2);
+    assert.match(beforeActivation.stderr, /command_not_registered/u);
+
+    const invoke = (command) => runHook(fixture, {
+      hook_event_name: 'PreToolUse', tool_name: 'execute/runInTerminal', tool_input: {command},
+    });
+    const proposalHook = invoke('node ~/.copilot/skills/command-runner/scripts/cli.mjs propose node-version ' + encoded);
+    assert.equal(JSON.parse(proposalHook.stdout).permissionDecision, 'allow');
+    const activatedHook = invoke('node ~/.copilot/skills/command-runner/scripts/cli.mjs activate ' + candidate.proposalId);
+    assert.equal(JSON.parse(activatedHook.stdout).permissionDecision, 'ask');
+    const review = JSON.parse(activatedHook.stdout).permissionDecisionReason;
+    assert.match(review, /Check the Node.js runtime version/u);
+    assert.match(review, /node-version/u);
+    assert.match(review, /--version/u);
+    assert.match(review, /timeoutMs/u);
+
+    const activated = runV2(fixture, fixture.alpha, ['activate', candidate.proposalId]);
+    assert.equal(activated.status, 0, activated.stderr);
+    const executed = runV2(fixture, fixture.alpha, ['run', 'node-version']);
+    assert.equal(executed.status, 0, executed.stderr);
+    assert.equal(JSON.parse(executed.stdout).status, 'completed');
+    const inspection = runV2(fixture, fixture.alpha, ['inspect', 'node-version']);
+    assert.equal(inspection.status, 0, inspection.stderr);
+    assert.match(inspection.stdout, /Check the Node.js runtime version/u);
+  });
+});
+
+test('CLI fixed proposals reject dynamic arguments and unsafe launcher forms', async () => {
+  await withFixture(async (fixture) => {
+    const description = 'Run a bounded project verification command, returning its diagnostics without changing project source files.';
+    const rejected = (definition, expected) => {
+      const result = runV2(fixture, fixture.alpha, [
+        'propose', 'check', 'definition=' + encodeURIComponent(JSON.stringify(definition)),
+      ]);
+      assert.equal(result.status, 2, result.stdout);
+      assert.equal(JSON.parse(result.stderr).error.code, expected);
+    };
+    rejected({run: ['node', '--version']}, 'invalid_description');
+    rejected({description, run: ['node', '-e', 'process.exit(0)']}, 'unsupported_fixed_launcher');
+    rejected({description, run: ['bash', '-c', 'true']}, 'unsupported_fixed_launcher');
+    rejected({description, run: ['npm', 'run', 'test']}, 'unsupported_fixed_launcher');
+    rejected({description, run: ['node', '--version'], arguments: {free: {kind: 'positional'}}}, 'invalid_definition');
+    rejected({description, run: ['node', '--version'], cwd: '..'}, 'invalid_definition');
+    rejected({description, run: ['node', '--version'], cwd: fixture.beta}, 'invalid_definition');
+    rejected({description, run: ['node', '--version'], allow: ['--anything=value']}, 'invalid_definition');
+    const mixed = runV2(fixture, fixture.alpha, [
+      'propose', 'check', 'definition=' + encodeURIComponent(JSON.stringify({description, run: ['node', '--version']})),
+      'script=test',
+    ]);
+    assert.equal(mixed.status, 2);
+    assert.match(mixed.stderr, /definition cannot be combined/u);
+  });
+});
+
+test('CLI detects fixed proposal tampering and concurrent definition changes', async () => {
+  await withFixture(async (fixture) => {
+    const description = 'Check Node.js version for a preflight runtime verification, returning the version and exit status without filesystem writes.';
+    const propose = () => runV2(fixture, fixture.alpha, [
+      'propose', 'runtime-check',
+      'definition=' + encodeURIComponent(JSON.stringify({description, run: ['node', '--version']})),
+    ]);
+    const first = propose();
+    assert.equal(first.status, 0, first.stderr);
+    const proposal = JSON.parse(first.stdout);
+    const proposalFile = path.join(fixture.home, 'command-runner', 'proposals', proposal.proposalId + '.json');
+    const modified = JSON.parse(await readFile(proposalFile, 'utf8'));
+    modified.definition.description = 'This has changed after proposal and should be rejected.';
+    await writeFile(proposalFile, JSON.stringify(modified));
+    const denied = runV2(fixture, fixture.alpha, ['activate', proposal.proposalId]);
+    assert.equal(denied.status, 2);
+    assert.match(denied.stderr, /stale_proposal/u);
+
+    const clean = propose();
+    assert.equal(clean.status, 0, clean.stderr);
+    const cleanId = JSON.parse(clean.stdout).proposalId;
+    const concurrent = runV2(fixture, fixture.alpha, [
+      'propose', 'runtime-check',
+      'definition=' + encodeURIComponent(JSON.stringify({
+        description: 'Check runtime version with a separate registered definition after a concurrent change.',
+        run: ['node', '--version'],
+      })),
+    ]);
+    assert.equal(concurrent.status, 0, concurrent.stderr);
+    const later = runV2(fixture, fixture.alpha, ['activate', JSON.parse(concurrent.stdout).proposalId]);
+    assert.equal(later.status, 0, later.stderr);
+    const stale = runV2(fixture, fixture.alpha, ['activate', cleanId]);
+    assert.equal(stale.status, 2);
+    assert.match(stale.stderr, /stale_proposal/u);
+  });
+});
+
+test('CLI package script proposal preserves old callers and accepts reviewed description', async () => {
+  await withFixture(async (fixture) => {
+    await writeFile(path.join(fixture.alpha, 'package.json'), JSON.stringify({
+      packageManager: 'npm@10.0.0', scripts: {check: 'node --version'},
+    }));
+    const description = 'Run the check script for package validation without changing source files; inspect lifecycle hooks before execution.';
+    const custom = runV2(fixture, fixture.alpha,
+      ['propose', 'check', 'description=' + encodeURIComponent(description)]);
+    assert.equal(custom.status, 0, custom.stderr);
+    assert.equal(JSON.parse(custom.stdout).description, description);
+    const older = runV2(fixture, fixture.alpha, ['propose', 'check']);
+    assert.equal(older.status, 0, older.stderr);
+    assert.match(JSON.parse(older.stdout).description, /Run npm package script/u);
+    const accepted = runV2(fixture, fixture.alpha, ['activate', JSON.parse(older.stdout).proposalId]);
+    assert.equal(accepted.status, 0, accepted.stderr);
+  });
+});
+
 test('CLI registers scripts using oversized lockfiles without reading lockfile contents', async () => {
   await withFixture(async (fixture) => {
     await writeFile(path.join(fixture.alpha, 'package.json'), JSON.stringify({
