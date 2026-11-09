@@ -1813,6 +1813,133 @@ test('CLI fixed proposals require an explicit description and host approval befo
   });
 });
 
+
+test('CLI description-only updates preserve legacy execution settings and use Host approval', async () => {
+  await withFixture(async (fixture) => {
+    const registry = path.join(fixture.home, 'command-runner', 'workspaces.json');
+    const original = JSON.parse(await readFile(registry, 'utf8'));
+    const before = structuredClone(original.workspaces[0].commands.sample);
+    const description = 'Echo the existing validated arguments without changing execution settings; report arguments in the command output.';
+    const token = 'description=' + encodeURIComponent(description);
+    const proposal = runV2(fixture, fixture.alpha, ['propose.description', 'sample', token]);
+    assert.equal(proposal.status, 0, proposal.stderr);
+    const candidate = JSON.parse(proposal.stdout);
+    assert.equal(candidate.proposalType, 'description');
+    assert.equal(candidate.previousDescription, before.description);
+    assert.equal(candidate.description, description);
+    assert.deepEqual(JSON.parse(await readFile(registry, 'utf8')), original);
+
+    const invoke = command => runHook(fixture, {
+      hook_event_name: 'PreToolUse', tool_name: 'execute/runInTerminal', tool_input: {command},
+    });
+    const prefix = 'node ~/.copilot/skills/command-runner/scripts/cli.mjs ';
+    const pending = invoke(prefix + 'propose.description sample ' + token);
+    assert.equal(JSON.parse(pending.stdout).permissionDecision, 'allow');
+    const review = invoke(prefix + 'activate ' + candidate.proposalId);
+    assert.equal(JSON.parse(review.stdout).permissionDecision, 'ask');
+    const reason = JSON.parse(review.stdout).permissionDecisionReason;
+    assert.match(reason, /update_description/u);
+    assert.match(reason, /Echo validated arguments/u);
+    assert.match(reason, /Echo the existing validated arguments/u);
+    assert.doesNotMatch(reason, /scriptPreview/u);
+
+    const activated = runV2(fixture, fixture.alpha, ['activate', candidate.proposalId]);
+    assert.equal(activated.status, 0, activated.stderr);
+    const updated = JSON.parse(await readFile(registry, 'utf8'));
+    assert.deepEqual(updated.workspaces[0].commands.sample, {...before, description});
+    assert.equal(executionHash(updated.workspaces[0].commands.sample, updated.defaults),
+      executionHash(before, original.defaults));
+    const described = runV2(fixture, fixture.alpha, ['describe', 'sample']);
+    assert.equal(described.status, 0, described.stderr);
+    assert.equal(JSON.parse(described.stdout).command.description, description);
+    const executed = runV2(fixture, fixture.alpha, ['run', 'sample', 'enabled=true']);
+    assert.equal(executed.status, 0, executed.stderr);
+    assert.equal(JSON.parse(executed.stdout).status, 'completed');
+  });
+});
+
+test('CLI description updates preserve package script guards, allowlists and custom limits', async () => {
+  await withFixture(async (fixture) => {
+    await writeFile(path.join(fixture.alpha, 'package.json'), JSON.stringify({
+      packageManager: 'npm@10.0.0', scripts: {check: 'node --version'},
+    }));
+    const proposed = runV2(fixture, fixture.alpha,
+      ['propose', 'check', 'description=' + encodeURIComponent('Execute the project package check script and report its exit status without changing source files.'),
+        'allow=' + encodeURIComponent(JSON.stringify(['--coverage']))]);
+    assert.equal(proposed.status, 0, proposed.stderr);
+    const activated = runV2(fixture, fixture.alpha, ['activate', JSON.parse(proposed.stdout).proposalId]);
+    assert.equal(activated.status, 0, activated.stderr);
+    const registry = path.join(fixture.home, 'command-runner', 'workspaces.json');
+    const config = JSON.parse(await readFile(registry, 'utf8'));
+    config.workspaces[0].commands.check.timeoutMs = 123456;
+    config.workspaces[0].commands.check.maxOutputBytes = 234567;
+    await writeFile(registry, JSON.stringify(config, null, 2) + '\n');
+    const before = structuredClone(config.workspaces[0].commands.check);
+    const description = 'Execute the existing package script without resetting custom execution limits or its guarded argument allowlist.';
+    const request = runV2(fixture, fixture.alpha,
+      ['propose.description', 'check', 'description=' + encodeURIComponent(description)]);
+    assert.equal(request.status, 0, request.stderr);
+    const updated = runV2(fixture, fixture.alpha, ['activate', JSON.parse(request.stdout).proposalId]);
+    assert.equal(updated.status, 0, updated.stderr);
+    const after = JSON.parse(await readFile(registry, 'utf8')).workspaces[0].commands.check;
+    assert.deepEqual(after, {...before, description});
+    assert.equal(executionHash(after), executionHash(before));
+  });
+});
+
+test('CLI description updates reject invalid, stale, and tampered proposals', async () => {
+  await withFixture(async (fixture) => {
+    const update = (id, description, extras = []) => runV2(fixture, fixture.alpha,
+      ['propose.description', id, 'description=' + encodeURIComponent(description), ...extras]);
+    const text1 = 'Explain the existing command more precisely while retaining its exact runtime configuration.';
+    for (const [id, description, extras, code] of [
+      ['builtin-git-status', text1, [], 'builtin_immutable'],
+      ['missing-command', text1, [], 'command_not_registered'],
+      ['sample', 'short', [], 'invalid_description'],
+      ['sample', text1, ['script=test'], 'invalid_argument'],
+    ]) {
+      const result = update(id, description, extras);
+      assert.equal(result.status, 2);
+      assert.equal(JSON.parse(result.stderr).error.code, code);
+    }
+    const noDescription = runV2(fixture, fixture.alpha, ['propose.description', 'sample']);
+    assert.equal(noDescription.status, 2);
+    const noChange = update('sample', 'Echo validated arguments.');
+    assert.equal(noChange.status, 2);
+    assert.match(noChange.stderr, /unchanged_description/u);
+
+    const invalidHook = runHook(fixture, {
+      hook_event_name: 'PreToolUse', tool_name: 'execute/runInTerminal',
+      tool_input: {command: 'node ~/.copilot/skills/command-runner/scripts/cli.mjs propose.description sample script=test'},
+    });
+    assert.equal(JSON.parse(invalidHook.stdout).permissionDecision, 'deny');
+
+    const candidate = JSON.parse(update('sample', text1).stdout);
+    const proposalFile = path.join(fixture.home, 'command-runner', 'proposals', candidate.proposalId + '.json');
+    const tampered = JSON.parse(await readFile(proposalFile, 'utf8'));
+    tampered.definition.run = ['node', '--version'];
+    tampered.approvalDigest = digest([
+      tampered.workspaceIdentity, tampered.commandId, tampered.definition, tampered.scriptPreview,
+      tampered.expectedHash, tampered.previousAllow, tampered.kind, tampered.previousDescription,
+    ]);
+    await writeFile(proposalFile, JSON.stringify(tampered));
+    const rejected = runV2(fixture, fixture.alpha, ['activate', candidate.proposalId]);
+    assert.equal(rejected.status, 2);
+    assert.match(rejected.stderr, /stale_proposal/u);
+
+    const first = JSON.parse(update('sample', text1).stdout);
+    const nextDescription = 'Describe the original command another way without altering its executable specification or permission surface.';
+    const second = JSON.parse(update('sample', nextDescription).stdout);
+    assert.equal(runV2(fixture, fixture.alpha, ['activate', second.proposalId]).status, 0);
+    const stale = runV2(fixture, fixture.alpha, ['activate', first.proposalId]);
+    assert.equal(stale.status, 2);
+    assert.match(stale.stderr, /stale_proposal/u);
+    const replay = runV2(fixture, fixture.alpha, ['activate', second.proposalId]);
+    assert.equal(replay.status, 2);
+    assert.match(replay.stderr, /stale_proposal/u);
+  });
+});
+
 test('CLI fixed proposals reject dynamic arguments and unsafe launcher forms', async () => {
   await withFixture(async (fixture) => {
     const description = 'Run a bounded project verification command, returning its diagnostics without changing project source files.';
