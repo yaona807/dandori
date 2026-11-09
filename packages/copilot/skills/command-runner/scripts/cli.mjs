@@ -161,6 +161,31 @@ function parseAllowParam(encoded) {
   }
   return entries;
 }
+function scriptDiscoveryError(cause) {
+  switch (cause?.message) {
+    case 'package.json is missing':
+      return error('package_manifest_missing', 'package.json is missing from the selected packageDir');
+    case 'the requested package script is unavailable':
+      return error('script_missing', 'the requested script is not defined in the selected package.json');
+    case 'ambiguous package manager: no declaration or lockfile inside workspace':
+      return error('package_manager_undetermined', 'set packageManager or provide one lockfile family inside the workspace');
+    case 'ambiguous package manager: competing lockfile families':
+      return error('package_manager_ambiguous', 'competing lockfile families exist at the same directory');
+    case 'unsupported packageManager declaration':
+      return error('invalid_package_manager', 'packageManager must declare npm, pnpm, yarn, or bun');
+    case 'package scripts contain non-string definitions':
+      return error('invalid_package_metadata', 'package.json scripts must contain string values');
+    default:
+      if (cause instanceof SyntaxError) {
+        return error('invalid_package_json', 'package.json must contain valid JSON');
+      }
+      if (typeof cause?.message === 'string' && cause.message.startsWith('invalid package manager metadata path: ')) {
+        return error('invalid_package_metadata', 'package.json and lockfiles must be regular non-symlink files; package.json must be at most 1 MiB');
+      }
+      return error('script_discovery_failed', 'unable to read or validate the package script metadata');
+  }
+}
+
 async function propose(commandId, params) {
   if (!COMMAND.test(commandId)) throw error('invalid_argument', 'invalid command ID');
   if ([...params.keys()].some(k => !['packageDir', 'script', 'allow'].includes(k))) throw error('invalid_argument', 'only packageDir/script/allow are supported');
@@ -177,9 +202,14 @@ async function propose(commandId, params) {
   let selectedScript;
   for (const manager of ['npm', 'pnpm', 'yarn', 'bun']) {
     try { selectedScript = { manager, ...(await scriptFingerprint(dir, manager, scriptName, root)) }; break; }
-    catch { /* try known package-manager candidates; do not execute anything */ }
+    catch (cause) {
+      // A manager mismatch is the only expected reason to try another candidate.
+      if (cause?.message !== 'package manager changed since command approval') {
+        throw scriptDiscoveryError(cause);
+      }
+    }
   }
-  if (!selectedScript) throw error('script_not_discoverable', 'unable to identify a unique package script/manager');
+  if (!selectedScript) throw error('script_discovery_failed', 'unable to identify a supported package manager');
   const definition = {
     description: 'Approved ' + selectedScript.manager + ' script: ' + commandId,
     run: scriptRunArgs(selectedScript.manager, scriptName),
