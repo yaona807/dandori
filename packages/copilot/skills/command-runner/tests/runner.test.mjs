@@ -1860,6 +1860,40 @@ test('CLI update proposals change only requested fields and require Host approva
   });
 });
 
+test('CLI update keeps omitted cwd implicit for existing commands', async () => {
+  await withFixture(async (fixture) => {
+    const registry = path.join(fixture.home, 'command-runner', 'workspaces.json');
+    const config = JSON.parse(await readFile(registry, 'utf8'));
+    delete config.workspaces[0].commands.sample.cwd;
+    delete config.workspaces[0].commands.timeout.cwd;
+    await writeFile(registry, JSON.stringify(config, null, 2) + '\n');
+
+    const description = 'Describe validation of optional command arguments without changing the registered working directory.';
+    const request = runV2(fixture, fixture.alpha,
+      ['propose.update', 'sample', 'patch=' + encodeURIComponent(JSON.stringify({description}))]);
+    assert.equal(request.status, 0, request.stderr);
+    const proposalId = JSON.parse(request.stdout).proposalId;
+    const hook = runHook(fixture, {hook_event_name: 'PreToolUse', tool_name: 'execute/runInTerminal',
+      tool_input: {command: 'node ~/.copilot/skills/command-runner/scripts/cli.mjs activate ' + proposalId}});
+    assert.equal(JSON.parse(hook.stdout).permissionDecision, 'ask');
+    const applied = runV2(fixture, fixture.alpha, ['activate', proposalId]);
+    assert.equal(applied.status, 0, applied.stderr);
+    let after = JSON.parse(await readFile(registry, 'utf8'));
+    assert.equal(Object.hasOwn(after.workspaces[0].commands.sample, 'cwd'), false);
+    assert.equal(after.workspaces[0].commands.sample.description, description);
+
+    const fixedPatch = {run: ['node', '--version'],
+      description: 'Query the Node runtime version and report its result with no project file writes.'};
+    const update = runV2(fixture, fixture.alpha, ['propose.update', 'timeout',
+      'patch=' + encodeURIComponent(JSON.stringify(fixedPatch))]);
+    assert.equal(update.status, 0, update.stderr);
+    assert.equal(runV2(fixture, fixture.alpha, ['activate', JSON.parse(update.stdout).proposalId]).status, 0);
+    after = JSON.parse(await readFile(registry, 'utf8'));
+    assert.equal(Object.hasOwn(after.workspaces[0].commands.timeout, 'cwd'), false);
+    assert.equal(runV2(fixture, fixture.alpha, ['run', 'timeout']).status, 0);
+  });
+});
+
 test('CLI update proposals preserve npm guards and unrelated custom settings', async () => {
   await withFixture(async (fixture) => {
     await writeFile(path.join(fixture.alpha, 'package.json'), JSON.stringify({
