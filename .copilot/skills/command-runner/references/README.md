@@ -310,3 +310,11 @@ The worker does not send a workspace ID. The existing core selects the registere
 The generated argv is manager-sensitive: npm uses a terminal `--` separator, pnpm/Yarn/Bun do not. New npm/pnpm/Yarn/Bun registrations carry a `scriptGuard` fingerprint checked by the core before every execution, including through the owner management API. All package scripts and declared package manager are hashed conservatively; this does not sandbox script contents or dependencies. Legacy entries without a guard remain supported. Do not auto-approve new candidates.
 
 For monorepos, `propose <id> packageDir=<workspace-relative-package>` inherits the closest package-manager declaration or lockfile from that package through the **registered workspace root only**. The execution guard repeats the identical resolution. The proposal response contains only the selected-script preview, never the full script catalog; the internal fingerprint still covers all package scripts.
+
+
+### General Fixed argv proposals (Worker)
+
+Existing npm-family `propose` accepts an optional `description=<percent-encoded-text>` for backward compatibility; Workers must supply a researched description (20-500 characters) covering purpose, scope, effects and result, including pre/post scripts. Generic fixed argv commands use `propose check definition=<percent-encoded-JSON-object>`, for example: `{"description":"Run the project test suite after edits; test caches may be generated and exit code plus diagnostics report the result.","run":["python","-m","pytest"],"cwd":".","arguments":{}}`. Investigate actual command behavior before making any assertion about effects.
+
+The generic Fixed definition accepts only a literal argv list, description, an existing workspace-contained cwd, and optional timeout/output limits. It cannot include dynamic `allow`/`arguments`; shell/proxy launchers, inline interpreter evaluation, and package managers are not accepted through this path. `propose` writes a bounded proposal file but neither registers nor executes a command; `activate` displays details for human Host approval. Registration still grants no execution permission. Fixed argv does not pin script contents, interpreter dependencies, or other effects: re-audit as needed before an authorized run.
+
