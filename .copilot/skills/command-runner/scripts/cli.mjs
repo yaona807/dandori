@@ -385,7 +385,7 @@ async function updatedDefinition(original, patch, root) {
       }
     }
     if (changesPackageScript) {
-      const packageDir = patch.packageDir ?? original.cwd;
+      const packageDir = patch.packageDir ?? original.cwd ?? '.';
       const scriptName = patch.script ?? original.scriptGuard.script;
       if (typeof packageDir !== 'string' || !packageDir || path.isAbsolute(packageDir)
         || packageDir.includes('..') || packageDir.includes('\\')) {
@@ -461,7 +461,7 @@ async function proposeUpdate(commandId, params) {
   return {status: 'pending_approval', proposalId: id, commandId,
     proposalType: 'update', action: 'update', previous: record.previous,
     changes: patch, description: definition.description,
-    argv: definition.run, cwd: definition.cwd, allow: definition.allow ?? null,
+    argv: definition.run, cwd: definition.cwd ?? '.', allow: definition.allow ?? null,
     arguments: definition.arguments ?? {}, timeoutMs: definition.timeoutMs,
     maxOutputBytes: definition.maxOutputBytes, scriptPreview,
     approvalDigest: record.approvalDigest};
@@ -471,7 +471,7 @@ async function activate(id) {
   const record = await readProposal(id);
   const {selected, workspace} = await selectedConfig();
   if (selected.workspaceIdentity !== record.workspaceIdentity) throw error('workspace_identity_changed', 'proposal workspace has changed');
-  const cwd = await realpath(path.join(workspace.root, record.definition.cwd));
+  const cwd = await realpath(path.join(workspace.root, record.definition.cwd ?? '.'));
   if (!within(await realpath(workspace.root), cwd)) throw error('path_escape', 'candidate script directory escaped workspace');
   const existing = workspace.commands[record.commandId] ?? null;
   if ((existing ? digest(existing) : null) !== record.expectedHash) {
