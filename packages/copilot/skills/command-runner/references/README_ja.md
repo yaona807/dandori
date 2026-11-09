@@ -302,7 +302,7 @@ COPILOT_HOME=/path/to/test-home node .copilot/skills/command-runner/scripts/gate
 
 ### 一般Fixedコマンドの提案（Worker）
 
-登録済みコマンドの説明文だけを修正する場合は `propose.description <id> description=<URLエンコードした説明>` を使います。既存の固定argv・可変引数・allowlist・scriptGuard・cwd・timeout・出力上限を維持し、`activate`で変更前後の説明文をHostが人間へ表示して承認を求めます。登録済み定義が提案後に変化した場合は拒否します。Built-inは対象外であり、説明文の変更自体は実行権限を付与しません。
+登録済みコマンドの更新には `propose.update <id> patch=<URLエンコードしたJSON>` を使います。`patch`で指定した項目だけ変更し、その他の固定argv・可変引数・allowlist・scriptGuard・cwd・timeout・出力上限を保持します。Descriptionだけの更新は `{\"description\":\"説明文\"}`、ほかに上限値、安全なFixed argv/cwd、登録済みパッケージスクリプトの`script`/`packageDir`/`allow`の変更を扱います。旧形式の可変引数スキーマや危険なShell実行をWorkerから拡張することはできません。`activate`は変更前後と実効定義を人間に提示し、定義競合を検出します。Built-inは更新不可で、コマンドの更新自体は実行権限を付与しません。
 
 既存のnpm系`propose`は、`description=<URLエンコードした説明>`を任意で受け付けます。旧呼出しは互換維持しますが、Workerは実際のスクリプトやpre/postスクリプトを調査し、用途・対象・副作用・結果の分かる具体的なDescription（20〜500文字）を付けます。
 
@@ -317,7 +317,7 @@ Workerは `node ~/.copilot/skills/command-runner/scripts/cli.mjs` を使用し�
 ```bash
 node ~/.copilot/skills/command-runner/scripts/cli.mjs workspace.ensure
 node ~/.copilot/skills/command-runner/scripts/cli.mjs propose test
-node ~/.copilot/skills/command-runner/scripts/cli.mjs propose.description test description=<URLエンコードした新しい説明文>
+node ~/.copilot/skills/command-runner/scripts/cli.mjs propose.update test patch=<URLエンコードしたJSON差分>
 # 人間に固定argvとスクリプト内容を示して承認を得る
 node ~/.copilot/skills/command-runner/scripts/cli.mjs activate prop-<32桁のID>
 node ~/.copilot/skills/command-runner/scripts/cli.mjs run test
