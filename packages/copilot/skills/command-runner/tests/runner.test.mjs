@@ -1807,9 +1807,9 @@ test('CLI fixed proposals require an explicit description and host approval befo
     const executed = runV2(fixture, fixture.alpha, ['run', 'node-version']);
     assert.equal(executed.status, 0, executed.stderr);
     assert.equal(JSON.parse(executed.stdout).status, 'completed');
-    const inspection = runV2(fixture, fixture.alpha, ['inspect', 'node-version']);
-    assert.equal(inspection.status, 0, inspection.stderr);
-    assert.match(inspection.stdout, /Check the Node.js runtime version/u);
+    const described = runV2(fixture, fixture.alpha, ['describe', 'node-version']);
+    assert.equal(described.status, 0, described.stderr);
+    assert.match(described.stdout, /Check the Node.js runtime version/u);
   });
 });
 
