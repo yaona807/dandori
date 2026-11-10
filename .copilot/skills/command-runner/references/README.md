@@ -6,6 +6,18 @@ This directory contains the fixed Node.js runner, its bounded management/executi
 
 The installed files live under `~/.copilot/`. No CommandRunner control files or personal command allowlists need to be added to a project repository.
 
+## Git worktree inheritance (explicit opt-in)
+
+Run this command **once from the registered Git repository root**, subject to Host/human approval:
+
+```bash
+node ~/.copilot/skills/command-runner/scripts/cli.mjs workspace.worktrees.enable
+```
+
+The reviewed operation adds `"inheritWorktrees": true` to the existing workspace entry in `workspaces.json`; it does not register each linked worktree. Only an exact Git repository root can enable inheritance. A linked worktree must have the same canonical Git common directory and appear in Git's official worktree list. Independent clones, copies and nested repositories do not inherit the registration.
+
+Registered command definitions and the existing Fixed/Allowlist policy are shared, but commands run relative to the **current worktree**. File arguments and command cwd are validated against that runtime root. Execution output and approval proposals are isolated by worktree identity. Existing package script guards are still checked against the current worktree before execution; changes in another branch can make the command unavailable. These checks are not an OS sandbox; a registered command may itself write elsewhere or affect shared Git metadata.
+
 ## Supported environments
 
 Version 1 targets macOS, Linux, and WSL2. Native Windows support is not included yet.

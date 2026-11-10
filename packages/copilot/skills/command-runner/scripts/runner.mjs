@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
+import { promisify } from 'node:util';
 import { builtinDefinitions, isBuiltinId } from './builtins.mjs';
 import { validateScriptGuard, scriptFingerprint } from './script-guard.mjs';
 import { createHash } from 'node:crypto';
@@ -18,6 +19,7 @@ const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
 const DEFAULTS = { timeoutMs: 300_000, maxOutputBytes: 1_048_576 };
 const TERMINATION_GRACE_MS = 1_000;
 const LIMITS = { parameters: 50, valueLength: 8192, totalLength: 65_536 };
+const gitExec = promisify(execFile);
 const INLINE_CODE = new Set([
   'sh\0-c', 'bash\0-c', 'zsh\0-c', 'cmd\0/c', 'cmd.exe\0/c',
   'powershell\0-command', 'powershell.exe\0-command', 'pwsh\0-command',
@@ -504,7 +506,10 @@ async function validateConfig(raw, { allowMissingRoots = false } = {}) {
   for (const [index, workspace] of raw.workspaces.entries()) {
     const location = `configuration.workspaces[${index}]`;
     requireObject(workspace, location);
-    requireKeys(workspace, ['id', 'root', 'commands', 'registrationId'], location);
+    requireKeys(workspace, ['id', 'root', 'commands', 'registrationId', 'inheritWorktrees'], location);
+    if (workspace.inheritWorktrees !== undefined && typeof workspace.inheritWorktrees !== 'boolean') {
+      throw new RunnerError('invalid_config', `${location}.inheritWorktrees must be boolean`);
+    }
     if (workspace.registrationId !== undefined && !REGISTRATION_RE.test(workspace.registrationId)) {
       throw new RunnerError('invalid_config', `${location}.registrationId must be a UUIDv4`);
     }
@@ -532,12 +537,58 @@ async function validateConfig(raw, { allowMissingRoots = false } = {}) {
     workspaces.push({
       id: workspace.id,
       root,
+      inheritWorktrees: workspace.inheritWorktrees === true,
       workspaceIdentity: identityHash([workspace.id, root, workspace.registrationId ?? null]),
       commandHashes: { ...builtinHashes, ...Object.fromEntries(Object.entries(workspace.commands).map(([id, cmd]) => [id, executionHash(cmd, defaults)])) },
       commands: { ...builtinCommands, ...commands },
     });
   }
   return workspaces;
+}
+
+// Git resolves repository membership; paths and directory names alone never grant authority.
+async function gitOutput(cwd, args) {
+  const env = Object.fromEntries(Object.entries(process.env)
+    .filter(([name]) => !name.startsWith('GIT_')));
+  const { stdout } = await gitExec('git', ['-C', cwd, ...args], {
+    encoding: 'utf8', env, timeout: 5_000, maxBuffer: 1_048_576, windowsHide: true,
+  });
+  return stdout;
+}
+
+async function gitState(cwd) {
+  const line = (value) => value.endsWith('\n') ? value.slice(0, -1) : value;
+  const top = line(await gitOutput(cwd, ['rev-parse', '--show-toplevel']));
+  const common = line(await gitOutput(cwd, ['rev-parse', '--path-format=absolute', '--git-common-dir']));
+  return { top: await realpath(top), common: await realpath(common) };
+}
+
+async function listedGitWorktree(registeredRoot, runtimeRoot) {
+  const output = await gitOutput(registeredRoot, ['worktree', 'list', '--porcelain', '-z']);
+  const entries = output.split('\0');
+  for (let i = 0; i < entries.length; i += 1) {
+    if (!entries[i].startsWith('worktree ')) continue;
+    let listed;
+    try { listed = await realpath(entries[i].slice('worktree '.length)); }
+    catch { continue; }
+    if (listed !== runtimeRoot) continue;
+    // Prunable registrations refer to absent or broken worktrees, not authorized roots.
+    for (let j = i + 1; j < entries.length && entries[j] !== ''; j += 1) {
+      if (entries[j] === 'prunable' || entries[j].startsWith('prunable ')) return false;
+    }
+    return true;
+  }
+  return false;
+}
+
+function runtimeWorkspace(workspace, runtimeRoot) {
+  return {
+    ...workspace,
+    registeredRoot: workspace.root,
+    runtimeRoot,
+    root: runtimeRoot,
+    runtimeIdentity: identityHash([workspace.workspaceIdentity, runtimeRoot]),
+  };
 }
 
 async function loadWorkspace(start = process.cwd()) {
@@ -564,21 +615,60 @@ async function loadWorkspace(start = process.cwd()) {
       `current working directory does not exist: ${start}`,
     );
   }
-  const matches = workspaces.filter((workspace) => inside(workspace.root, current));
-  if (!matches.length) {
-    throw new RunnerError(
-      'workspace_not_registered',
-      `current workspace is not registered: ${current}`,
-    );
+  const direct = workspaces.filter((workspace) => inside(workspace.root, current));
+  if (direct.length) {
+    direct.sort((left, right) => right.root.length - left.root.length);
+    if (direct.length > 1 && direct[0].root.length === direct[1].root.length) {
+      throw new RunnerError('invalid_config', `workspace selection is ambiguous for ${current}`);
+    }
+    const selected = direct[0];
+    // A linked worktree can be nested beneath the registered checkout. The
+    // containing path must not override Git's actual working-tree boundary.
+    let registeredGit;
+    let currentGit;
+    try {
+      registeredGit = await gitState(selected.root);
+      if (registeredGit.top === selected.root) currentGit = await gitState(current);
+    } catch {
+      // For non-Git workspaces retain the existing path-based selection.
+    }
+    if (registeredGit?.top === selected.root && currentGit
+      && currentGit.top !== selected.root) {
+      if (!selected.inheritWorktrees || registeredGit.common !== currentGit.common
+        || !(await listedGitWorktree(selected.root, currentGit.top))) {
+        throw new RunnerError('workspace_not_registered',
+          `nested repository is not an authorized worktree: ${current}`);
+      }
+      return runtimeWorkspace(selected, currentGit.top);
+    }
+    return runtimeWorkspace(selected, selected.root);
   }
-  matches.sort((left, right) => right.root.length - left.root.length);
-  if (matches.length > 1 && matches[0].root.length === matches[1].root.length) {
-    throw new RunnerError(
-      'invalid_config',
-      `workspace selection is ambiguous for ${current}`,
-    );
+
+  const eligible = workspaces.filter((workspace) => workspace.inheritWorktrees);
+  if (!eligible.length) {
+    throw new RunnerError('workspace_not_registered', `current workspace is not registered: ${current}`);
   }
-  return matches[0];
+  let runtimeGit;
+  try { runtimeGit = await gitState(current); }
+  catch {
+    throw new RunnerError('workspace_not_registered', `current workspace is not registered: ${current}`);
+  }
+  const candidates = [];
+  for (const workspace of eligible) {
+    try {
+      const registeredGit = await gitState(workspace.root);
+      if (registeredGit.top !== workspace.root || registeredGit.common !== runtimeGit.common
+        || !(await listedGitWorktree(workspace.root, runtimeGit.top))) continue;
+      candidates.push(workspace);
+    } catch {
+      // Git could not verify this workspace: fail closed instead of guessing by name.
+    }
+  }
+  if (candidates.length !== 1) {
+    throw new RunnerError(candidates.length ? 'workspace_ambiguous' : 'workspace_not_registered',
+      `cannot uniquely identify a registered Git worktree for ${current}`);
+  }
+  return runtimeWorkspace(candidates[0], runtimeGit.top);
 }
 
 function publicCommand(id, command) {
@@ -1040,6 +1130,7 @@ async function execute(workspace, id, command, provided) {
           ? 'completed'
           : 'failed',
         workspaceId: workspace.id,
+        runtimeIdentity: workspace.runtimeIdentity,
         commandId: id,
         arguments: publicArguments,
         cwd: relativeCwd,
@@ -1094,6 +1185,9 @@ async function main() {
     emit({
       workspaceId: workspace.id,
       workspaceIdentity: workspace.workspaceIdentity,
+      runtimeIdentity: workspace.runtimeIdentity,
+      registeredRoot: workspace.registeredRoot,
+      runtimeRoot: workspace.runtimeRoot,
       commands: Object.entries(workspace.commands).map(
         ([id, command]) => publicCommand(id, command),
       ),
@@ -1121,6 +1215,7 @@ async function main() {
     emit({
       workspaceId: workspace.id,
       workspaceIdentity: workspace.workspaceIdentity,
+      runtimeIdentity: workspace.runtimeIdentity,
       definitionHash: workspace.commandHashes[commandId],
       command: publicCommand(commandId, command),
     });

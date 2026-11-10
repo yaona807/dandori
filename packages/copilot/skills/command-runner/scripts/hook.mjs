@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import os from 'node:os';
 import { lstatSync, readFileSync, realpathSync } from 'node:fs';
 import process from 'node:process';
@@ -141,6 +142,29 @@ function activationReview(id) {
 }
 
 // A first-time workspace registration is confirmed once, not on every run.
+// Review the exact directory whose registration will inherit into linked worktrees.
+function worktreeEnableReview(input) {
+  const callerCwd = realpathSync(process.cwd());
+  if (input.cwd !== undefined
+    && (typeof input.cwd !== 'string' || !path.isAbsolute(input.cwd)
+      || realpathSync(input.cwd) !== callerCwd)) {
+    throw new Error('host workspace differs from hook current directory');
+  }
+  const runner = path.join(path.dirname(realpathSync(fileURLToPath(import.meta.url))), 'runner.mjs');
+  const check = spawnSync(process.execPath, [runner, 'list'], {
+    cwd: callerCwd, env: process.env, encoding: 'utf8',
+    timeout: 10_000, maxBuffer: 128_000, windowsHide: true,
+  });
+  if (check.status !== 0) throw new Error('registered repository root could not be verified');
+  let selected;
+  try { selected = JSON.parse(check.stdout); }
+  catch { throw new Error('runner returned invalid workspace metadata'); }
+  if (selected.registeredRoot !== callerCwd || selected.runtimeRoot !== callerCwd) {
+    throw new Error('worktree inheritance must be enabled at the exact registered repository root');
+  }
+  return 'Enable registered commands for all verified Git worktrees? Repository root: ' + callerCwd;
+}
+
 function workspaceEnsureReview(input) {
   const callerCwd = realpathSync(process.cwd());
   if (input.cwd !== undefined) {
@@ -170,6 +194,22 @@ function workspaceEnsureReview(input) {
     return relative === '' || (relative !== '..' && !relative.startsWith('..' + path.sep) && !path.isAbsolute(relative));
   });
   if (existing) return null;
+  // Reuse the Core Runner's Git membership verification instead of duplicating
+  // authorization logic in the hook. An unverified directory still needs approval.
+  const runner = path.join(path.dirname(realpathSync(fileURLToPath(import.meta.url))), 'runner.mjs');
+  const check = spawnSync(process.execPath, [runner, 'list'], {
+    cwd: callerCwd, env: process.env, encoding: 'utf8',
+    timeout: 10_000, maxBuffer: 128_000, windowsHide: true,
+  });
+  if (check.status === 0) {
+    try {
+      const selected = JSON.parse(check.stdout);
+      if (typeof selected.runtimeRoot === 'string' && typeof selected.registeredRoot === 'string'
+        && selected.runtimeRoot !== selected.registeredRoot) return null;
+    } catch {
+      // Unrecognized Runner output is not proof of authorization.
+    }
+  }
   // No automatic parent-directory selection. Show the exact cwd to the human.
   const rootMarker = ['.git', 'package.json'].some(name => {
     try {
@@ -246,6 +286,10 @@ function validateCliInvocation(tokens) {
   if (operation === 'workspace.ensure' || operation === 'context') {
     if (tokens.length !== 3) throw new Error('unexpected parameters');
     return 'allow';
+  }
+  if (operation === 'workspace.worktrees.enable') {
+    if (tokens.length !== 3) throw new Error('unexpected parameters');
+    return 'ask';
   }
   if (operation === 'list') {
     for (const t of tokens.slice(3)) validateEncodedParameter(t);
@@ -637,7 +681,10 @@ try {
       else allow('Workspace is already registered and bound to this directory.');
     } else if (decision === 'ask') {
       const isActivation = isCli && tokens[2] === 'activate';
-      ask(isActivation ? activationReview(tokens[3]) : 'Human approval required for registry mutation; review the exact command definition.');
+      const worktrees = isCli && tokens[2] === 'workspace.worktrees.enable';
+      ask(worktrees ? worktreeEnableReview(input)
+        : isActivation ? activationReview(tokens[3])
+          : 'Human approval required for registry mutation; review the exact command definition.');
     } else allow('Only the fixed user-level command runner interface is permitted.');
   }
 } catch (error) {
