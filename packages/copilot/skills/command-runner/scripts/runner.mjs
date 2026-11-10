@@ -557,8 +557,9 @@ async function gitOutput(cwd, args) {
 }
 
 async function gitState(cwd) {
-  const top = (await gitOutput(cwd, ['rev-parse', '--show-toplevel'])).trimEnd();
-  const common = (await gitOutput(cwd, ['rev-parse', '--path-format=absolute', '--git-common-dir'])).trimEnd();
+  const line = (value) => value.endsWith('\n') ? value.slice(0, -1) : value;
+  const top = line(await gitOutput(cwd, ['rev-parse', '--show-toplevel']));
+  const common = line(await gitOutput(cwd, ['rev-parse', '--path-format=absolute', '--git-common-dir']));
   return { top: await realpath(top), common: await realpath(common) };
 }
 
