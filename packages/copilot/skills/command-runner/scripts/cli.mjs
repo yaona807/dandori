@@ -140,7 +140,7 @@ async function readProposal(id) {
         : record.version === 3
           ? [record.workspaceIdentity, record.commandId, record.definition, record.scriptPreview, record.expectedHash ?? null, record.previousAllow, record.kind]
           : [record.workspaceIdentity, record.commandId, record.definition, record.scriptPreview, record.expectedHash, record.previousAllow, record.kind, record.patch, record.previous]),
-      ...(record.runtimeIdentity === undefined ? [] : [record.runtimeIdentity])]) {
+      ...(record.runtimeIdentity === undefined ? [] : [record.runtimeIdentity])])) {
     throw error('stale_proposal', 'proposal is expired or was modified');
   }
   return record;
