@@ -621,7 +621,27 @@ async function loadWorkspace(start = process.cwd()) {
     if (direct.length > 1 && direct[0].root.length === direct[1].root.length) {
       throw new RunnerError('invalid_config', `workspace selection is ambiguous for ${current}`);
     }
-    return runtimeWorkspace(direct[0], direct[0].root);
+    const selected = direct[0];
+    // A linked worktree can be nested beneath the registered checkout. The
+    // containing path must not override Git's actual working-tree boundary.
+    let registeredGit;
+    let currentGit;
+    try {
+      registeredGit = await gitState(selected.root);
+      if (registeredGit.top === selected.root) currentGit = await gitState(current);
+    } catch {
+      // For non-Git workspaces retain the existing path-based selection.
+    }
+    if (registeredGit?.top === selected.root && currentGit
+      && currentGit.top !== selected.root) {
+      if (!selected.inheritWorktrees || registeredGit.common !== currentGit.common
+        || !(await listedGitWorktree(selected.root, currentGit.top))) {
+        throw new RunnerError('workspace_not_registered',
+          `nested repository is not an authorized worktree: ${current}`);
+      }
+      return runtimeWorkspace(selected, currentGit.top);
+    }
+    return runtimeWorkspace(selected, selected.root);
   }
 
   const eligible = workspaces.filter((workspace) => workspace.inheritWorktrees);
