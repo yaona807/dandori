@@ -70,6 +70,16 @@ test('Git worktrees require a reviewed opt-in and reuse the registered command s
     const before = invoke(f, f.linked, 'runner.mjs', ['list']);
     assert.equal(before.status, 2);
     assert.equal(result(before).error.code, 'workspace_not_registered');
+    const review = spawnSync(process.execPath, [path.join(f.installed, 'hook.mjs')], {
+      cwd: f.main, encoding: 'utf8', env: { ...process.env, COPILOT_HOME: f.home },
+      input: JSON.stringify({
+        tool_name: 'run_in_terminal',
+        tool_input: { command: 'node ~/.copilot/skills/command-runner/scripts/cli.mjs workspace.worktrees.enable' },
+      }),
+    });
+    assert.equal(review.status, 0, review.stderr);
+    assert.equal(result(review).permissionDecision, 'ask');
+    assert.match(result(review).permissionDecisionReason, /Git worktrees/);
     await enable(f);
     const configured = JSON.parse(await readFile(path.join(f.home, 'command-runner/workspaces.json'), 'utf8'));
     assert.equal(configured.workspaces.length, 1);
