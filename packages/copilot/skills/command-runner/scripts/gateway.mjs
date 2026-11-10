@@ -2,7 +2,7 @@
 
 import { createHash, randomUUID } from 'node:crypto';
 import { builtinDefinitions, isBuiltinId } from './builtins.mjs';
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import {
   lstat,
   mkdir,
@@ -447,7 +447,11 @@ async function readStableConfiguration(expectedWorkspace) {
   if (!DEFINITION_HASH_RE.test(selected.workspaceIdentity ?? '')) {
     throw new InterfaceError('runner_protocol_error', 'fixed runner returned an invalid workspace identity');
   }
-  return { ...before, workspaceId: selected.workspaceId, workspaceIdentity: selected.workspaceIdentity, workspace: matches[0] };
+  return {
+    ...before, workspaceId: selected.workspaceId, workspaceIdentity: selected.workspaceIdentity,
+    runtimeIdentity: selected.runtimeIdentity, runtimeRoot: selected.runtimeRoot,
+    registeredRoot: selected.registeredRoot, workspace: matches[0],
+  };
 }
 
 async function validateCandidateConfiguration(configuration, expectedWorkspaceId) {
@@ -571,6 +575,41 @@ async function registerConfiguredWorkspace(id) {
       root: current,
       workspaceHash: workspaceHash(workspace),
     };
+  });
+}
+
+async function enableWorkspaceWorktrees(expectedWorkspace) {
+  return withConfigurationLock(async () => {
+    const snapshot = await readStableConfiguration(expectedWorkspace);
+    const root = await realpath(snapshot.workspace.root);
+    if (snapshot.runtimeRoot && snapshot.runtimeRoot !== root) {
+      throw new InterfaceError('workspace_scope_mismatch',
+        'Worktree inheritance can only be enabled from the registered repository root');
+    }
+    const env = Object.fromEntries(Object.entries(process.env)
+      .filter(([name]) => !name.startsWith('GIT_')));
+    let top;
+    try {
+      top = execFileSync('git', ['-C', root, 'rev-parse', '--show-toplevel'], {
+        encoding: 'utf8', env, timeout: 5_000, windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'],
+      }).trimEnd();
+    } catch {
+      throw new InterfaceError('workspace_root_unverified',
+        'registered workspace must be the exact root of a Git repository');
+    }
+    if (await realpath(top) !== root) {
+      throw new InterfaceError('workspace_root_unverified',
+        'registered workspace must be the exact root of a Git repository');
+    }
+    if (snapshot.workspace.inheritWorktrees === true) {
+      return { status: 'ready', workspaceId: expectedWorkspace, inheritWorktrees: true };
+    }
+    const candidate = JSON.parse(JSON.stringify(snapshot.raw));
+    const target = candidate.workspaces.find((entry) => entry.id === expectedWorkspace);
+    target.inheritWorktrees = true;
+    await validateCandidateConfiguration(candidate, expectedWorkspace);
+    await writeConfigurationAtomically(snapshot.source, candidate);
+    return { status: 'completed', workspaceId: expectedWorkspace, inheritWorktrees: true };
   });
 }
 
@@ -856,14 +895,12 @@ async function managedExecutions() {
   await mkdir(root, { recursive: true, mode: 0o700 });
   const now = Date.now();
   const entries = [];
-  for (const workspace of await readdir(root, { withFileTypes: true })) {
-    if (!workspace.isDirectory() || !COMMAND_ID_RE.test(workspace.name)) continue;
-    const workspaceRoot = path.join(root, workspace.name);
-    for (const execution of await readdir(workspaceRoot, { withFileTypes: true })) {
+  async function collect(scope) {
+    for (const execution of await readdir(scope, { withFileTypes: true })) {
       if (!execution.isDirectory()) continue;
       const createdAt = executionCreatedAt(execution.name);
       if (createdAt === null) continue;
-      const directory = path.join(workspaceRoot, execution.name);
+      const directory = path.join(scope, execution.name);
       let size = 0;
       for (const name of ['stdout.log', 'stderr.log']) {
         try {
@@ -874,6 +911,16 @@ async function managedExecutions() {
         }
       }
       entries.push({ directory, createdAt, age: Math.max(0, now - createdAt), size });
+    }
+  }
+  for (const workspace of await readdir(root, { withFileTypes: true })) {
+    if (!workspace.isDirectory() || !COMMAND_ID_RE.test(workspace.name)) continue;
+    const workspaceRoot = path.join(root, workspace.name);
+    await collect(workspaceRoot); // Previous layout and the registered root.
+    for (const scope of await readdir(workspaceRoot, { withFileTypes: true })) {
+      if (scope.isDirectory() && /^[0-9a-f]{64}$/u.test(scope.name)) {
+        await collect(path.join(workspaceRoot, scope.name));
+      }
     }
   }
   return entries;
@@ -934,9 +981,19 @@ function tail(value) {
   return buffer.subarray(start).toString('utf8');
 }
 
-async function storeExecution(workspace, coreResult) {
+function scopedExecutionsRoot(workspace, context) {
+  const inherited = context?.runtimeRoot && context?.registeredRoot
+    && context.runtimeRoot !== context.registeredRoot;
+  if (!inherited) return path.join(executionsRoot(), workspace);
+  if (!DEFINITION_HASH_RE.test(context.runtimeIdentity ?? '')) {
+    throw new InterfaceError('runner_protocol_error', 'missing worktree execution identity');
+  }
+  return path.join(executionsRoot(), workspace, context.runtimeIdentity.slice('sha256-'.length));
+}
+
+async function storeExecution(workspace, context, coreResult) {
   const id = executionId();
-  const root = path.join(executionsRoot(), workspace);
+  const root = scopedExecutionsRoot(workspace, context);
   await mkdir(root, { recursive: true, mode: 0o700 });
   const directory = path.join(root, id);
   await mkdir(directory, { mode: 0o700 });
@@ -963,7 +1020,7 @@ async function storeExecution(workspace, coreResult) {
   };
 }
 
-async function readOutput(workspace, id, provided) {
+async function readOutput(workspace, context, id, provided) {
   allowOnly(provided, new Set(['stream', 'offset']));
   const stream = one(provided, 'stream', true);
   if (!['stdout', 'stderr'].includes(stream)) {
@@ -976,7 +1033,7 @@ async function readOutput(workspace, id, provided) {
     throw new InterfaceError('execution_expired', `execution has expired: ${id}`);
   }
 
-  const root = path.join(executionsRoot(), workspace);
+  const root = scopedExecutionsRoot(workspace, context);
   let canonicalRoot;
   let directory;
   try {
@@ -1045,6 +1102,7 @@ async function main() {
     'workspace-describe',
     'workspace-register',
     'workspace-unregister',
+    'workspace-worktrees-enable',
     'list',
     'describe',
     'inspect',
@@ -1115,6 +1173,17 @@ async function main() {
       subject,
       one(provided, 'expected', true),
     ));
+    return 0;
+  }
+
+  if (operation === 'workspace-worktrees-enable') {
+    const { expectedWorkspace, rest: parameters } = scopedArguments(
+      subject === undefined ? rest : [subject, ...rest],
+    );
+    if (parameters.length) {
+      throw new InterfaceError('invalid_argument', 'workspace-worktrees-enable accepts no arguments');
+    }
+    emit(await enableWorkspaceWorktrees(expectedWorkspace));
     return 0;
   }
 
@@ -1280,10 +1349,11 @@ async function main() {
     }
     await requireExecutionCapacity(LIMITS.maxExecutionReserveBytes);
     const result = await runCore(['run', subject, ...rest]);
-    if (result?.workspaceId !== expectedWorkspace || result?.commandId !== subject) {
+    if (result?.workspaceId !== expectedWorkspace || result?.commandId !== subject
+      || (preflight.runtimeIdentity && result?.runtimeIdentity !== preflight.runtimeIdentity)) {
       throw new InterfaceError('runner_protocol_error', 'unexpected execution identity');
     }
-    emit(await storeExecution(expectedWorkspace, result));
+    emit(await storeExecution(expectedWorkspace, preflight, result));
     return 0;
   }
 
@@ -1291,8 +1361,12 @@ async function main() {
     throw new InterfaceError('usage', 'output requires a safe execution ID');
   }
   const { expectedWorkspace, rest: parameters } = scopedArguments(rest);
-  const workspace = await workspaceId(expectedWorkspace);
-  emit(await readOutput(workspace, subject, parseArguments(parameters)));
+  const context = await runCore(['list']);
+  if (context.workspaceId !== expectedWorkspace) {
+    throw new InterfaceError('workspace_scope_mismatch',
+      'selected terminal workspace differs from the delegated workspace');
+  }
+  emit(await readOutput(expectedWorkspace, context, subject, parseArguments(parameters)));
   return 0;
 }
 
