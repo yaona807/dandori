@@ -206,3 +206,65 @@ test('legacy root-scoped proposals cannot be activated in a linked worktree', { 
     assert.equal(original.status, 0, original.stderr);
   } finally { await rm(f.root, { recursive: true, force: true }); }
 });
+
+test('a worktree nested inside its parent checkout uses its own runtime and output', { skip: !gitAvailable }, async () => {
+  const f = await fixture();
+  try {
+    const nested = path.join(f.main, '.worktrees', 'nested-feature');
+    await mkdir(path.dirname(nested), { recursive: true });
+    git(f.main, 'worktree', 'add', '-b', 'nested-feature', nested);
+    const before = invoke(f, nested, 'runner.mjs', ['list']);
+    assert.equal(before.status, 2);
+    assert.equal(result(before).error.code, 'workspace_not_registered');
+
+    await enable(f);
+    const scope = invoke(f, nested, 'runner.mjs', ['list']);
+    assert.equal(scope.status, 0, scope.stderr);
+    assert.equal(result(scope).runtimeRoot, nested);
+    assert.equal(result(scope).registeredRoot, f.main);
+    const fromSubdirectory = invoke(f, path.join(nested, 'tools'), 'runner.mjs', ['list']);
+    assert.equal(fromSubdirectory.status, 0, fromSubdirectory.stderr);
+    assert.equal(result(fromSubdirectory).runtimeRoot, nested);
+
+    const ran = invoke(f, nested, 'cli.mjs', ['run', 'probe']);
+    assert.equal(ran.status, 0, ran.stderr);
+    assert.equal(result(ran).stdoutPreview, nested);
+    const localOutput = invoke(f, nested, 'cli.mjs', ['output', result(ran).executionId, 'stream=stdout']);
+    assert.equal(localOutput.status, 0, localOutput.stderr);
+    assert.equal(result(localOutput).data, nested);
+    const parentOutput = invoke(f, f.main, 'cli.mjs', ['output', result(ran).executionId, 'stream=stdout']);
+    assert.equal(parentOutput.status, 2);
+    assert.equal(result(parentOutput).error.code, 'execution_not_found');
+
+    const unrelated = path.join(f.main, 'unrelated-repo');
+    await mkdir(unrelated);
+    git(unrelated, 'init', '-b', 'main');
+    const notInherited = invoke(f, unrelated, 'runner.mjs', ['list']);
+    assert.equal(notInherited.status, 2);
+    assert.equal(result(notInherited).error.code, 'workspace_not_registered');
+  } finally { await rm(f.root, { recursive: true, force: true }); }
+});
+
+test('only the exact registered checkout may authorize inheritance', { skip: !gitAvailable }, async () => {
+  const f = await fixture();
+  try {
+    const child = path.join(f.main, 'tools');
+    const rejected = invoke(f, child, 'cli.mjs', ['workspace.worktrees.enable']);
+    assert.equal(rejected.status, 2);
+    assert.equal(result(rejected).error.code, 'workspace_scope_mismatch');
+    const config = JSON.parse(await readFile(path.join(f.home, 'command-runner/workspaces.json'), 'utf8'));
+    assert.notEqual(config.workspaces[0].inheritWorktrees, true);
+    const hook = spawnSync(process.execPath, [path.join(f.installed, 'hook.mjs')], {
+      cwd: child, encoding: 'utf8',
+      env: { ...process.env, COPILOT_HOME: f.home },
+      input: JSON.stringify({
+        tool_name: 'run_in_terminal',
+        tool_input: { command: 'node ~/.copilot/skills/command-runner/scripts/cli.mjs workspace.worktrees.enable' },
+      }),
+    });
+    assert.equal(hook.status, 0, hook.stderr);
+    assert.equal(result(hook).permissionDecision, 'deny');
+    assert.match(result(hook).permissionDecisionReason, /exact registered repository root/);
+    await enable(f);
+  } finally { await rm(f.root, { recursive: true, force: true }); }
+});
