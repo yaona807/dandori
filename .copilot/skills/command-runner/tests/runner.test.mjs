@@ -15,6 +15,8 @@ import {
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+// Keep the existing fixed test-suite inventory while exercising Git worktree inheritance.
+import './worktree.test.mjs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const SOURCE_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
