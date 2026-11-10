@@ -132,13 +132,15 @@ async function readProposal(id) {
       || !record.previous || typeof record.previous !== 'object' || Array.isArray(record.previous)
       || !/^sha256-[0-9a-f]{64}$/u.test(record.expectedHash)))
     || !Number.isFinite(record.expiresAt) || Date.now() > record.expiresAt
-    || record.approvalDigest !== digest(record.version === 1
+    || (record.runtimeIdentity !== undefined && !/^sha256-[0-9a-f]{64}$/u.test(record.runtimeIdentity))
+    || record.approvalDigest !== digest([...(record.version === 1
       ? [record.workspaceIdentity, record.commandId, record.definition, record.scriptPreview, record.expectedHash ?? null]
       : record.version === 2
         ? [record.workspaceIdentity, record.commandId, record.definition, record.scriptPreview, record.expectedHash ?? null, record.previousAllow]
         : record.version === 3
           ? [record.workspaceIdentity, record.commandId, record.definition, record.scriptPreview, record.expectedHash ?? null, record.previousAllow, record.kind]
-          : [record.workspaceIdentity, record.commandId, record.definition, record.scriptPreview, record.expectedHash, record.previousAllow, record.kind, record.patch, record.previous])) {
+          : [record.workspaceIdentity, record.commandId, record.definition, record.scriptPreview, record.expectedHash, record.previousAllow, record.kind, record.patch, record.previous]),
+      ...(record.runtimeIdentity === undefined ? [] : [record.runtimeIdentity])]) {
     throw error('stale_proposal', 'proposal is expired or was modified');
   }
   return record;
@@ -272,7 +274,7 @@ async function propose(commandId, params) {
       : 'only packageDir/script/allow/description are supported');
   }
   const {selected, workspace} = await selectedConfig();
-  const root = await realpath(workspace.root);
+  const root = await realpath(selected.runtimeRoot ?? workspace.root);
   let definition;
   let scriptPreview = null;
   let kind = 'fixed';
@@ -285,7 +287,7 @@ async function propose(commandId, params) {
     if (!packageDir || path.isAbsolute(packageDir) || packageDir.includes('..') || packageDir.includes('\\')) {
       throw error('invalid_argument', 'packageDir must be a workspace-relative directory');
     }
-    const dir = await realpath(path.resolve(workspace.root, packageDir));
+    const dir = await realpath(path.resolve(root, packageDir));
     if (!within(root, dir)) throw error('path_escape', 'packageDir escapes workspace');
     const scriptName = params.get('script') ?? commandId;
     let selectedScript;
@@ -323,11 +325,13 @@ async function propose(commandId, params) {
   const original = workspace.commands[commandId] ?? null;
   const id = 'prop-' + randomUUID().replaceAll('-', '');
   const record = {version: fixed ? 3 : 2, id, commandId, workspaceIdentity: selected.workspaceIdentity,
+    ...(selected.runtimeIdentity ? {runtimeIdentity: selected.runtimeIdentity} : {}),
     ...(fixed ? {kind} : {}), definition, scriptPreview, previousAllow: original?.allow ?? null,
     expectedHash: original ? digest(original) : null, expiresAt: Date.now() + MAX_AGE};
   const subject = [record.workspaceIdentity, record.commandId, record.definition, record.scriptPreview,
     record.expectedHash, record.previousAllow];
-  record.approvalDigest = digest(fixed ? [...subject, kind] : subject);
+  record.approvalDigest = digest([...(fixed ? [...subject, kind] : subject),
+    ...(record.runtimeIdentity ? [record.runtimeIdentity] : [])]);
   await mkdir(PROPOSALS, {recursive: true, mode: 0o700});
   await writeFile(path.join(PROPOSALS, id + '.json'), JSON.stringify(record) + '\n', {flag: 'wx', mode: 0o600});
   return {status: 'pending_approval', proposalId: id, commandId, proposalType: kind,
@@ -442,16 +446,19 @@ async function proposeUpdate(commandId, params) {
   const {selected, workspace} = await selectedConfig();
   const original = workspace.commands?.[commandId];
   if (!original) throw error('command_not_registered', 'update requires an existing registered command');
-  const root = await realpath(workspace.root);
+  const root = await realpath(selected.runtimeRoot ?? workspace.root);
   const {definition, scriptPreview} = await updatedDefinition(original, patch, root);
   const id = 'prop-' + randomUUID().replaceAll('-', '');
   const record = {version: 4, kind: 'update', id, commandId,
-    workspaceIdentity: selected.workspaceIdentity, definition, scriptPreview,
+    workspaceIdentity: selected.workspaceIdentity,
+    ...(selected.runtimeIdentity ? {runtimeIdentity: selected.runtimeIdentity} : {}),
+    definition, scriptPreview,
     patch, previous: previousFields(original, patch), previousAllow: original.allow ?? null,
     expectedHash: digest(original), expiresAt: Date.now() + MAX_AGE};
   record.approvalDigest = digest([
     record.workspaceIdentity, record.commandId, record.definition, record.scriptPreview,
     record.expectedHash, record.previousAllow, record.kind, record.patch, record.previous,
+    ...(record.runtimeIdentity ? [record.runtimeIdentity] : []),
   ]);
   if (Buffer.byteLength(JSON.stringify(record)) > 32_768) {
     throw error('invalid_definition', 'update proposal exceeds the bounded proposal size');
@@ -471,8 +478,12 @@ async function activate(id) {
   const record = await readProposal(id);
   const {selected, workspace} = await selectedConfig();
   if (selected.workspaceIdentity !== record.workspaceIdentity) throw error('workspace_identity_changed', 'proposal workspace has changed');
-  const cwd = await realpath(path.join(workspace.root, record.definition.cwd ?? '.'));
-  if (!within(await realpath(workspace.root), cwd)) throw error('path_escape', 'candidate script directory escaped workspace');
+  if (record.runtimeIdentity && selected.runtimeIdentity !== record.runtimeIdentity) {
+    throw error('workspace_identity_changed', 'proposal was created in a different worktree');
+  }
+  const root = await realpath(selected.runtimeRoot ?? workspace.root);
+  const cwd = await realpath(path.join(root, record.definition.cwd ?? '.'));
+  if (!within(root, cwd)) throw error('path_escape', 'candidate script directory escaped workspace');
   const existing = workspace.commands[record.commandId] ?? null;
   if ((existing ? digest(existing) : null) !== record.expectedHash) {
     throw error('stale_proposal', 'registered command changed since proposal');
@@ -492,11 +503,11 @@ async function activate(id) {
     }
   } else if (record.version === 3 && record.kind === 'fixed') {
     if (record.definition.scriptGuard !== undefined || record.scriptPreview !== null
-      || digest(await fixedDefinition(record.definition, await realpath(workspace.root))) !== digest(record.definition)) {
+      || digest(await fixedDefinition(record.definition, root)) !== digest(record.definition)) {
       throw error('stale_proposal', 'fixed proposal is invalid or was modified');
     }
   } else {
-    const currentFingerprint = await scriptFingerprint(cwd, record.definition.scriptGuard.manager, record.definition.scriptGuard.script, workspace.root);
+    const currentFingerprint = await scriptFingerprint(cwd, record.definition.scriptGuard.manager, record.definition.scriptGuard.script, root);
     if (currentFingerprint.fingerprint !== record.definition.scriptGuard.fingerprint) {
       throw error('stale_script_definition', 'package scripts changed before activation');
     }
@@ -516,6 +527,11 @@ async function main() {
   if (op === 'workspace.ensure') {
     if (id !== undefined) throw error('invalid_argument', 'workspace.ensure takes no arguments');
     return ensure();
+  }
+  if (op === 'workspace.worktrees.enable') {
+    if (id !== undefined) throw error('invalid_argument', 'workspace.worktrees.enable takes no arguments');
+    const selected = await current();
+    return runInterface(['workspace-worktrees-enable', '--expected-workspace=' + selected.workspaceId]);
   }
   if (op === 'propose') return propose(id, safeParams(tokens));
   if (op === 'propose.update') return proposeUpdate(id, safeParams(tokens));
