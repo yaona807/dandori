@@ -495,7 +495,7 @@ async function activate(id) {
       throw error('stale_proposal', 'registered command changed since proposal');
     }
     let updated;
-    try { updated = await updatedDefinition(existing, parseUpdatePatch(JSON.stringify(record.patch)), await realpath(workspace.root)); }
+    try { updated = await updatedDefinition(existing, parseUpdatePatch(JSON.stringify(record.patch)), root); }
     catch { throw error('stale_proposal', 'update proposal no longer validates'); }
     if (digest(updated.definition) !== digest(record.definition)
       || digest(updated.scriptPreview) !== digest(record.scriptPreview)) {
