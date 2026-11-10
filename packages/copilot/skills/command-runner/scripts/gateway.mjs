@@ -582,7 +582,9 @@ async function enableWorkspaceWorktrees(expectedWorkspace) {
   return withConfigurationLock(async () => {
     const snapshot = await readStableConfiguration(expectedWorkspace);
     const root = await realpath(snapshot.workspace.root);
-    if (snapshot.runtimeRoot && snapshot.runtimeRoot !== root) {
+    // The selected runtime root may be the parent checkout even when the
+    // caller is in a subdirectory. Check the canonical *actual cwd*.
+    if (await realpath(process.cwd()) !== root || (snapshot.runtimeRoot && snapshot.runtimeRoot !== root)) {
       throw new InterfaceError('workspace_scope_mismatch',
         'Worktree inheritance can only be enabled from the registered repository root');
     }
