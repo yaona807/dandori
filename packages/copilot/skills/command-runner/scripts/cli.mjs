@@ -482,6 +482,11 @@ async function activate(id) {
     throw error('workspace_identity_changed', 'proposal was created in a different worktree');
   }
   const root = await realpath(selected.runtimeRoot ?? workspace.root);
+  // Proposals created before runtime scoping were approved at the registered root.
+  // Never let a legacy proposal cross into a newly inherited worktree.
+  if (!record.runtimeIdentity && root !== await realpath(workspace.root)) {
+    throw error('workspace_identity_changed', 'legacy proposal cannot be activated from a linked worktree');
+  }
   const cwd = await realpath(path.join(root, record.definition.cwd ?? '.'));
   if (!within(root, cwd)) throw error('path_escape', 'candidate script directory escaped workspace');
   const existing = workspace.commands[record.commandId] ?? null;
