@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
@@ -172,5 +173,36 @@ test('hook recognizes enabled worktrees without asking to register a new workspa
     const illegalEnable = invoke(f, f.linked, 'cli.mjs', ['workspace.worktrees.enable']);
     assert.equal(illegalEnable.status, 2);
     assert.equal(result(illegalEnable).error.code, 'workspace_scope_mismatch');
+  } finally { await rm(f.root, { recursive: true, force: true }); }
+});
+
+test('legacy root-scoped proposals cannot be activated in a linked worktree', { skip: !gitAvailable }, async () => {
+  const f = await fixture();
+  try {
+    await enable(f);
+    const definition = {
+      description: 'Inspect the working directory with the fixed Node script.',
+      run: [process.execPath, 'tools/echo.mjs'], cwd: '.', arguments: {},
+    };
+    const proposed = invoke(f, f.main, 'cli.mjs', ['propose', 'legacycmd',
+      'definition=' + encodeURIComponent(JSON.stringify(definition))]);
+    assert.equal(proposed.status, 0, proposed.stderr);
+    const proposalFile = path.join(f.home, 'command-runner/proposals', result(proposed).proposalId + '.json');
+    const record = JSON.parse(await readFile(proposalFile, 'utf8'));
+    delete record.runtimeIdentity;
+    const subject = [record.workspaceIdentity, record.commandId, record.definition,
+      record.scriptPreview, record.expectedHash, record.previousAllow, record.kind];
+    const canonical = (value) => Array.isArray(value) ? value.map(canonical)
+      : value && typeof value === 'object'
+        ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])]))
+        : value;
+    record.approvalDigest = 'sha256-' + createHash('sha256')
+      .update(JSON.stringify(canonical(subject))).digest('hex');
+    await writeFile(proposalFile, JSON.stringify(record));
+    const linked = invoke(f, f.linked, 'cli.mjs', ['activate', record.id]);
+    assert.equal(linked.status, 2);
+    assert.equal(result(linked).error.code, 'workspace_identity_changed');
+    const original = invoke(f, f.main, 'cli.mjs', ['activate', record.id]);
+    assert.equal(original.status, 0, original.stderr);
   } finally { await rm(f.root, { recursive: true, force: true }); }
 });
