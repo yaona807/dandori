@@ -599,7 +599,7 @@ async function loadWorkspace(start = process.cwd()) {
   } catch {
     throw new RunnerError(
       'configuration_not_found',
-      \`unable to read \${configurationPath}\`,
+      `unable to read ${configurationPath}`,
     );
   }
   const workspaces = await validateConfig(
@@ -611,26 +611,26 @@ async function loadWorkspace(start = process.cwd()) {
   } catch {
     throw new RunnerError(
       'workspace_not_found',
-      \`current working directory does not exist: \${start}\`,
+      `current working directory does not exist: ${start}`,
     );
   }
   const direct = workspaces.filter((workspace) => inside(workspace.root, current));
   if (direct.length) {
     direct.sort((left, right) => right.root.length - left.root.length);
     if (direct.length > 1 && direct[0].root.length === direct[1].root.length) {
-      throw new RunnerError('invalid_config', \`workspace selection is ambiguous for \${current}\`);
+      throw new RunnerError('invalid_config', `workspace selection is ambiguous for ${current}`);
     }
     return runtimeWorkspace(direct[0], direct[0].root);
   }
 
   const eligible = workspaces.filter((workspace) => workspace.inheritWorktrees);
   if (!eligible.length) {
-    throw new RunnerError('workspace_not_registered', \`current workspace is not registered: \${current}\`);
+    throw new RunnerError('workspace_not_registered', `current workspace is not registered: ${current}`);
   }
   let runtimeGit;
   try { runtimeGit = await gitState(current); }
   catch {
-    throw new RunnerError('workspace_not_registered', \`current workspace is not registered: \${current}\`);
+    throw new RunnerError('workspace_not_registered', `current workspace is not registered: ${current}`);
   }
   const candidates = [];
   for (const workspace of eligible) {
@@ -645,7 +645,7 @@ async function loadWorkspace(start = process.cwd()) {
   }
   if (candidates.length !== 1) {
     throw new RunnerError(candidates.length ? 'workspace_ambiguous' : 'workspace_not_registered',
-      \`cannot uniquely identify a registered Git worktree for \${current}\`);
+      `cannot uniquely identify a registered Git worktree for ${current}`);
   }
   return runtimeWorkspace(candidates[0], runtimeGit.top);
 }
