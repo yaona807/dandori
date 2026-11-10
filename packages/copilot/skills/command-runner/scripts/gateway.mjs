@@ -592,7 +592,7 @@ async function enableWorkspaceWorktrees(expectedWorkspace) {
     try {
       top = execFileSync('git', ['-C', root, 'rev-parse', '--show-toplevel'], {
         encoding: 'utf8', env, timeout: 5_000, windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'],
-      }).trimEnd();
+      }).replace(/\n$/u, '');
     } catch {
       throw new InterfaceError('workspace_root_unverified',
         'registered workspace must be the exact root of a Git repository');
