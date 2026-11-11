@@ -439,16 +439,7 @@ BUNDLED_WORKER_REQUIRED_MARKERS = {
     for worker, sections in BUNDLED_WORKER_REQUIRED_SECTION_MARKERS.items()
 }
 
-CODE_REVIEW_SKILL_FILES = frozenset(
-    {
-        "SKILL.md",
-        "references/correctness.md",
-        "references/maintainability.md",
-        "references/performance.md",
-        "references/security.md",
-        "references/testability.md",
-    }
-)
+CODE_REVIEW_SKILL_FILES = frozenset({"SKILL.md"})
 CODE_REVIEW_SKILL_FRONTMATTER_KEYS = frozenset({"name", "description", "user-invocable"})
 
 ORCHESTRATOR_REQUIRED_MARKERS = (

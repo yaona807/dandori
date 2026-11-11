@@ -896,9 +896,9 @@ class ValidatorMutationTests(unittest.TestCase):
     def test_code_review_inventory_rejects_missing_file(self) -> None:
         temp, repo = self.make_repo()
         with temp:
-            path = repo / ".copilot/skills/code-review/references/performance.md"
+            path = repo / ".copilot/skills/code-review/SKILL.md"
             path.unlink()
-            self.assert_invalid(repo, "code-review inventory is missing files")
+            self.assert_invalid(repo, "missing SKILL.md")
 
     def test_dandori_coupling_format_variants_are_rejected(self) -> None:
         variants = (
@@ -922,17 +922,17 @@ class ValidatorMutationTests(unittest.TestCase):
                     path.write_text(path.read_text() + f"\nUse {variant} internals.\n")
                     self.assert_invalid(repo, "forbidden DANDORI coupling detected")
 
-    def test_skill_reference_cannot_contain_worker_policy(self) -> None:
+    def test_code_review_skill_cannot_contain_worker_policy(self) -> None:
         temp, repo = self.make_repo()
         with temp:
-            path = repo / ".copilot/skills/code-review/references/correctness.md"
+            path = repo / ".copilot/skills/code-review/SKILL.md"
             path.write_text(path.read_text() + "\nDo not modify files.\n")
             self.assert_invalid(repo, "worker-specific policy must stay in Reviewer.agent.md")
 
-    def test_skill_reference_cannot_contain_coupling_variant(self) -> None:
+    def test_code_review_skill_cannot_contain_coupling_variant(self) -> None:
         temp, repo = self.make_repo()
         with temp:
-            path = repo / ".copilot/skills/code-review/references/correctness.md"
+            path = repo / ".copilot/skills/code-review/SKILL.md"
             path.write_text(path.read_text() + "\nUse approved_contract internals.\n")
             self.assert_invalid(repo, "forbidden DANDORI coupling detected")
 
