@@ -537,7 +537,7 @@ async function validateConfig(raw, { allowMissingRoots = false } = {}) {
     workspaces.push({
       id: workspace.id,
       root,
-      inheritWorktrees: workspace.inheritWorktrees === true,
+      inheritWorktrees: workspace.inheritWorktrees !== false,
       workspaceIdentity: identityHash([workspace.id, root, workspace.registrationId ?? null]),
       commandHashes: { ...builtinHashes, ...Object.fromEntries(Object.entries(workspace.commands).map(([id, cmd]) => [id, executionHash(cmd, defaults)])) },
       commands: { ...builtinCommands, ...commands },

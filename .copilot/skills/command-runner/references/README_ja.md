@@ -6,17 +6,13 @@
 
 実際の利用ファイルは `~/.copilot/` 配下へインストールします。CommandRunnerの制御ファイルや個人用の許可コマンド設定を、対象プロジェクトのリポジトリへ追加する必要はありません。
 
-## Git Worktreeの継承（明示的な許可）
+## Git Worktreeの自動継承（デフォルト有効）
 
-リポジトリの登録済みWorkspace rootから一度だけ次を実行し、Hostの確認を受けます。
+登録済みWorkspaceがGitリポジトリのルートであれば、Gitが認識する同一リポジトリのWorktreeでも既存のコマンド定義を自動的に利用できます。**WorktreeごとのWorkspace登録・コマンド再登録・継承の初回承認は不要**です。既存の`workspaces.json`に`inheritWorktrees`がない場合も有効になります。明示的に`"inheritWorktrees": false`としたWorkspaceでは継承しません。
 
-```bash
-node ~/.copilot/skills/command-runner/scripts/cli.mjs workspace.worktrees.enable
-```
+継承対象は、canonical Git common directoryが一致し`git worktree list`に存在するWorktreeだけです。別clone・単なるコピー・独立した入れ子のリポジトリは継承対象外です。実行`runtimeRoot`・ファイル引数・実行ログ・承認候補は現在のWorktree単位で分離し、Fixed/Allowlistの実行許可やnpm script guardは引き続き適用します。**Worktreeの自動認識はコマンドの実行承認を意味しません。**
 
-`workspaces.json` のそのWorkspaceに `"inheritWorktrees": true` を記録します。登録済みGitリポジトリのrootでだけ有効化でき、モノレポの中間ディレクトリや未登録Workspaceでは有効化できません。以後は、Gitが登録した同じリポジトリのWorktreeで `workspace.ensure` を呼んでも再登録されず、既存のコマンドIDとFixed/Allowlistを共有します。別cloneや単なるコピーは対象外です。
-
-コマンドは現在のWorktreeを `runtimeRoot` として実行し、ファイルの境界もそのWorktree内に限定します。共有されるのはコマンド定義であり、実行ログ・未承認提案はWorktreeごとに分離します。別ブランチでnpm script / package manager情報が変わった場合、従来の `scriptGuard` が再検証し、不一致なら停止します。Workspace単位の許可はOS sandboxではなく、コマンド内部の副作用やGit管理メタデータへのアクセスを完全に禁止するものではありません。
+互換性のため、`inheritWorktrees: false`から明示的に有効へ戻す`workspace.worktrees.enable`は残しています。この操作は登録済みリポジトリルートでのHost承認を必要としますが、通常は実行不要です。ローカルで古いRunnerがインストールされている場合、masterの更新だけでは反映されないため、CommandRunner本体とHookを最新版に更新してください。
 
 ## 対応環境
 
