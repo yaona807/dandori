@@ -7,7 +7,7 @@ Every example suffix must be preceded by the **exact** installed CLI prefix:
 | --- | --- | --- |
 | `context` | `context` | Runtime-selected workspace metadata |
 | `workspace.ensure` | `workspace.ensure` | May register the current workspace; separate permission for config write |
-| `workspace.worktrees.enable` | `workspace.worktrees.enable` | One-time Host-reviewed opt-in at the registered Git repository root; linked worktrees then inherit commands |
+| `workspace.worktrees.enable` | `workspace.worktrees.enable` | Optional re-enable after explicit `inheritWorktrees: false` opt-out; otherwise worktree inheritance is automatic |
 | `list` | `list query=git offset=0` | Filtered registered IDs; follow `revision` and `nextOffset` for pages |
 | `describe` | `describe builtin-git-status` | Public definition; not equivalent to exact `inspect` |
 | `inspect` | `inspect builtin-git-status` | Effective fixed argv, cwd and schema for exact ID |
