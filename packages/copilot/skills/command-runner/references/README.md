@@ -6,17 +6,13 @@ This directory contains the fixed Node.js runner, its bounded management/executi
 
 The installed files live under `~/.copilot/`. No CommandRunner control files or personal command allowlists need to be added to a project repository.
 
-## Git worktree inheritance (explicit opt-in)
+## Git worktree inheritance (enabled by default)
 
-Run this command **once from the registered Git repository root**, subject to Host/human approval:
+Once a Git repository root is registered as a Workspace, its registered commands are automatically available in **all Git-verified linked worktrees**. No additional worktree registration, command registration, or inheritance approval is needed. An omitted `inheritWorktrees` setting is equivalent to `true`; set `"inheritWorktrees": false` in an existing Workspace entry to opt out.
 
-```bash
-node ~/.copilot/skills/command-runner/scripts/cli.mjs workspace.worktrees.enable
-```
+A linked worktree must have the same canonical Git common directory and appear in Git's official worktree list. Independent clones, copies, and nested unrelated repositories do not inherit registration. Registered Fixed/Allowlist definitions are shared, but the command's cwd, path validation, execution output, and approval proposals remain scoped to the **current worktree**. Existing package-script guards remain in force. This does **not** grant execution permission or provide an OS sandbox.
 
-The reviewed operation adds `"inheritWorktrees": true` to the existing workspace entry in `workspaces.json`; it does not register each linked worktree. Only an exact Git repository root can enable inheritance. A linked worktree must have the same canonical Git common directory and appear in Git's official worktree list. Independent clones, copies and nested repositories do not inherit the registration.
-
-Registered command definitions and the existing Fixed/Allowlist policy are shared, but commands run relative to the **current worktree**. File arguments and command cwd are validated against that runtime root. Execution output and approval proposals are isolated by worktree identity. Existing package script guards are still checked against the current worktree before execution; changes in another branch can make the command unavailable. These checks are not an OS sandbox; a registered command may itself write elsewhere or affect shared Git metadata.
+The legacy `workspace.worktrees.enable` operation remains available to re-enable inheritance after an explicit `inheritWorktrees: false` opt-out; it is otherwise unnecessary and still requires Host review at the exact registered repository root. Existing local installations must be refreshed separately; updating the Git repository does not replace installed `~/.copilot/skills/command-runner` files.
 
 ## Supported environments
 
