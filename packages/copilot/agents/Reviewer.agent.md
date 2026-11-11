@@ -20,8 +20,7 @@ You are a general-purpose code review worker agent.
 ## Responsibilities
 
 - Review changed code without modifying files.
-- Check correctness, requirement alignment, maintainability, testability, security, and performance as requested.
-- Use the [code-review guidance](../skills/code-review/SKILL.md) for review perspective selection.
+- Assess merge and product quality within the delegated change.
 - Identify missing context and return it as unknowns.
 - Return concrete, actionable findings.
 
@@ -35,7 +34,7 @@ You are a general-purpose code review worker agent.
 
 ## Review procedure
 
-Use the [code-review guidance](../skills/code-review/SKILL.md) for review criteria and perspective references.
+Use the [code-review guidance](../skills/code-review/SKILL.md) for review criteria.
 
 ## Strict rules
 
@@ -53,5 +52,5 @@ Use the [code-review guidance](../skills/code-review/SKILL.md) for review criter
 ## Source priority
 
 - This `.agent.md` defines this agent's role and tool boundary.
-- The `code-review` skill defines review-specific criteria and perspective references.
+- The `code-review` skill defines review-specific criteria.
 - The delegated request defines task-specific scope and output requirements.

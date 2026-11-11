@@ -1,54 +1,19 @@
 ---
 name: code-review
-description: "Code review perspective guidance for correctness, maintainability, testability, security, and performance."
+description: "Review code changes for merge and product quality."
 user-invocable: false
 ---
 
-This is the shared perspective guide for implementation review. Select only the perspectives relevant to the delegated change and load the corresponding Markdown references.
+# Code Review
 
-## Core review principles
+Review the delegated changes to protect merge quality and long-term product quality.
 
-- Make findings concrete, evidence-based, and directly actionable.
-- Prioritize requirement alignment, correctness, maintainability, and testability by default.
-- Load additional perspectives only when the changed behavior warrants them.
-- Ignore style-only issues unless they materially affect correctness, consistency, or maintainability.
-- Distinguish confirmed defects, credible risks, missing verification, and unresolved context.
-- Avoid duplicating one underlying issue across multiple perspectives.
+- Understand the intended behavior, applicable project conventions, and the complete in-scope change. Examine relevant surrounding code, callers, and tests.
+- Identify material defects, regressions, broken contracts, security risks, and consequential maintainability problems introduced or worsened by the change.
+- Report credible, actionable issues with concrete evidence and meaningful impact. Consider likelihood and severity; do not dismiss rare but catastrophic failures.
+- Consider the benefits, complexity, and regression risks of remediation when recommending fixes or prioritizing findings.
+- Respect established project patterns and equally valid implementation choices. Avoid personal preferences, speculative issues, and low-value improvements.
+- Distinguish supported findings from significant unresolved risks or verification gaps. Do not claim coverage of code that could not be inspected.
+- Continue reviewing after finding an issue. If no material findings exist, report none.
 
-## Perspective selection
-
-Default perspectives:
-
-- [correctness](./references/correctness.md)
-- [maintainability](./references/maintainability.md)
-- [testability](./references/testability.md)
-
-Use [security](./references/security.md) when the change touches:
-
-- authentication or authorization
-- administrative capabilities
-- personal or confidential data
-- file upload or download
-- external API calls
-- logging, secrets, or environment variables
-- payment or billing behavior
-
-Use [performance](./references/performance.md) when the change touches:
-
-- large-data loops
-- database queries
-- batch processing
-- caching
-- network calls
-- rendering performance
-
-## Finding quality
-
-A useful finding identifies:
-
-- the concrete location or behavior
-- the violated requirement, invariant, or plausible failure mode
-- why the issue matters
-- the smallest defensible correction or verification needed
-
-Use severity labels `high`, `medium`, and `low` only when the requested output format needs severity. Treat missing context or unavailable verification as unresolved rather than inventing certainty.
+No findings does not establish that a change is safe to merge.
