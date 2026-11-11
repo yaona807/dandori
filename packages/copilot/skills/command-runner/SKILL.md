@@ -33,7 +33,7 @@ For npm-family scripts, use `propose test description=<encoded-text>` with optio
 
 ## Git worktree context
 
-A user may explicitly enable Git worktree inheritance once, from the registered repository root, with `workspace.worktrees.enable`. The Hook must ask for human approval. Workers must not enable inheritance to circumvent a denied workspace or missing command. When inheritance has already been approved, `workspace.ensure`, `list`, and `run` operate against the current Git worktree without registering it separately. Registered command definitions are shared while file paths, command cwd, execution output and pending approval proposals are bounded to the current worktree. A changed branch-local package script still fails its existing script guard.
+Git-verified linked worktrees automatically inherit registered commands from their registered repository root by default. No additional `workspace.ensure` or `workspace.worktrees.enable` operation is needed for an inherited worktree. If `inheritWorktrees: false` is explicitly configured, inheritance is disabled; do not override this setting to circumvent a denial. Registered command definitions are shared while file paths, cwd, execution output, and approval proposals are bounded to the current worktree. A changed branch-local package script still fails its existing script guard. Execution remains subject to exact human authorization and effects.
 
 ## Host integration
 
