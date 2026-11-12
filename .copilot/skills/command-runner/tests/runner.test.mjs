@@ -1695,7 +1695,7 @@ test('P0 Git built-ins only observe a repository rooted at the workspace', async
     assert.equal(run('builtin-git-show', ['commit=' + commit]).status, 'completed');
     assert.equal(run('builtin-git-ls-files').status, 'completed');
     assert.equal(run('builtin-git-branch-info').status, 'completed');
-    assert.equal(run('builtin-git-show', ['commit=HEAD']).status, 'failed');
+    assert.equal(run('builtin-git-show', ['commit=HEAD']).status, 'completed');
     const indexBefore = await readFile(path.join(fixture.alpha, '.git', 'index'));
     assert.equal(run('builtin-fs-trash', ['source=tests%2Fsample.test.js']).status, 'completed');
     const ignore = spawnSync('git', ['check-ignore', '-q', '--no-index', '.agent-trash/.gitignore'],
@@ -1704,6 +1704,73 @@ test('P0 Git built-ins only observe a repository rooted at the workspace', async
     const indexAfter = await readFile(path.join(fixture.alpha, '.git', 'index'));
     assert.deepEqual(indexAfter, indexBefore);
     assert.equal(execGit('status', '--porcelain').includes('?? .agent-trash'), false);
+  });
+});
+
+
+
+test('read-only Git builtins support branch comparisons, history, search and safe argv', async () => {
+  await withFixture(async (fixture) => {
+    const git = (...args) => {
+      const result = spawnSync('git', args, { cwd: fixture.alpha, encoding: 'utf8' });
+      assert.equal(result.status, 0, result.stderr);
+      return result.stdout.trim();
+    };
+    git('init', '-q');
+    git('config', 'user.name', 'Test Author');
+    git('config', 'user.email', 'test@example.invalid');
+    git('add', 'tests/sample.test.js');
+    git('commit', '-qm', 'initial');
+    git('branch', 'main');
+    git('checkout', '-qb', 'feature');
+    await writeFile(path.join(fixture.alpha, 'tests/sample.test.js'), '// new-marker\nexport {};\n');
+    git('add', 'tests/sample.test.js');
+    git('commit', '-qm', 'feature change');
+
+    const run = (id, parameters = []) => {
+      const result = runRunnerWithoutHashes(fixture, fixture.alpha, [
+        'run', id, '--expected-workspace=alpha', ...parameters,
+      ]);
+      assert.equal(result.status, 0, result.stderr);
+      return JSON.parse(result.stdout);
+    };
+    const output = (id, parameters = []) => {
+      const result = run(id, parameters);
+      assert.equal(result.status, 'completed', id + ': ' + result.stderr);
+      return JSON.parse(result.stdout).output;
+    };
+    assert.match(output('builtin-git-diff', [
+      'scope=commits', 'base=main', 'target=HEAD', 'comparison=merge-base', 'format=name-only',
+    ]), /tests\/sample\.test\.js/u);
+    assert.match(output('builtin-git-diff', [
+      'scope=commits', 'base=main', 'target=HEAD', 'comparison=direct', 'format=stat',
+    ]), /sample\.test\.js/u);
+    assert.match(output('builtin-git-log', ['range=main..HEAD', 'format=oneline']), /feature change/u);
+    assert.match(output('builtin-git-show', ['commit=HEAD', 'format=name-only']), /sample\.test\.js/u);
+    assert.match(output('builtin-git-ls-files'), /sample\.test\.js/u);
+    assert.match(output('builtin-git-branch', ['scope=all']), /feature/u);
+    assert.match(output('builtin-git-blame', ['file=tests%2Fsample.test.js', 'start=1', 'end=1']), /new-marker/u);
+    assert.match(output('builtin-git-grep', ['pattern=new-marker']), /sample\.test\.js/u);
+    assert.equal(output('builtin-git-grep', ['pattern=not-there-anywhere']), '');
+    assert.match(output('builtin-git-merge-base', ['left=main', 'right=HEAD']), /^[a-f0-9]{40}\n/u);
+    assert.match(output('builtin-git-rev-parse', ['ref=HEAD']), /^[a-f0-9]{40}\n/u);
+    assert.match(output('builtin-git-rev-list', ['range=main..HEAD']), /^[a-f0-9]{40}\n/u);
+    assert.match(output('builtin-git-worktree', ['format=porcelain']), /worktree /u);
+    assert.match(output('builtin-git-reflog'), /feature change/u);
+    assert.match(output('builtin-git-range-diff', ['oldRange=main..HEAD', 'newRange=main..HEAD']), /feature change/u);
+    assert.match(output('builtin-git-ls-tree', ['ref=HEAD', 'recursive=true', 'format=names']), /sample\.test\.js/u);
+
+    assert.equal(run('builtin-git-diff', ['scope=commits', 'base=main']).status, 'failed');
+    assert.equal(run('builtin-git-diff', ['scope=unstaged', 'base=main']).status, 'failed');
+    assert.equal(run('builtin-git-diff', ['format=--output=evil']).status, 'failed');
+    assert.equal(run('builtin-git-diff', ['file=..%2Foutside']).status, 'failed');
+    assert.equal(run('builtin-git-branch', ['scope=delete']).status, 'failed');
+    assert.equal(run('builtin-git-worktree', ['format=remove']).status, 'failed');
+    assert.equal(run('builtin-git-grep', ['arg=--open-files-in-pager']).status, 'failed');
+    assert.equal(run('builtin-git-ls-tree', ['ref=--upload-pack=evil']).status, 'failed');
+    const inspected = runInterface(fixture, fixture.alpha, ['inspect', 'builtin-git-merge-base']);
+    assert.equal(inspected.status, 0, inspected.stderr);
+    assert.match(inspected.stdout, /"left"/u);
   });
 });
 
