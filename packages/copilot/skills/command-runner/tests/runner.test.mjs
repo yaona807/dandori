@@ -1731,6 +1731,13 @@ test('read-only Git builtins support branch comparisons, history, search and saf
       const result = runRunnerWithoutHashes(fixture, fixture.alpha, [
         'run', id, '--expected-workspace=alpha', ...parameters,
       ]);
+      // Rejected schemas exit 2 before launching a built-in, while rejected
+      // Git invocations are returned as a failed execution with exit 0.
+      if (result.status === 2) {
+        const denial = JSON.parse(result.stderr);
+        assert.equal(denial.status, 'error');
+        return { status: 'failed', denial };
+      }
       assert.equal(result.status, 0, result.stderr);
       return JSON.parse(result.stdout);
     };
