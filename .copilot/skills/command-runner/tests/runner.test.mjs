@@ -1767,6 +1767,41 @@ test('read-only Git builtins support branch comparisons, history, search and saf
     assert.match(output('builtin-git-range-diff', ['oldRange=main..HEAD', 'newRange=main..HEAD']), /feature change/u);
     assert.match(output('builtin-git-ls-tree', ['ref=HEAD', 'recursive=true', 'format=names']), /sample\.test\.js/u);
 
+    // When a revision has the same name as a worktree path, Git requires
+    // an explicit revision/path separator even without a file filter.
+    git('branch', 'release');
+    await mkdir(path.join(fixture.alpha, 'release'));
+    await writeFile(path.join(fixture.alpha, 'release', 'untracked.txt'), 'untracked\n');
+    assert.match(output('builtin-git-diff', [
+      'scope=commits', 'base=main', 'target=release', 'format=name-only',
+    ]), /sample\.test\.js/u);
+    assert.match(output('builtin-git-log', [
+      'range=main..release', 'format=oneline',
+    ]), /feature change/u);
+    assert.match(output('builtin-git-show', [
+      'commit=release', 'format=name-only',
+    ]), /sample\.test\.js/u);
+    assert.match(output('builtin-git-ls-tree', [
+      'ref=release', 'recursive=true', 'format=names',
+    ]), /sample\.test\.js/u);
+
+    // --check must retain actionable file/line diagnostics on failure.
+    await writeFile(path.join(fixture.alpha, 'tests/sample.test.js'), '// new-marker\nexport {};\nlet bad = 1; \n');
+    const checked = run('builtin-git-diff', ['format=check']);
+    assert.equal(checked.status, 'failed');
+    assert.match(checked.stderr, /trailing whitespace/u);
+
+    // range-diff internally invokes Git log, which may spawn configured
+    // textconv drivers. Reject those configs before running the command.
+    git('config', 'diff.marker.textconv', 'touch converter-marker');
+    await writeFile(path.join(fixture.alpha, '.gitattributes'), '*.js diff=marker\n');
+    const blockedRangeDiff = run('builtin-git-range-diff', [
+      'oldRange=main..HEAD', 'newRange=main..HEAD',
+    ]);
+    assert.equal(blockedRangeDiff.status, 'failed');
+    assert.match(blockedRangeDiff.stderr, /textconv/u);
+    await assert.rejects(readFile(path.join(fixture.alpha, 'converter-marker')));
+
     assert.equal(run('builtin-git-diff', ['scope=commits', 'base=main']).status, 'failed');
     assert.equal(run('builtin-git-diff', ['scope=unstaged', 'base=main']).status, 'failed');
     assert.equal(run('builtin-git-diff', ['format=--output=evil']).status, 'failed');
