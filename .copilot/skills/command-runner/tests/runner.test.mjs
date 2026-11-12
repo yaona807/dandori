@@ -302,7 +302,7 @@ test('distributed Researcher and Writer share the fixed runner CLI hook', async 
     const source = await readFile(agentSource, 'utf8');
     assert.match(source, /^user-invocable: false$/mu);
     assert.match(source, /^disable-model-invocation: true$/mu);
-    assert.match(source, /  - execute\/runInTerminal\n  - execute\nagents: \[\]\nhooks:/u);
+    assert.match(source, /  - execute\/runInTerminal\n  - execute\n(?:  - github\/[a-z_]+\n)+agents: \[\]\nhooks:/u);
     assert.match(source, /hook\.mjs/u);
     assert.match(source, /node ~\/\.copilot\/skills\/command-runner\/scripts\/cli\.mjs/u);
     assert.match(source, /request synchronous execution/u);
