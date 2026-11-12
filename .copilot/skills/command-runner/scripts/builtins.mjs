@@ -191,7 +191,7 @@ function git(root, args, allowNonRepo = false, allowNoMatch = false) {
   if (result.status !== 0) {
     if (allowNoMatch && result.status === 1) return result.stdout;
     if (allowNonRepo && result.status === 128 && /not a git repository/u.test(result.stderr ?? '')) return null;
-    refuse('git failed: ' + String(result.stderr || result.status).slice(0, 500));
+    refuse('git failed: ' + String(result.stderr || result.stdout || result.status).slice(0, 500));
   }
   return result.stdout;
 }
@@ -364,7 +364,7 @@ async function gitAction(root, id, positionals, options) {
     args = ['--literal-pathspecs', 'diff',
       ...(scope === 'staged' ? ['--cached'] : []),
       '--no-ext-diff', '--no-textconv', '--ignore-submodules=all',
-      ...render, ...revs, ...files];
+      ...render, ...revs, ...(scope === 'commits' && files.length === 0 ? ['--'] : files)];
   } else if (id === 'builtin-git-log') {
     const count = get('count') ?? '20';
     const format = get('format') ?? 'summary';
@@ -376,12 +376,14 @@ async function gitAction(root, id, positionals, options) {
       ...render, '-n', count,
       ...(get('author') ? ['--author=' + get('author')] : []),
       ...(get('grep') ? ['--grep=' + get('grep')] : []),
-      ...(get('range') ? [gitRef(get('range'))] : []), ...files];
+      ...(get('range') ? [gitRef(get('range'))] : []),
+      ...(get('range') && files.length === 0 ? ['--'] : files)];
   } else if (id === 'builtin-git-show') {
     const format = get('format') ?? 'patch';
     args = ['--literal-pathspecs', 'show', '--format=format:%H%n%s%n%b',
       '--no-ext-diff', '--no-textconv', '--no-show-signature', '--ignore-submodules=all',
-      ...(format === 'patch' ? [] : ['--' + format]), gitRef(positionals[0]), ...files];
+      ...(format === 'patch' ? [] : ['--' + format]), gitRef(positionals[0]),
+      ...(files.length ? files : ['--'])];
   } else if (id === 'builtin-git-ls-files') {
     const mode = get('mode') ?? 'tracked';
     const selection = {
@@ -431,6 +433,65 @@ async function gitAction(root, id, positionals, options) {
   } else if (id === 'builtin-git-reflog') {
     args = ['reflog', 'show', '-n', get('count') ?? '20', gitRef(get('ref') ?? 'HEAD')];
   } else if (id === 'builtin-git-range-diff') {
+    // Git range-diff internally generates patches via git log; outer
+    // --no-textconv does not block configured diff-driver commands.
+    // Avoid spawning project-defined conversion helpers.
+    const converterKeys = git(root, ['config', '--includes', '--name-only',
+      '--get-regexp', '^diff\\..*\\.textconv
+  } else if (id === 'builtin-git-ls-tree') {
+    args = ['--literal-pathspecs', 'ls-tree',
+      ...(get('recursive') === 'true' ? ['-r'] : []),
+      ...(get('format') === 'names' ? ['--name-only'] : []),
+      gitRef(get('ref')), ...(files.length ? files : ['--'])];
+  } else refuse('unsupported builtin Git operation');
+  return { output: git(root, args, false, allowNoMatch) };
+}
+
+async function runBuiltin() {
+  const [id, ...args] = process.argv.slice(2);
+  if (!isBuiltinId(id)) refuse('unknown builtin operation');
+  const root = await realpath(process.cwd());
+  const { positionals, options } = parseInput(id, args);
+  if (id.startsWith('builtin-git-')) return gitAction(root, id, positionals, options);
+  if (id === 'builtin-fs-trash-list') {
+    if (positionals.length) refuse('trash listing accepts no positional arguments');
+    const offset = Number(options['--offset'] ?? '0');
+    const limit = Number(options['--limit'] ?? '100');
+    if (!Number.isSafeInteger(offset) || offset < 0 || offset > 100000000 ||
+      !Number.isSafeInteger(limit) || limit < 1 || limit > 100) refuse('invalid trash pagination');
+    return trashList(root, offset, limit);
+  }
+  if (Object.keys(options).length) refuse('filesystem builtins do not accept options');
+  if (id === 'builtin-fs-move' || id === 'builtin-fs-copy') {
+    if (positionals.length !== 2) refuse('source and destination required');
+    const source = await workspacePath(root, positionals[0]);
+    const destination = await workspacePath(root, positionals[1], true);
+    if (id === 'builtin-fs-move') await noReplaceMove(source, destination);
+    else await copyFile(source, destination, fsConstants.COPYFILE_EXCL);
+    return { source: positionals[0], destination: positionals[1] };
+  }
+  if (id === 'builtin-fs-trash') {
+    if (positionals.length !== 1) refuse('source required');
+    return trash(root, positionals[0]);
+  }
+  if (id === 'builtin-fs-restore') {
+    if (positionals.length !== 1) refuse('item ID required');
+    return restore(root, positionals[0]);
+  }
+  refuse('unsupported builtin');
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === CURRENT) {
+  try {
+    const result = await runBuiltin();
+    process.stdout.write(JSON.stringify({ status: 'completed', ...result }) + '\n');
+  } catch (error) {
+    process.stderr.write(JSON.stringify({ status: 'error', message: String(error?.message ?? error) }) + '\n');
+    process.exitCode = 1;
+  }
+}
+], false, true);
+    if (converterKeys.trim()) refuse('range-diff unavailable with configured textconv helpers');
     args = ['range-diff', gitRef(get('old-range')), gitRef(get('new-range'))];
   } else if (id === 'builtin-git-ls-tree') {
     args = ['--literal-pathspecs', 'ls-tree',
