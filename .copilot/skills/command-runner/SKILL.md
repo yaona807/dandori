@@ -33,7 +33,7 @@ For npm-family scripts, use `propose test description=<encoded-text>` with optio
 
 ## Git read-only builtins
 
-Use an exact, registration-free Git observation built-in rather than proposing a raw project Git shell command. Existing status, diff, log, show, ls-files and branch-info builtins are retained. The additional read-only builtins cover branch listing, blame, grep, merge-base, rev-parse, rev-list, worktree listing, reflog, range-diff and ls-tree. Inspect the known ID for its named schema, and pass URL-encoded `key=value` arguments as usual. For `builtin-git-diff`, `scope=commits base=main target=HEAD comparison=merge-base` compares the merge base to HEAD, whereas `comparison=direct` compares the two tips. No Git branch mutation, arbitrary Git argv, or new execution authority is granted; exact Task Card scope remains in force.
+Use an exact, registration-free Git observation built-in rather than proposing a raw project Git shell command. Existing status, diff, log, show, ls-files and branch-info builtins are retained. The additional read-only builtins cover branch listing, blame, grep, merge-base, rev-parse, rev-list, worktree listing, reflog, range-diff and ls-tree. Inspect the known ID for its named schema, and pass URL-encoded `key=value` arguments as usual. For `builtin-git-diff`, `scope=commits base=main target=HEAD comparison=merge-base` compares the merge base to HEAD, whereas `comparison=direct` compares the two tips. No Git branch mutation, arbitrary Git argv, or new execution authority is granted; exact delegated operation scope remains in force.
 
 ## Git worktree context
 
