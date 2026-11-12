@@ -260,7 +260,6 @@ Select runtime-visible agent names/descriptions, not definition files or caller-
 ## Copilot worker routing (mandatory)
 Native `task`: pick an installed, available exact-name custom agent:
 - `Researcher`
-- `GitHubResearcher`
 - `Writer`
 - `Reviewer`
 - `BrowserQA`

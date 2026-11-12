@@ -27,6 +27,7 @@ const SCRIPT_GUARD_SOURCE = path.join(SCRIPT_DIRECTORY, 'script-guard.mjs');
 const CLI_SOURCE = path.join(SCRIPT_DIRECTORY, 'cli.mjs');
 const INTERFACE_SOURCE = path.join(SCRIPT_DIRECTORY, 'gateway.mjs');
 const HOOK_SOURCE = path.join(SCRIPT_DIRECTORY, 'hook.mjs');
+const GITHUB_APPROVAL_SOURCE = path.join(SCRIPT_DIRECTORY, 'github-mcp-approval.mjs');
 const AGENT_SOURCES = ['Researcher', 'Writer'].map(name => path.join(SOURCE_DIRECTORY, '..', '..', '..', 'agents', `${name}.agent.md`));
 
 async function makeFixture(configure = (configuration) => configuration) {
@@ -58,6 +59,10 @@ async function makeFixture(configure = (configuration) => configuration) {
   await writeFile(
     path.join(home, 'skills', 'command-runner', 'scripts', 'hook.mjs'),
     await readFile(HOOK_SOURCE),
+  );
+  await writeFile(
+    path.join(home, 'skills', 'command-runner', 'scripts', 'github-mcp-approval.mjs'),
+    await readFile(GITHUB_APPROVAL_SOURCE),
   );
   for (const agentSource of AGENT_SOURCES) {
     await writeFile(path.join(home, 'agents', path.basename(agentSource)), await readFile(agentSource));
@@ -297,7 +302,7 @@ test('distributed Researcher and Writer share the fixed runner CLI hook', async 
     const source = await readFile(agentSource, 'utf8');
     assert.match(source, /^user-invocable: false$/mu);
     assert.match(source, /^disable-model-invocation: true$/mu);
-    assert.match(source, /  - execute\/runInTerminal\n  - execute\nagents: \[\]\nhooks:/u);
+    assert.match(source, /  - execute\/runInTerminal\n  - execute\n(?:  - github\/[a-z_]+\n)+agents: \[\]\nhooks:/u);
     assert.match(source, /hook\.mjs/u);
     assert.match(source, /node ~\/\.copilot\/skills\/command-runner\/scripts\/cli\.mjs/u);
     assert.match(source, /request synchronous execution/u);

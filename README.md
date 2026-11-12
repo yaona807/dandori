@@ -261,7 +261,6 @@ If the current session's authorization or cumulative loop-control state cannot b
   agents/
     Orchestrator.agent.md
     Researcher.agent.md
-    GitHubResearcher.agent.md
     Writer.agent.md
     Reviewer.agent.md
     BrowserQA.agent.md
@@ -313,7 +312,6 @@ assets/
 - DANDORI agents explicitly target VS Code.
 - Only the GitHub Copilot delegated-agent harness is supported. Workers use Copilot's `task` delegation and terminal tools; confirm actual tool/hook availability with the [conformance cases](./tests/conformance.md), especially `CONF-024`.
 - Copilot worker routing names only the approved custom agents. The instruction-level routing list is not a host-enforced authorization boundary; scoped grants and Task Cards remain mandatory.
-- `GitHubResearcher` requires the GitHub Pull Requests extension and its exposed tools.
 - `BrowserQA` requires the configured browser tool set.
 - Unavailable or unrecognized tool names can be ignored by the runtime; verify actual tool availability before use.
 - A bundled Worker calls a tool only when the tool arguments and runtime behavior can enforce the delegated boundary. If the available tool can operate only on a broader scope, the Worker returns `blocked` and identifies the narrower capability required.
@@ -327,7 +325,19 @@ DANDORI works best with a capable reasoning model for the Orchestrator.
 
 The Orchestrator must distinguish execution-method ambiguity from authorization ambiguity, normalize contracts without widening them, create minimal Task Cards, audit worker results, resolve conflicts, and stop when containment cannot be established.
 
-The bundled agents pin **GPT-6.1 Sol (copilot)** with `medium` effort for Orchestrator and Reviewer; **GPT-6.1 Terra (copilot)** with `medium` for Writer and `low` for BrowserQA; and **GPT-6 Luna (copilot)** with `medium` for Researcher and `low` for GitHubResearcher. The `reasoning-effort` frontmatter field is applied by the Copilot harness; model availability and actual model selection still require runtime verification. Custom or external Workers may select their own models.
+The bundled agents pin **GPT-6.1 Sol (copilot)** with `medium` effort for Orchestrator and Reviewer; **GPT-6.1 Terra (copilot)** with `medium` for Writer and `low` for BrowserQA; and **GPT-6 Luna (copilot)** with `medium` for Researcher. The `reasoning-effort` frontmatter field is applied by the Copilot harness; model availability and actual model selection still require runtime verification. Custom or external Workers may select their own models.
+
+## GitHub MCP and per-call human approval
+
+DANDORI consolidates GitHub inspection into Researcher and Reviewer (read-only), and exposes selected GitHub MCP PR, Issue, and Actions mutations to Writer. Orchestrator still owns authorization and delegates only exact Task Cards. Tool exposure never grants permission to act.
+
+**GitHub MCP writes must prompt the human for every invocation.** Writer's existing `preToolUse` hook now asks for each approved GitHub write and denies unknown GitHub tools/aliases. A user-level independent hook is also provided as `skills/command-runner/assets/github-mcp-hooks.example.json` in the Copilot distribution. After installing the distributed Skills, install that example in `~/.copilot/hooks/dandori-github-mcp.json` and verify that Copilot actually loads it. Enable `chat.useCustomAgentHooks`, select Manual/Default approvals, and prevent auto-approval of **each exact GitHub write tool**. Clear previous saved approvals.
+
+**This is not an unconditional guarantee:** preToolUse timeouts fall back to Host permissions; saved session approvals, Assisted/Allow all, Autopilot, Worktree sessions, and host policy variations can bypass fresh confirmation. Where available, enterprise-managed `permissions.ask` (Agent Host) provides a stronger per-invocation requirement; validate it with your organization. Do not expose GitHub write tools or write-capable credentials to an unverified harness. If a new tool name, input schema, or Hook behavior cannot be confirmed, leave that environment read-only. Run `tests/conformance.md` in an isolated test repository before allowing writes in a work repository.
+
+GitHub MCP tool availability depends on the server and its enabled toolsets; `actions` and `copilot` may require explicit enablement. DANDORI does not grant raw shell, Git push, remote file mutation/deletion, repository deletion, or automatic merge privileges. Every remote mutation requires a bounded TFR permission, a Task Card, a single-call Host confirmation, and post-write verification. Denied or uncertain mutations must not be retried through another interface.
+
+Sources: [GitHub MCP Server](https://github.com/github/github-mcp-server), [Copilot hook decisions](https://docs.github.com/en/copilot/reference/hooks-reference), [VS Code hooks](https://code.visualstudio.com/docs/agent-customization/hooks), [VS Code approvals](https://code.visualstudio.com/docs/agents/run/approvals), [enterprise permissions](https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings).
 
 ## Installation
 
@@ -472,4 +482,4 @@ MIT. See [LICENSE](./LICENSE).
 
 ## Prebuilt Copilot bundle
 
-The GitHub source ZIP includes only `packages/copilot/` with six agents, shared Skills, and the fixed command runner. Copy its `agents/` and `skills/` into the appropriate VS Code Copilot agent discovery location; install the `command-runner` Skill under `~/.copilot/skills/command-runner/` (keep persistent data under `~/.copilot/command-runner/`). VS Code Local agent harness is no longer supported. Run `python scripts/build_agent_profiles.py --check` to verify the generated bundle or `--write` to regenerate it. Copilot runtime delegation, model IDs, and hook behavior still require verification in the target VS Code environment.
+The GitHub source ZIP includes only `packages/copilot/` with five agents, shared Skills, and the fixed command runner. Copy its `agents/` and `skills/` into the appropriate VS Code Copilot agent discovery location; install the `command-runner` Skill under `~/.copilot/skills/command-runner/` (keep persistent data under `~/.copilot/command-runner/`). VS Code Local agent harness is no longer supported. Run `python scripts/build_agent_profiles.py --check` to verify the generated bundle or `--write` to regenerate it. Copilot runtime delegation, model IDs, and hook behavior still require verification in the target VS Code environment.

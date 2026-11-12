@@ -13,7 +13,6 @@ COPILOT_WORKER_ROUTING = (
     "## Copilot worker routing (mandatory)\n"
     "Native `task`: pick an installed, available exact-name custom agent:\n"
     "- `Researcher`\n"
-    "- `GitHubResearcher`\n"
     "- `Writer`\n"
     "- `Reviewer`\n"
     "- `BrowserQA`\n"
@@ -30,7 +29,7 @@ def replace_exactly_once(text: str, old: str, new: str, label: str) -> str:
     return text.replace(old, new, 1)
 
 
-WORKERS = ("Researcher", "GitHubResearcher", "Writer", "Reviewer", "BrowserQA")
+WORKERS = ("Researcher", "Writer", "Reviewer", "BrowserQA")
 NAMES = ("Orchestrator", *WORKERS)
 def transform(source: str, name: str, profile: str) -> str:
     if not source.startswith("---\n"):
@@ -64,11 +63,42 @@ def transform(source: str, name: str, profile: str) -> str:
             "Orchestrator worker-selection section",
         )
     # Use documented Copilot aliases rather than Local-qualified tool IDs.
+    github_read = (
+        "github/pull_request_read",
+        "github/list_pull_requests",
+        "github/search_pull_requests",
+        "github/issue_read",
+        "github/list_issues",
+        "github/search_issues",
+        "github/actions_get",
+        "github/actions_list",
+        "github/get_job_logs",
+        "github/get_file_contents",
+        "github/get_commit",
+        "github/list_branches",
+        "github/list_commits",
+        "github/search_code",
+        "github/search_commits",
+    )
+    github_write = (
+        "github/create_pull_request",
+        "github/update_pull_request",
+        "github/update_pull_request_branch",
+        "github/merge_pull_request",
+        "github/pull_request_review_write",
+        "github/add_comment_to_pending_review",
+        "github/add_reply_to_pull_request_comment",
+        "github/issue_write",
+        "github/add_issue_comment",
+        "github/update_issue_comment",
+        "github/actions_run_trigger",
+        "github/create_branch",
+        "github/request_copilot_review",
+    )
     tools = {
-        "Researcher": ("read", "search", "web", "execute"),
-        "GitHubResearcher": ("GitHub.vscode-pull-request-github/pullRequestStatusChecks", "GitHub.vscode-pull-request-github/issue_fetch"),
-        "Writer": ("read", "edit", "execute"),
-        "Reviewer": ("read", "search"),
+        "Researcher": ("read", "search", "web", "execute") + github_read,
+        "Writer": ("read", "edit", "execute") + github_read + github_write,
+        "Reviewer": ("read", "search") + github_read,
         "BrowserQA": ("browser/openBrowserPage", "browser/navigatePage", "browser/readPage", "browser/screenshotPage", "browser/clickElement", "browser/hoverElement", "browser/dragElement", "browser/typeInPage", "browser/handleDialog", "browser/runPlaywrightCode"),
     }
     if name in tools:

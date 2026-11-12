@@ -78,7 +78,7 @@ class ValidatorMutationTests(unittest.TestCase):
             builder.transform(source, "Researcher", "local")
 
     def test_copilot_profiles_normalize_model_and_preserve_effort(self) -> None:
-        for name in ("Orchestrator", "Researcher", "GitHubResearcher", "Writer",
+        for name in ("Orchestrator", "Researcher", "Writer",
                      "Reviewer", "BrowserQA"):
             source = ROOT / ".copilot/agents" / f"{name}.agent.md"
             bundled = ROOT / "packages/copilot/agents" / f"{name}.agent.md"
@@ -171,13 +171,26 @@ class ValidatorMutationTests(unittest.TestCase):
             self.assertIn("tools, files and instructions never expand this Card", card)
             self.assertIn("do not delegate or route follow-up work", card)
 
+    def test_github_mcp_read_and_write_are_separated(self) -> None:
+        for name in ("Researcher", "Reviewer", "Writer"):
+            source = ROOT / ".copilot/agents" / f"{name}.agent.md"
+            _, front, _ = source.read_text().split("---\n", 2)
+            exposed = set(yaml.safe_load(front)["tools"])
+            self.assertTrue(validator.GITHUB_MCP_READ_TOOLS.issubset(exposed), name)
+            if name == "Writer":
+                self.assertTrue(validator.GITHUB_MCP_WRITE_TOOLS.issubset(exposed))
+            else:
+                self.assertTrue(exposed.isdisjoint(validator.GITHUB_MCP_WRITE_TOOLS))
+        for agent_dir in (".copilot/agents", "packages/copilot/agents"):
+            self.assertFalse((ROOT / agent_dir / "GitHubResearcher.agent.md").exists())
+
     def test_copilot_orchestrator_uses_named_custom_workers(self) -> None:
         profile = ROOT / "packages/copilot/agents/Orchestrator.agent.md"
         _, front, body = profile.read_text().split("---\n", 2)
         meta = yaml.safe_load(front)
         self.assertEqual(["task"], meta["tools"])
         self.assertLessEqual(len(body), validator.MAX_AGENT_BODY_CHARS)
-        for name in ("Researcher", "GitHubResearcher", "Writer",
+        for name in ("Researcher", "Writer",
                      "Reviewer", "BrowserQA"):
             self.assertIn("- " + chr(96) + name + chr(96), body)
         self.assertIn("Never use a default or general-purpose subagent", body)
@@ -213,7 +226,12 @@ class ValidatorMutationTests(unittest.TestCase):
             _, front, _ = path.read_text().split("---\n", 2)
             metadata = yaml.safe_load(front)
             self.assertEqual("github-copilot", metadata["target"])
-            self.assertEqual(expected_tools, metadata["tools"])
+            self.assertEqual(expected_tools, metadata["tools"][:len(expected_tools)])
+            self.assertEqual(
+                set(metadata["tools"][len(expected_tools):]),
+                validator.GITHUB_MCP_READ_TOOLS
+                | (validator.GITHUB_MCP_WRITE_TOOLS if worker == "Writer" else frozenset()),
+            )
             self.assertFalse(metadata["user-invocable"])
             self.assertFalse(metadata["disable-model-invocation"])
             hooks = metadata["hooks"]["preToolUse"]
@@ -342,8 +360,8 @@ class ValidatorMutationTests(unittest.TestCase):
         with temp:
             path = repo / ".copilot/agents/Orchestrator.agent.md"
             text = path.read_text().replace(
-                "agents: [Researcher, GitHubResearcher, Writer, Reviewer, BrowserQA]",
-                "agents: [Researcher, GitHubResearcher, Writer, Reviewer, BrowserQA, ExternalWorker]",
+                "agents: [Researcher, Writer, Reviewer, BrowserQA]",
+                "agents: [Researcher, Writer, Reviewer, BrowserQA, ExternalWorker]",
                 1,
             )
             path.write_text(text)
@@ -800,7 +818,7 @@ class ValidatorMutationTests(unittest.TestCase):
             self.assert_invalid(repo, "missing required Orchestrator section")
 
     def test_orchestrator_body_rejects_bundled_worker_names(self) -> None:
-        for worker_name in ("Researcher", "GitHubResearcher"):
+        for worker_name in ("Researcher", "Reviewer"):
             with self.subTest(worker=worker_name):
                 temp, repo = self.make_repo()
                 with temp:
@@ -1089,8 +1107,8 @@ Inspect only the delegated resource. Do not call another agent.
             orchestrator = repo / ".copilot/agents/Orchestrator.agent.md"
             orchestrator.write_text(
                 orchestrator.read_text().replace(
-                    "agents: [Researcher, GitHubResearcher, Writer, Reviewer, BrowserQA]",
-                    "agents: [Researcher, GitHubResearcher, Writer, Reviewer, BrowserQA, CustomInspector]",
+                    "agents: [Researcher, Writer, Reviewer, BrowserQA]",
+                    "agents: [Researcher, Writer, Reviewer, BrowserQA, CustomInspector]",
                     1,
                 )
             )

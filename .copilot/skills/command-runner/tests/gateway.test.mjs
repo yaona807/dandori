@@ -23,6 +23,7 @@ const BUILTIN_SOURCE = path.join(SCRIPT_DIRECTORY, 'builtins.mjs');
 const SCRIPT_GUARD_SOURCE = path.join(SCRIPT_DIRECTORY, 'script-guard.mjs');
 const INTERFACE_SOURCE = path.join(SCRIPT_DIRECTORY, 'gateway.mjs');
 const HOOK_SOURCE = path.join(SCRIPT_DIRECTORY, 'hook.mjs');
+const GITHUB_APPROVAL_SOURCE = path.join(SCRIPT_DIRECTORY, 'github-mcp-approval.mjs');
 const AGENT_SOURCES = ['Researcher', 'Writer'].map(name => path.join(SOURCE_DIRECTORY, '..', '..', '..', 'agents', `${name}.agent.md`));
 const RESPONSE_LIMIT = 12_288;
 
@@ -112,6 +113,7 @@ async function makeFixture(commandCount = 3) {
   await writeFile(path.join(scripts, 'script-guard.mjs'), await readFile(SCRIPT_GUARD_SOURCE));
   await writeFile(path.join(scripts, 'gateway.mjs'), await readFile(INTERFACE_SOURCE));
   await writeFile(path.join(scripts, 'hook.mjs'), await readFile(HOOK_SOURCE));
+  await writeFile(path.join(scripts, 'github-mcp-approval.mjs'), await readFile(GITHUB_APPROVAL_SOURCE));
   await writeFile(path.join(scripts, 'runner.mjs'), STUB_CORE);
 
   const commands = {};
@@ -151,6 +153,7 @@ async function makeManagementFixture() {
   await writeFile(path.join(scripts, 'script-guard.mjs'), await readFile(SCRIPT_GUARD_SOURCE));
   await writeFile(path.join(scripts, 'gateway.mjs'), await readFile(INTERFACE_SOURCE));
   await writeFile(path.join(scripts, 'hook.mjs'), await readFile(HOOK_SOURCE));
+  await writeFile(path.join(scripts, 'github-mcp-approval.mjs'), await readFile(GITHUB_APPROVAL_SOURCE));
   await writeFile(path.join(scripts, 'runner.mjs'), await readFile(CORE_SOURCE));
   await writeFile(
     path.join(alpha, 'echo-args.mjs'),
@@ -293,6 +296,47 @@ function parseFailure(result, code) {
   assert.equal(output.error.code, code);
   return output;
 }
+
+
+test('GitHub MCP approval hook allows reads, asks for writes, and denies unknown tools', async () => {
+  await withFixture(async (fixture) => {
+    const invoke = (name, args, script = 'github-mcp-approval.mjs') => {
+      const result = spawnSync(process.execPath, [path.join(fixture.scripts, script)], {
+        cwd: fixture.alpha, encoding: 'utf8',
+        input: JSON.stringify({ toolName: name, toolArgs: args }),
+      });
+      assert.equal(result.status, 0, result.stderr);
+      return JSON.parse(result.stdout);
+    };
+    const scope = { owner: 'example', repo: 'project' };
+    assert.deepEqual(invoke('github/pull_request_read', { ...scope, pullNumber: 8, method: 'get' }), {});
+    assert.deepEqual(invoke('read', { path: 'README.md' }), {});
+    for (const [name, args] of [
+      ['github/create_pull_request', { ...scope, head: 'topic', base: 'main', title: 'Fix' }],
+      ['github/add_issue_comment', { ...scope, issue_number: 8, body: 'Please change this' }],
+      ['github/pull_request_review_write', { ...scope, pullNumber: 8, method: 'submit' }],
+      ['github/add_reply_to_pull_request_comment', { ...scope, pullNumber: 8, commentId: 15, body: 'Updated' }],
+      ['github/actions_run_trigger', { ...scope, method: 'rerun_workflow', run_id: 3 }],
+      ['github/merge_pull_request', { ...scope, pullNumber: 8, expectedHeadSha: 'a'.repeat(40) }],
+    ]) {
+      assert.equal(invoke(name, args).permissionDecision, 'ask', name);
+      assert.equal(invoke(name, args, 'hook.mjs').permissionDecision, 'ask', name);
+    }
+    for (const [name, args] of [
+      ['github/delete_repository', scope],
+      ['github/merge_pull_request', { ...scope, pullNumber: 8 }],
+      ['github/create_pull_request', { ...scope, base: 'main', title: 'missing head' }],
+      ['github/add_issue_comment', { ...scope, issue_number: 8 }],
+      ['github/update_pull_request', { ...scope, pullNumber: 8 }],
+      ['github/actions_run_trigger', { ...scope, method: 'run_workflow' }],
+      ['mcp__github__merge_pull_request', { ...scope, pullNumber: 8 }],
+      ['github/issue_write', 'not-json'],
+    ]) {
+      assert.equal(invoke(name, args).permissionDecision, 'deny', name);
+      assert.equal(invoke(name, args, 'hook.mjs').permissionDecision, 'deny', name);
+    }
+  });
+});
 
 test('shared CLI worker agents expose the fixed runner without arbitrary shell permissions', async () => {
   for (const agentSource of AGENT_SOURCES) {

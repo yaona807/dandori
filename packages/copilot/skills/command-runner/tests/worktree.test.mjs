@@ -43,7 +43,7 @@ async function fixture() {
   git(main, 'add', '.');
   git(main, 'commit', '-m', 'initial');
   git(main, 'worktree', 'add', '-b', 'feature', linked);
-  for (const name of ['runner.mjs', 'gateway.mjs', 'cli.mjs', 'hook.mjs', 'builtins.mjs', 'script-guard.mjs']) {
+  for (const name of ['runner.mjs', 'gateway.mjs', 'cli.mjs', 'hook.mjs', 'github-mcp-approval.mjs', 'builtins.mjs', 'script-guard.mjs']) {
     await writeFile(path.join(installed, name), await readFile(path.join(scripts, name)));
   }
   const configuration = {

@@ -1,0 +1,11 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "type": "command",
+        "command": "node ~/.copilot/skills/command-runner/scripts/github-mcp-approval.mjs",
+        "timeout": 10
+      }
+    ]
+  }
+}
