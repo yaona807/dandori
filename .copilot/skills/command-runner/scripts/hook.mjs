@@ -6,6 +6,7 @@ import os from 'node:os';
 import { lstatSync, readFileSync, realpathSync } from 'node:fs';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
+import { githubMcpDecision } from './github-mcp-approval.mjs';
 
 const TERMINAL_TOOL_NAMES = new Set([
   'execute/runInTerminal',
@@ -647,7 +648,10 @@ try {
       // An opaque string can never be a valid fixed-runner terminal invocation.
     }
   }
-  if (!TERMINAL_TOOL_NAMES.has(toolName)) {
+  const githubDecision = githubMcpDecision(toolName, toolInput);
+  if (githubDecision !== null) {
+    output(githubDecision);
+  } else if (!TERMINAL_TOOL_NAMES.has(toolName)) {
     // Parse only a real patch-bearing argument, never ordinary source text or
     // replacement strings that merely contain patch syntax as documentation.
     const isWriteTool = typeof toolName === 'string'

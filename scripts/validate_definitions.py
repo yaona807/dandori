@@ -231,12 +231,41 @@ WORKER_FAILURE_EVIDENCE_POLICY = (
     "never repeat unchanged failures, bypass denials, or retry unknown effects."
 )
 
+GITHUB_MCP_READ_TOOLS = frozenset({
+    "github/pull_request_read",
+    "github/list_pull_requests",
+    "github/search_pull_requests",
+    "github/issue_read",
+    "github/list_issues",
+    "github/search_issues",
+    "github/actions_get",
+    "github/actions_list",
+    "github/get_job_logs",
+    "github/get_file_contents",
+    "github/get_commit",
+    "github/list_branches",
+    "github/list_commits",
+    "github/search_code",
+    "github/search_commits",
+})
+GITHUB_MCP_WRITE_TOOLS = frozenset({
+    "github/create_pull_request",
+    "github/update_pull_request",
+    "github/update_pull_request_branch",
+    "github/merge_pull_request",
+    "github/pull_request_review_write",
+    "github/add_comment_to_pending_review",
+    "github/add_reply_to_pull_request_comment",
+    "github/issue_write",
+    "github/add_issue_comment",
+    "github/update_issue_comment",
+    "github/actions_run_trigger",
+    "github/create_branch",
+    "github/request_copilot_review",
+})
+
 BUNDLED_WORKER_TOOLS: dict[str, set[str]] = {
     "BrowserQA": {"browser"},
-    "GitHubResearcher": {
-        "GitHub.vscode-pull-request-github/pullRequestStatusChecks",
-        "GitHub.vscode-pull-request-github/issue_fetch",
-    },
     "Researcher": {
         "read",
         "search",
@@ -271,6 +300,9 @@ BUNDLED_WORKER_TOOLS: dict[str, set[str]] = {
         "execute",
     },
 }
+BUNDLED_WORKER_TOOLS["Researcher"].update(GITHUB_MCP_READ_TOOLS)
+BUNDLED_WORKER_TOOLS["Reviewer"].update(GITHUB_MCP_READ_TOOLS)
+BUNDLED_WORKER_TOOLS["Writer"].update(GITHUB_MCP_READ_TOOLS | GITHUB_MCP_WRITE_TOOLS)
 # These markers protect the runtime-visible frontmatter used by Copilot to
 # select workers. The descriptions, not this validator, remain the routing source
 # of truth; this rejects accidentally omitted positive or negative capabilities.
@@ -281,12 +313,6 @@ WORKER_DESCRIPTION_ROUTING_MARKERS: dict[str, tuple[str, ...]] = {
         "Returns source-backed implementation facts",
         "fixed-runner diagnostic commands",
         "Not for edits, arbitrary shell execution",
-    ),
-    "GitHubResearcher": (
-        "Use for exact GitHub issue and pull request inspection",
-        "Supports read-only GitHub extension tools",
-        "Returns bounded GitHub artifact findings",
-        "Not for workspace codebase investigation",
     ),
     "Writer": (
         "Use for scoped file creation and edits",
@@ -318,14 +344,12 @@ BUNDLED_AGENT_NAMES = frozenset({"Orchestrator", *BUNDLED_WORKER_NAMES})
 BUNDLED_AGENT_MODEL_SETTINGS = {
     "Orchestrator": ("GPT-6.1 Sol (copilot)", "medium"),
     "Researcher": ("GPT-6 Luna (copilot)", "medium"),
-    "GitHubResearcher": ("GPT-6 Luna (copilot)", "low"),
     "Writer": ("GPT-6.1 Terra (copilot)", "medium"),
     "Reviewer": ("GPT-6.1 Sol (copilot)", "medium"),
     "BrowserQA": ("GPT-6.1 Terra (copilot)", "low"),
 }
 BUNDLED_AGENT_MIN_BODY_CHARS = {
     "BrowserQA": 1_000,
-    "GitHubResearcher": 1_200,
     "Researcher": 1_100,
     "Reviewer": 1_000,
     "Writer": 2_000,
@@ -361,20 +385,6 @@ BUNDLED_WORKER_REQUIRED_SECTION_MARKERS: dict[str, dict[str, tuple[str, ...]]] =
             "Do not introduce an additional persistent effect or leave the delegated application flow.",
             "Prefer the narrowest available browser capability that can enforce the delegated interaction boundary.",
             "If an interaction could cause a persistent effect not clearly required by the delegated flow, stop before performing it and report the uncertainty.",
-        ),
-    },
-    "GitHubResearcher": {
-        "## Delegated task contract": ("Treat the delegated request as the complete task boundary.",),
-        "## Strict rules": (
-            BOUNDARY_ENFORCEMENT_POLICY,
-            WORKER_FAILURE_EVIDENCE_POLICY,
-            "Do not modify files.",
-            "Do not run terminal commands.",
-            "Do not call another agent.",
-            "Do not approve, merge, close, or comment on issues or pull requests.",
-            "Use only read-only GitHub tools whose inputs can identify the exact delegated repository and issue or pull-request number.",
-            "Do not follow linked issues, pull requests, repository files, or external resources unless explicitly delegated.",
-            "Do not inspect workspace files as a substitute for unavailable GitHub artifact information.",
         ),
     },
     "Researcher": {

@@ -265,7 +265,6 @@ DANDORIは**実質的進捗**（Criterionの検証済み改善）と**診断上�
   agents/
     Orchestrator.agent.md
     Researcher.agent.md
-    GitHubResearcher.agent.md
     Writer.agent.md
     Reviewer.agent.md
     BrowserQA.agent.md
@@ -317,7 +316,6 @@ assets/
 - DANDORI Agentは明示的にVS Codeを対象とします。
 - GitHub CopilotのAgent委任のみをサポートします。`task`による委譲とCopilotのターミナルToolを使用します。実際のTool・Hookの可用性は[conformanceケース](./tests/conformance.md)（特に`CONF-024`）で確認してください。
 - Copilotの委譲先は承認された名前付きCustom Agentに限定します。名前指定はHostによる認可の強制ではないため、許可範囲とTask Cardの制約を維持します。
-- `GitHubResearcher`にはGitHub Pull Requests拡張機能と、その拡張機能が公開するToolが必要です。
 - `BrowserQA`には設定済みのbrowser Tool群が必要です。
 - 利用できない、または認識されないTool名はruntimeに無視される場合があるため、実際のTool可用性を確認してください。
 - 同梱Workerは、Toolの引数とruntime挙動で委譲境界を強制できる場合だけ、そのToolを呼び出します。利用可能なToolがより広い範囲でしか動作できない場合は、実行せず`blocked`を返し、必要な狭いcapabilityを示します。
@@ -331,7 +329,19 @@ DANDORI は、Orchestratorへ推論能力の高いモデルを使用すること
 
 Orchestrator は、実行方法の曖昧さと権限の曖昧さを区別し、契約を広げずに正規化し、最小Task Cardを作り、Worker結果を監査し、矛盾を処理し、包含関係を確認できない場合に停止する必要があります。
 
-同梱のAgent定義では、**OrchestratorとReviewerに GPT-6.1 Sol (copilot)**（`medium`）、**Writerに GPT-6.1 Terra (copilot)**（`medium`）、**BrowserQAに GPT-6.1 Terra (copilot)**（`low`）、**Researcherに GPT-6 Luna (copilot)**（`medium`）、**GitHubResearcherに GPT-6 Luna (copilot)**（`low`）を指定します。`reasoning-effort`はCopilot harness向けのフィールドであり、モデルの実際の認識・選択はVS Codeで確認が必要です。追加した外部Workerのモデルは別途選択できます。
+同梱のAgent定義では、**OrchestratorとReviewerに GPT-6.1 Sol (copilot)**（`medium`）、**Writerに GPT-6.1 Terra (copilot)**（`medium`）、**BrowserQAに GPT-6.1 Terra (copilot)**（`low`）、**Researcherに GPT-6 Luna (copilot)**（`medium`）を指定します。`reasoning-effort`はCopilot harness向けのフィールドであり、モデルの実際の認識・選択はVS Codeで確認が必要です。追加した外部Workerのモデルは別途選択できます。
+
+## GitHub MCP と実行直前の人間承認
+
+GitHubの読み取りはResearcherとReviewerに統合し、Writerには限定されたPR・Issue・Actions書き込みツールを公開します。Orchestratorは従来どおりTask Cardを委譲するだけです。ツール公開は操作許可を意味しません。
+
+**GitHub MCPの書き込みは毎回人間が承認する運用です。** Writerの既存`preToolUse` Hookが書き込み時に`ask`を返し、未知のGitHubツール名・形式は`deny`にします。さらに、配布物の`skills/command-runner/assets/github-mcp-hooks.example.json`を`~/.copilot/hooks/dandori-github-mcp.json`へ設置し、共通Hookを有効化してください。`chat.useCustomAgentHooks`も有効化し、Manual permissionsを選択し、GitHub書き込みツールごとに自動承認を無効化します。保存済みツール承認も解除します。
+
+**Hook単独では強制できません。** タイムアウトでは通常権限処理へ移行し、既存承認、Assisted/Allow all、Autopilot、Worktreeセッション、ホストのポリシー差異が影響します。利用可能な企業環境ではAgent Hostの管理対象`permissions.ask`を併用し、個別操作の毎回承認を実機で確かめます。実機で承認を強制できない場合はWriterからGitHub書き込みツールを外すか、認証を読み取り専用とします。業務用リポジトリでの運用前に隔離したテストリポジトリで`tests/conformance.md`を実施してください。
+
+GitHub MCPの`actions`や`copilot`ツールセットは環境により別途有効化が必要です。GitHubへの書き込みには承認済みTFR・Task Card・実行直前のHost承認・実行後の再取得が必要です。CLIや別MCPへの自動フォールバック、Git push、リモートファイル操作、リポジトリ削除を追加しません。
+
+参照：[GitHub MCP Server](https://github.com/github/github-mcp-server)、[Copilot Hooks](https://docs.github.com/en/copilot/reference/hooks-reference)、[VS Code Hooks](https://code.visualstudio.com/docs/agent-customization/hooks)、[承認設定](https://code.visualstudio.com/docs/agents/run/approvals)、[企業設定](https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings)。
 
 ## インストール
 
@@ -583,7 +593,7 @@ MIT. 詳細は [LICENSE](./LICENSE) を参照してください。
 
 ## ビルド済みの Copilot 配布物
 
-GitHub の「Download ZIP」には `packages/copilot/` のみが含まれます。6つのAgent、code-review Skill、CommandRunnerの実行スクリプトを収録しています。VS Code Local Agent harnessのサポートは終了します。
+GitHub の「Download ZIP」には `packages/copilot/` のみが含まれます。5つのAgent、code-review Skill、CommandRunnerの実行スクリプトを収録しています。VS Code Local Agent harnessのサポートは終了します。
 
 - `agents/` と `skills/` は対応する VS Code のユーザープロファイルまたはワークスペースで有効な Agent / Skill ディレクトリへ配置します。
 - CommandRunnerの実行コードは `skills/command-runner/` に同梱されます。永続データは `~/.copilot/command-runner/` に保持します。Copilot 版のResearcher・Writerは `preToolUse` フックを利用するため、対象環境でフックが実行されることを **先に確認**してください。フックが使えない環境では Researcher・Writerに実行権限を与えないでください。

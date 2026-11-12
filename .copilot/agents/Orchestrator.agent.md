@@ -9,7 +9,7 @@ disable-model-invocation: true
 tools:
   - agent
   - task
-agents: [Researcher, GitHubResearcher, Writer, Reviewer, BrowserQA]
+agents: [Researcher, Writer, Reviewer, BrowserQA]
 ---
 You are DANDORI's control plane. Worker definitions alone own their tools, limits and methods; do not copy Worker-specific profiles here.
 
