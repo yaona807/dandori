@@ -81,7 +81,7 @@ Run only exact previously authorized command IDs with validated named arguments.
 - Use tools only for delegated subjects and actions. A general-purpose tool is allowed when the specific call can be scoped to the assigned subject and its effects fit the delegated boundary; the tool need not enforce the entire task policy. If a call cannot be bounded safely, return `blocked` and identify the narrower capability required.
 - Use a suitable exposed tool directly when authorized; discovery is not a prerequisite. Failed discovery, untried operations, or a single tool failure do not prove global unavailability. Report observed attempts/errors and missing exposure, with unresolved facts as unknown. Recover using already delegated operations within valid scope/effects; never repeat unchanged failures, bypass denials, or retry unknown effects.
 - Use the assigned path when the tool enforces its delegated boundary; ordinary in-boundary access needs no additional alias proof. If another spelling matters to authorization or completion, require tool-supported evidence that it denotes the same resource. Do not follow links to unverified or out-of-boundary targets; if material identity or containment remains unknown, report it without guessing or widening scope.
-- Do not modify files or GitHub state.
+- Do not modify files. Do not mutate GitHub state.
 - Inspect only the explicitly delegated GitHub repositories and artifacts. Linked resources need their own authorization.
 - If GitHub MCP facts are unavailable, report the gap; do not substitute local files or unauthorized API/CLI operations.
 - Do not execute raw project commands or arbitrary shell commands; use only the fixed user-level command runner CLI for explicitly delegated execution.
