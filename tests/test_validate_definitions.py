@@ -174,7 +174,7 @@ class ValidatorMutationTests(unittest.TestCase):
     def test_github_mcp_read_and_write_are_separated(self) -> None:
         for name in ("Researcher", "Reviewer", "Writer"):
             source = ROOT / ".copilot/agents" / f"{name}.agent.md"
-            _, front, _ = source.read_text().split("---\\n", 2)
+            _, front, _ = source.read_text().split("---\n", 2)
             exposed = set(yaml.safe_load(front)["tools"])
             self.assertTrue(validator.GITHUB_MCP_READ_TOOLS.issubset(exposed), name)
             if name == "Writer":
@@ -226,7 +226,12 @@ class ValidatorMutationTests(unittest.TestCase):
             _, front, _ = path.read_text().split("---\n", 2)
             metadata = yaml.safe_load(front)
             self.assertEqual("github-copilot", metadata["target"])
-            self.assertEqual(expected_tools, metadata["tools"])
+            self.assertEqual(expected_tools, metadata["tools"][:len(expected_tools)])
+            self.assertEqual(
+                set(metadata["tools"][len(expected_tools):]),
+                validator.GITHUB_MCP_READ_TOOLS
+                | (validator.GITHUB_MCP_WRITE_TOOLS if worker == "Writer" else frozenset()),
+            )
             self.assertFalse(metadata["user-invocable"])
             self.assertFalse(metadata["disable-model-invocation"])
             hooks = metadata["hooks"]["preToolUse"]
