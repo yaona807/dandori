@@ -15,6 +15,11 @@ const CURRENT = fileURLToPath(import.meta.url);
 const file = () => ({ type: 'string', maxLength: 4096 });
 const positional = (value) => ({ kind: 'positional', required: true, value });
 const option = (token, value) => ({ kind: 'option', token, value });
+const requiredOption = (token, value) => ({ kind: 'option', token, value, required: true });
+const repeatedOption = (token, value, maxItems = 16) => ({ kind: 'option', token, value, repeatable: true, maxItems });
+const choice = (...values) => ({ type: 'choice', values });
+const reference = () => ({ type: 'string', maxLength: 256 });
+const number = (min, max) => ({ type: 'integer', min, max });
 
 const SPECS = {
   'builtin-fs-move': { description: 'Move/rename one existing regular file between workspace-relative paths; destination parent must exist. No overwrite, symlink traversal, directory operation, or cross-filesystem fallback.', arguments: { source: positional(file()), destination: positional(file(false)) } },
@@ -23,11 +28,67 @@ const SPECS = {
   'builtin-fs-restore': { description: 'Restore a .agent-trash itemId to its original workspace-relative file path; original parent must exist. No overwrite, permanent deletion, directory restore, or symlink traversal.', arguments: { itemId: positional({ type: 'string', maxLength: 36 }) } },
   'builtin-fs-trash-list': { description: 'Read restorable .agent-trash items (itemId, original path, createdAt) in the current workspace; offset and limit bound pagination. Read-only; does not restore or delete files.', arguments: { offset: option('--offset', { type: 'integer', min: 0, max: 100000000 }), limit: option('--limit', { type: 'integer', min: 1, max: 100 }) } },
   'builtin-git-status': { description: 'Read Git status including tracked changes and untracked files when repository root equals current workspace. No index refresh, staging, or writes.', arguments: {} },
-  'builtin-git-diff': { description: 'Read unstaged (default) or staged Git diff, optionally for one workspace-relative file; repository root must equal current workspace. No index refresh, staging, or writes.', arguments: { scope: option('--scope', { type: 'choice', values: ['unstaged', 'staged'] }), file: option('--file', file(false)) } },
-  'builtin-git-log': { description: 'Read up to 100 Git commit summaries (default 20) in the repository rooted at the current workspace; no repository changes.', arguments: { count: option('--count', { type: 'integer', min: 1, max: 100 }) } },
-  'builtin-git-show': { description: 'Read one Git commit by full 40-character SHA in the repository rooted at the current workspace; external diff disabled, no writes.', arguments: { commit: positional({ type: 'string', maxLength: 40 }) } },
-  'builtin-git-ls-files': { description: 'List Git-tracked files, optionally restricted to a workspace-relative path; repository root must equal current workspace. Read-only.', arguments: { file: option('--file', file(false)) } },
+  'builtin-git-diff': { description: 'Read unstaged, staged or commit-to-commit Git diff with optional workspace-relative files; branch comparison supported. No index refresh, staging, or writes.', arguments: {
+    scope: option('--scope', choice('unstaged', 'staged', 'commits')),
+    base: option('--base', reference()), target: option('--target', reference()),
+    comparison: option('--comparison', choice('direct', 'merge-base')),
+    format: option('--format', choice('patch', 'stat', 'name-only', 'check')),
+    file: repeatedOption('--file', file()),
+  } },
+  'builtin-git-log': { description: 'Read up to 100 Git commit summaries or range-filtered history (default 20); no repository changes.', arguments: {
+    count: option('--count', number(1, 100)), range: option('--range', reference()),
+    format: option('--format', choice('summary', 'oneline', 'full', 'graph')),
+    author: option('--author', reference()), grep: option('--grep', reference()),
+    file: repeatedOption('--file', file()),
+  } },
+  'builtin-git-show': { description: 'Read one Git commit reference (full 40-character SHA, HEAD or branch), optionally scoped to workspace-relative files; no writes.', arguments: {
+    commit: positional(reference()), format: option('--format', choice('patch', 'stat', 'name-only')),
+    file: repeatedOption('--file', file()),
+  } },
+  'builtin-git-ls-files': { description: 'List Git-tracked or other indexed files, optionally restricted to workspace-relative paths. Read-only.', arguments: {
+    mode: option('--mode', choice('tracked', 'untracked', 'modified', 'deleted')),
+    file: repeatedOption('--file', file()),
+  } },
   'builtin-git-branch-info': { description: 'Read the current Git branch name only when repository root matches the current workspace; does not switch branches or write.', arguments: {} },
+  'builtin-git-branch': { description: 'List local, remote or all branches, and inspect merged/containing refs. Never creates, modifies or deletes branches.', arguments: {
+    scope: option('--scope', choice('local', 'remote', 'all', 'current')),
+    contains: option('--contains', reference()), merged: option('--merged', reference()),
+    pattern: option('--pattern', reference()),
+  } },
+  'builtin-git-blame': { description: 'Read line history of one workspace-relative file, optionally at a commit and within an inclusive line interval.', arguments: {
+    file: requiredOption('--file', file()), ref: option('--ref', reference()),
+    start: option('--start', number(1, 100000000)), end: option('--end', number(1, 100000000)),
+  } },
+  'builtin-git-grep': { description: 'Search Git tracked content for an explicit pattern without a pager or external search program.', arguments: {
+    pattern: requiredOption('--pattern', { type: 'string', maxLength: 1024 }),
+    mode: option('--mode', choice('fixed', 'regex')),
+    case: option('--case', choice('sensitive', 'ignore')),
+    output: option('--output', choice('lines', 'files', 'count')),
+    file: repeatedOption('--file', file()),
+  } },
+  'builtin-git-merge-base': { description: 'Read the best common ancestor of two Git commit references without changing repository state.', arguments: {
+    left: requiredOption('--left', reference()), right: requiredOption('--right', reference()),
+  } },
+  'builtin-git-rev-parse': { description: 'Resolve and verify one Git revision as a full or abbreviated object ID.', arguments: {
+    ref: requiredOption('--ref', reference()), format: option('--format', choice('full', 'short')),
+  } },
+  'builtin-git-rev-list': { description: 'List commits in a bounded revision range or count matching commits.', arguments: {
+    range: requiredOption('--range', reference()), count: option('--count', number(1, 100)),
+    format: option('--format', choice('hashes', 'count')),
+  } },
+  'builtin-git-worktree': { description: 'List Git worktrees in human-readable or porcelain format; no add, move, prune or remove.', arguments: {
+    format: option('--format', choice('text', 'porcelain')),
+  } },
+  'builtin-git-reflog': { description: 'Read Git reference move history, optionally for a selected ref and bounded count.', arguments: {
+    ref: option('--ref', reference()), count: option('--count', number(1, 100)),
+  } },
+  'builtin-git-range-diff': { description: 'Compare two commit ranges, for example before and after rebase, without rewriting history.', arguments: {
+    oldRange: requiredOption('--old-range', reference()), newRange: requiredOption('--new-range', reference()),
+  } },
+  'builtin-git-ls-tree': { description: 'Read the tree for a Git revision, optionally recursively and restricted to workspace-relative paths.', arguments: {
+    ref: requiredOption('--ref', reference()), recursive: option('--recursive', choice('true', 'false')),
+    format: option('--format', choice('names', 'full')), file: repeatedOption('--file', file()),
+  } },
 };
 
 export function builtinDefinitions() {
@@ -118,7 +179,7 @@ function gitEnvironment() {
   env.GIT_EXTERNAL_DIFF = '';
   return env;
 }
-function git(root, args, allowNonRepo = false) {
+function git(root, args, allowNonRepo = false, allowNoMatch = false) {
   const result = spawnSync('git', [
     '--no-pager', '--no-optional-locks', '-c', 'core.fsmonitor=false',
     '-c', 'diff.external=', ...args,
@@ -128,8 +189,9 @@ function git(root, args, allowNonRepo = false) {
   });
   if (result.error) throw result.error;
   if (result.status !== 0) {
+    if (allowNoMatch && result.status === 1) return result.stdout;
     if (allowNonRepo && result.status === 128 && /not a git repository/u.test(result.stderr ?? '')) return null;
-    refuse('git failed: ' + String(result.stderr || result.status).slice(0, 500));
+    refuse('git failed: ' + String(result.stderr || result.stdout || result.status).slice(0, 500));
   }
   return result.stdout;
 }
@@ -220,51 +282,177 @@ async function trashList(root, offset, limit) {
   return { items, nextOffset: null };
 }
 
-function parseInput(argv) {
-  const options = {};
+// Only internal option names declared in SPECS are accepted. The Worker does not
+// supply raw git argv; named parameters are mapped to a fixed Git invocation.
+function parseInput(id, argv) {
+  const specs = SPECS[id].arguments;
+  const known = new Map(Object.values(specs).filter(v => v.kind === 'option').map(v => [v.token, v]));
+  const options = Object.create(null);
   const positionals = [];
-  for (let i = 0; i < argv.length; i += 1) {
-    const token = argv[i];
-    if (token.startsWith('--')) {
-      if (!['--scope', '--file', '--count', '--offset', '--limit'].includes(token) || i + 1 >= argv.length || token in options) {
-        refuse('unsupported or duplicate builtin option');
-      }
-      options[token] = argv[++i];
-    } else positionals.push(token);
+  for (let index = 0; index < argv.length; index += 1) {
+    const token = argv[index];
+    if (!token.startsWith('--')) {
+      positionals.push(token);
+      continue;
+    }
+    const spec = known.get(token);
+    if (!spec || index + 1 >= argv.length) refuse('unsupported or incomplete builtin option: ' + token);
+    const value = argv[++index];
+    if (spec.repeatable) {
+      if (!options[token]) options[token] = [];
+      if (options[token].length >= spec.maxItems) refuse('too many repeated builtin arguments');
+      options[token].push(value);
+    } else {
+      if (Object.hasOwn(options, token)) refuse('duplicate builtin option: ' + token);
+      options[token] = value;
+    }
   }
+  const expected = Object.values(specs).filter(v => v.kind === 'positional').length;
+  if (positionals.length !== expected) refuse('wrong number of builtin positional arguments');
   return { positionals, options };
 }
+
+function gitRef(value) {
+  if (typeof value !== 'string' || !value || value.length > 256
+    || value.startsWith('-') || /[\s\u0000-\u001f\u007f]/u.test(value)) {
+    refuse('invalid Git revision or pattern');
+  }
+  return value;
+}
+
+// Git pathspecs may reference files removed from the current worktree. Unlike
+// filesystem mutation builtins, do not require that the leaf exists today.
+function gitPath(root, value) {
+  if (typeof value !== 'string' || !value || path.isAbsolute(value)
+    || path.win32.isAbsolute(value) || value.includes('\\') || value.includes('\0')) {
+    refuse('Git paths must be workspace-relative');
+  }
+  const full = path.resolve(root, value);
+  if (!inside(root, full)) refuse('Git path outside workspace');
+  const relative = path.relative(root, full) || '.';
+  if (relative.split(path.sep).some(v => v.toLowerCase() === '.git' || v.toLowerCase() === TRASH)) {
+    refuse('protected Git path');
+  }
+  return relative;
+}
+
 async function gitAction(root, id, positionals, options) {
   await gitRepoRoot(root);
-  const readPath = options['--file'] === undefined
-    ? null : path.relative(root, await workspacePath(root, options['--file'], true));
+  const get = (key) => options['--' + key];
+  const selectedFiles = get('file');
+  const paths = (selectedFiles === undefined ? [] : Array.isArray(selectedFiles) ? selectedFiles : [selectedFiles])
+    .map(value => gitPath(root, value));
+  const files = paths.length ? ['--', ...paths] : [];
   let args;
-  if (id === 'builtin-git-status') args = ['status', '--porcelain=v2', '--branch', '--untracked-files=all', '--ignore-submodules=all'];
-  else if (id === 'builtin-git-diff') {
-    const scope = options['--scope'] ?? 'unstaged';
-    if (!['unstaged', 'staged'].includes(scope)) refuse('invalid diff scope');
-    args = ['--literal-pathspecs', 'diff', ...(scope === 'staged' ? ['--cached'] : []),
+  let allowNoMatch = false;
+  if (id === 'builtin-git-status') {
+    args = ['status', '--porcelain=v2', '--branch', '--untracked-files=all', '--ignore-submodules=all'];
+  } else if (id === 'builtin-git-diff') {
+    const scope = get('scope') ?? 'unstaged';
+    const comparison = get('comparison') ?? 'direct';
+    if (scope !== 'commits' && (get('base') || get('target') || get('comparison'))) {
+      refuse('commit comparisons require scope=commits');
+    }
+    if (scope === 'commits' && (!get('base') || !get('target'))) refuse('base and target are required');
+    const revs = scope === 'commits'
+      ? comparison === 'merge-base'
+        ? [gitRef(get('base')) + '...' + gitRef(get('target'))]
+        : [gitRef(get('base')), gitRef(get('target'))]
+      : [];
+    const format = get('format') ?? 'patch';
+    const render = format === 'patch' ? [] : ['--' + format];
+    args = ['--literal-pathspecs', 'diff',
+      ...(scope === 'staged' ? ['--cached'] : []),
       '--no-ext-diff', '--no-textconv', '--ignore-submodules=all',
-      ...(readPath ? ['--', readPath] : [])];
+      ...render, ...revs, ...(scope === 'commits' && files.length === 0 ? ['--'] : files)];
   } else if (id === 'builtin-git-log') {
-    const count = options['--count'] ?? '20';
-    if (!/^(?:[1-9]|[1-9][0-9]|100)$/u.test(count)) refuse('invalid history count');
-    args = ['log', '--no-show-signature', '--format=%h %s', '-n', count];
+    const count = get('count') ?? '20';
+    const format = get('format') ?? 'summary';
+    const render = {
+      summary: ['--format=%h %s'], oneline: ['--oneline'],
+      full: ['--format=fuller'], graph: ['--graph', '--oneline'],
+    }[format];
+    args = ['--literal-pathspecs', 'log', '--no-show-signature',
+      ...render, '-n', count,
+      ...(get('author') ? ['--author=' + get('author')] : []),
+      ...(get('grep') ? ['--grep=' + get('grep')] : []),
+      ...(get('range') ? [gitRef(get('range'))] : []),
+      ...(get('range') && files.length === 0 ? ['--'] : files)];
   } else if (id === 'builtin-git-show') {
-    if (positionals.length !== 1 || !/^[a-f0-9]{40}$/iu.test(positionals[0])) refuse('full commit SHA required');
-    args = ['show', '--format=format:%H%n%s%n%b', '--no-ext-diff', '--no-textconv', '--no-show-signature', '--ignore-submodules=all', positionals[0]];
+    const format = get('format') ?? 'patch';
+    args = ['--literal-pathspecs', 'show', '--format=format:%H%n%s%n%b',
+      '--no-ext-diff', '--no-textconv', '--no-show-signature', '--ignore-submodules=all',
+      ...(format === 'patch' ? [] : ['--' + format]), gitRef(positionals[0]),
+      ...(files.length ? files : ['--'])];
   } else if (id === 'builtin-git-ls-files') {
-    args = ['--literal-pathspecs', 'ls-files', '--cached', '-z', ...(readPath ? ['--', readPath] : [])];
-  } else if (id === 'builtin-git-branch-info') args = ['branch', '--show-current'];
-  else refuse('unsupported builtin Git operation');
-  return { output: git(root, args) };
+    const mode = get('mode') ?? 'tracked';
+    const selection = {
+      tracked: ['--cached'], untracked: ['--others', '--exclude-standard'],
+      modified: ['--modified'], deleted: ['--deleted'],
+    }[mode];
+    args = ['--literal-pathspecs', 'ls-files', ...selection, '-z', ...files];
+  } else if (id === 'builtin-git-branch-info') {
+    args = ['branch', '--show-current'];
+  } else if (id === 'builtin-git-branch') {
+    const scope = get('scope') ?? 'local';
+    if (scope === 'current') {
+      if (get('contains') || get('merged') || get('pattern')) refuse('current branch cannot be filtered');
+      args = ['branch', '--show-current'];
+    } else {
+      args = ['branch', '--list',
+        ...(scope === 'all' ? ['--all'] : scope === 'remote' ? ['--remotes'] : []),
+        ...(get('contains') ? ['--contains', gitRef(get('contains'))] : []),
+        ...(get('merged') ? ['--merged', gitRef(get('merged'))] : []),
+        ...(get('pattern') ? [gitRef(get('pattern'))] : [])];
+    }
+  } else if (id === 'builtin-git-blame') {
+    const start = get('start'), end = get('end');
+    if ((start === undefined) !== (end === undefined)) refuse('both start and end are required');
+    if (start !== undefined && Number(start) > Number(end)) refuse('blame line range is reversed');
+    args = ['--literal-pathspecs', 'blame',
+      ...(start ? ['-L', start + ',' + end] : []),
+      ...(get('ref') ? [gitRef(get('ref'))] : []), '--', gitPath(root, get('file'))];
+  } else if (id === 'builtin-git-grep') {
+    const mode = get('mode') ?? 'fixed';
+    const output = get('output') ?? 'lines';
+    args = ['--literal-pathspecs', 'grep', mode === 'regex' ? '-E' : '-F',
+      ...(get('case') === 'ignore' ? ['-i'] : []),
+      ...(output === 'files' ? ['-l'] : output === 'count' ? ['-c'] : ['-n']),
+      '-e', get('pattern'), ...files];
+    allowNoMatch = true;
+  } else if (id === 'builtin-git-merge-base') {
+    args = ['merge-base', gitRef(get('left')), gitRef(get('right'))];
+  } else if (id === 'builtin-git-rev-parse') {
+    args = ['rev-parse', '--verify', ...(get('format') === 'short' ? ['--short=12'] : []),
+      '--end-of-options', gitRef(get('ref'))];
+  } else if (id === 'builtin-git-rev-list') {
+    args = ['rev-list', '--max-count=' + (get('count') ?? '100'),
+      ...(get('format') === 'count' ? ['--count'] : []), gitRef(get('range'))];
+  } else if (id === 'builtin-git-worktree') {
+    args = ['worktree', 'list', ...(get('format') === 'porcelain' ? ['--porcelain'] : [])];
+  } else if (id === 'builtin-git-reflog') {
+    args = ['reflog', 'show', '-n', get('count') ?? '20', gitRef(get('ref') ?? 'HEAD')];
+  } else if (id === 'builtin-git-range-diff') {
+    // range-diff generates patches via git log: outer --no-textconv does
+    // not disable configured diff-driver text converters in that stage.
+    const converterKeys = git(root, ['config', '--includes', '--name-only',
+      '--get-regexp', '^diff\\..*\\.textconv$'], false, true);
+    if (converterKeys.trim()) refuse('range-diff unavailable with configured textconv helpers');
+    args = ['range-diff', gitRef(get('old-range')), gitRef(get('new-range'))];
+  } else if (id === 'builtin-git-ls-tree') {
+    args = ['--literal-pathspecs', 'ls-tree',
+      ...(get('recursive') === 'true' ? ['-r'] : []),
+      ...(get('format') === 'names' ? ['--name-only'] : []),
+      gitRef(get('ref')), ...(files.length ? files : ['--'])];
+  } else refuse('unsupported builtin Git operation');
+  return { output: git(root, args, false, allowNoMatch) };
 }
 
 async function runBuiltin() {
   const [id, ...args] = process.argv.slice(2);
   if (!isBuiltinId(id)) refuse('unknown builtin operation');
   const root = await realpath(process.cwd());
-  const { positionals, options } = parseInput(args);
+  const { positionals, options } = parseInput(id, args);
   if (id.startsWith('builtin-git-')) return gitAction(root, id, positionals, options);
   if (id === 'builtin-fs-trash-list') {
     if (positionals.length) refuse('trash listing accepts no positional arguments');
