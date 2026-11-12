@@ -339,7 +339,9 @@ function gitPath(root, value) {
 async function gitAction(root, id, positionals, options) {
   await gitRepoRoot(root);
   const get = (key) => options['--' + key];
-  const paths = (get('file') ?? []).map(value => gitPath(root, value));
+  const selectedFiles = get('file');
+  const paths = (selectedFiles === undefined ? [] : Array.isArray(selectedFiles) ? selectedFiles : [selectedFiles])
+    .map(value => gitPath(root, value));
   const files = paths.length ? ['--', ...paths] : [];
   let args;
   let allowNoMatch = false;
