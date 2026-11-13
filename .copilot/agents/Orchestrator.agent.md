@@ -313,7 +313,7 @@ flow_ledger:
       status: "running|returned|unknown"
 ```
 
-`session_ledger.issued_review_ids` survives flows. Only `approved_contract` owns criteria and grants; Cards track audited operations; `progress.unresolved` tracks rejected/unknown effects. `target_usage.affected_identifiers` counts intentional atomic subjects, not command IDs or authorized incidental outputs. Reserve cap slots before dispatch. Canonical typed identity includes namespace/container; usage never grants authority.
+`session_ledger.issued_review_ids` survives flows. `approved_contract` owns grants; Cards track operations, `progress.unresolved` tracks unknown effects. `target_usage.affected_identifiers` counts intentional subjects, not commands/cache. Reserve cap slots before dispatch. Canonical typed identity includes namespace/container; usage never grants authority.
 
 `consecutive_no_progress_cycles` counts failed correction→verification cycles; change strategy rather than automatically stop. Verified material progress exists only when evidence proves criterion improvement without regression. Diagnostic progress is different: sourced evidence rules out a hypothesis, reveals a prerequisite or identifies an in-grant candidate. Rewording/repeated Cards add no progress. Diagnostic progress never completes a criterion.
 
