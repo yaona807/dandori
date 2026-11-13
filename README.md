@@ -302,7 +302,7 @@ assets/
 | Component | Role |
 | --- | --- |
 | `Orchestrator` | Control-plane agent for intake, compact approval, contract management, Task Card creation, worker selection, audit, loop control, and synthesis |
-| Reference workers | Optional workers for investigation, exact GitHub issue/pull-request inspection, implementation, review, and browser-based verification |
+| Reference workers | Optional workers for investigation, exact GitHub issue/pull-request inspection, implementation, independent review, and guarded read-only page observation |
 | `code-review` skill | Focused review guidance used by the reference review worker |
 | `command-runner` skill | Shared CLI operating and recovery guide for execution workers |
 
@@ -311,7 +311,7 @@ assets/
 - DANDORI agents explicitly target VS Code.
 - Only the GitHub Copilot delegated-agent harness is supported. Workers use Copilot's `task` delegation and terminal tools; confirm actual tool/hook availability with the [conformance cases](./tests/conformance.md), especially `CONF-024`.
 - Copilot worker routing names only the approved custom agents. The instruction-level routing list is not a host-enforced authorization boundary; scoped grants and Task Cards remain mandatory.
-- `Writer` also performs delegated browser QA; enable the integrated browser tools and include browser interactions and effects in its Task Card.
+- Standalone `BrowserQA` is removed. `Writer` provides only read-only observation of a human-shared page, and only when the Host can establish its exact page binding before the call. Navigation, clicks, typing, dialogs and Playwright are disabled pending an enforced, page-bound interaction interface. Do not treat tool names or Hook approval as proof of page isolation.
 - Unavailable or unrecognized tool names can be ignored by the runtime; verify actual tool availability before use.
 - A bundled Worker calls a tool only when the tool arguments and runtime behavior can enforce the delegated boundary. If the available tool can operate only on a broader scope, the Worker returns `blocked` and identifies the narrower capability required.
 - Researcher and Writer call the shared fixed runner CLI directly. Install the unified runner Skill from `.copilot/skills/command-runner/` and enable agent-scoped hooks with `chat.useCustomAgentHooks`. Copilot workers load the declared `command-runner` Skill and verify availability before terminal use. Skill availability is not execution permission. Synchronous terminal tabs may remain until host-specific cleanup is validated.
