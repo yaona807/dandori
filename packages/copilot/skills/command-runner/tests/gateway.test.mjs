@@ -338,6 +338,26 @@ test('GitHub MCP approval hook allows reads, asks for writes, and denies unknown
   });
 });
 
+test('Writer permits user-shared tab interactions but denies direct URL navigation', async () => {
+  await withFixture(async (fixture) => {
+    const invoke = (name) => {
+      const result = spawnSync(process.execPath, [path.join(fixture.scripts, 'hook.mjs')], {
+        cwd: fixture.alpha, encoding: 'utf8',
+        input: JSON.stringify({ toolName: name, toolArgs: {} }),
+      });
+      assert.equal(result.status, 0, result.stderr);
+      return JSON.parse(result.stdout);
+    };
+    for (const name of ["browser/readPage","browser/screenshotPage","browser/clickElement","browser/hoverElement","browser/dragElement","browser/typeInPage","browser/handleDialog"]) {
+      assert.deepEqual(invoke(name), {}, name);
+    }
+    for (const name of ['browser', 'browser/openBrowserPage', 'browser/navigatePage',
+      'browser/runPlaywrightCode', 'browser/unknownAction']) {
+      assert.equal(invoke(name).permissionDecision, 'deny', name);
+    }
+  });
+});
+
 test('shared CLI worker agents expose the fixed runner without arbitrary shell permissions', async () => {
   for (const agentSource of AGENT_SOURCES) {
     const source = await readFile(agentSource, 'utf8');

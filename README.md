@@ -263,7 +263,6 @@ If the current session's authorization or cumulative loop-control state cannot b
     Researcher.agent.md
     Writer.agent.md
     Reviewer.agent.md
-    BrowserQA.agent.md
   skills/
     code-review/
       SKILL.md
@@ -303,7 +302,7 @@ assets/
 | Component | Role |
 | --- | --- |
 | `Orchestrator` | Control-plane agent for intake, compact approval, contract management, Task Card creation, worker selection, audit, loop control, and synthesis |
-| Reference workers | Optional workers for investigation, exact GitHub issue/pull-request inspection, implementation, review, and browser-based verification |
+| Reference workers | Optional workers for investigation, exact GitHub issue/pull-request inspection, implementation, independent review, and user-shared tab interaction |
 | `code-review` skill | Focused review guidance used by the reference review worker |
 | `command-runner` skill | Shared CLI operating and recovery guide for execution workers |
 
@@ -312,7 +311,7 @@ assets/
 - DANDORI agents explicitly target VS Code.
 - Only the GitHub Copilot delegated-agent harness is supported. Workers use Copilot's `task` delegation and terminal tools; confirm actual tool/hook availability with the [conformance cases](./tests/conformance.md), especially `CONF-024`.
 - Copilot worker routing names only the approved custom agents. The instruction-level routing list is not a host-enforced authorization boundary; scoped grants and Task Cards remain mandatory.
-- `BrowserQA` requires the configured browser tool set.
+- Standalone `BrowserQA` is removed. `Writer` can read and interact with browser tabs explicitly shared by the human. UI clicks may navigate within the shared tab as part of the authorized flow. The agent must never navigate directly by URL, launch a browser tab, run arbitrary Playwright, or interact with an unshared tab. Browser interactions with persistent side effects still require the existing delegated authorization, and cannot bypass GitHub MCP Host approval.
 - Unavailable or unrecognized tool names can be ignored by the runtime; verify actual tool availability before use.
 - A bundled Worker calls a tool only when the tool arguments and runtime behavior can enforce the delegated boundary. If the available tool can operate only on a broader scope, the Worker returns `blocked` and identifies the narrower capability required.
 - Researcher and Writer call the shared fixed runner CLI directly. Install the unified runner Skill from `.copilot/skills/command-runner/` and enable agent-scoped hooks with `chat.useCustomAgentHooks`. Copilot workers load the declared `command-runner` Skill and verify availability before terminal use. Skill availability is not execution permission. Synchronous terminal tabs may remain until host-specific cleanup is validated.
@@ -325,7 +324,7 @@ DANDORI works best with a capable reasoning model for the Orchestrator.
 
 The Orchestrator must distinguish execution-method ambiguity from authorization ambiguity, normalize contracts without widening them, create minimal Task Cards, audit worker results, resolve conflicts, and stop when containment cannot be established.
 
-The bundled agents pin **GPT-6.1 Sol (copilot)** with `medium` effort for Orchestrator and Reviewer; **GPT-6.1 Terra (copilot)** with `medium` for Writer and `low` for BrowserQA; and **GPT-6 Luna (copilot)** with `medium` for Researcher. The `reasoning-effort` frontmatter field is applied by the Copilot harness; model availability and actual model selection still require runtime verification. Custom or external Workers may select their own models.
+The bundled agents pin **GPT-6.1 Sol (copilot)** with `medium` effort for Orchestrator and Reviewer; **GPT-6.1 Terra (copilot)** with `medium` for Writer; and **GPT-6 Luna (copilot)** with `medium` for Researcher. The `reasoning-effort` frontmatter field is applied by the Copilot harness; model availability and actual model selection still require runtime verification. Custom or external Workers may select their own models.
 
 ## GitHub MCP and per-call human approval
 

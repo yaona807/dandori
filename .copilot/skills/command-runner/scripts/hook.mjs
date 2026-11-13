@@ -35,6 +35,15 @@ const PERMITTED_NON_TERMINAL_TOOL_NAMES = new Set([
   'edit/editFiles', 'edit/createFile', 'edit/createDirectory',
   // Native Copilot Web and file-creation tools; Host permission checks still apply.
   'create', 'Write', 'web_search', 'WebSearch', 'web_fetch', 'WebFetch',
+  // User-shared browser-tab interactions; never enable direct URL navigation.
+  // This tool-name allowlist cannot prove tab identity or approve external effects.
+  'browser/readPage',
+  'browser/screenshotPage',
+  'browser/clickElement',
+  'browser/hoverElement',
+  'browser/dragElement',
+  'browser/typeInPage',
+  'browser/handleDialog',
 ]);
 const COMMAND_ID_PATTERN = /^[a-z][a-z0-9_-]{0,63}$/;
 const EXECUTION_ID_PATTERN = /^\d{8}T\d{6}\.\d{3}Z_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;

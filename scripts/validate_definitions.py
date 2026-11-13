@@ -264,8 +264,17 @@ GITHUB_MCP_WRITE_TOOLS = frozenset({
     "github/request_copilot_review",
 })
 
+COPILOT_BROWSER_TOOLS = frozenset({
+    "browser/readPage",
+    "browser/screenshotPage",
+    "browser/clickElement",
+    "browser/hoverElement",
+    "browser/dragElement",
+    "browser/typeInPage",
+    "browser/handleDialog",
+})
+
 BUNDLED_WORKER_TOOLS: dict[str, set[str]] = {
-    "BrowserQA": {"browser"},
     "Researcher": {
         "read",
         "search",
@@ -292,6 +301,13 @@ BUNDLED_WORKER_TOOLS: dict[str, set[str]] = {
     "Writer": {
         "read",
         "edit",
+        "browser/readPage",
+        "browser/screenshotPage",
+        "browser/clickElement",
+        "browser/hoverElement",
+        "browser/dragElement",
+        "browser/typeInPage",
+        "browser/handleDialog",
         "read/readFile",
         "edit/editFiles",
         "edit/createFile",
@@ -319,6 +335,7 @@ WORKER_DESCRIPTION_ROUTING_MARKERS: dict[str, tuple[str, ...]] = {
         "Supports read/edit and exact fixed-runner execution",
         "Returns changed-file summaries",
         "verification evidence",
+        "user-shared browser-tab interaction",
         "Not for broad investigation",
     ),
     "Reviewer": (
@@ -326,12 +343,6 @@ WORKER_DESCRIPTION_ROUTING_MARKERS: dict[str, tuple[str, ...]] = {
         "Supports read/search and code-review guidance",
         "Returns evidence-linked actionable findings",
         "Not for editing files",
-    ),
-    "BrowserQA": (
-        "Use for browser-visible UI verification",
-        "Supports integrated-browser navigation",
-        "Returns observed interaction evidence",
-        "Not for source editing",
     ),
 }
 
@@ -346,13 +357,11 @@ BUNDLED_AGENT_MODEL_SETTINGS = {
     "Researcher": ("GPT-6 Luna (copilot)", "medium"),
     "Writer": ("GPT-6.1 Terra (copilot)", "medium"),
     "Reviewer": ("GPT-6.1 Sol (copilot)", "medium"),
-    "BrowserQA": ("GPT-6.1 Terra (copilot)", "low"),
 }
 BUNDLED_AGENT_MIN_BODY_CHARS = {
-    "BrowserQA": 1_000,
     "Researcher": 1_100,
     "Reviewer": 1_000,
-    "Writer": 2_000,
+    "Writer": 3_000,
 }
 BUNDLED_AGENT_FRONTMATTER_KEYS = frozenset(
     {
@@ -370,23 +379,6 @@ BUNDLED_AGENT_FRONTMATTER_KEYS = frozenset(
 FORBIDDEN_AGENT_FRONTMATTER_KEYS = frozenset({"hooks", "handoffs", "mcp-servers"})
 
 BUNDLED_WORKER_REQUIRED_SECTION_MARKERS: dict[str, dict[str, tuple[str, ...]]] = {
-    "BrowserQA": {
-        "## Delegated task contract": ("Treat the delegated request as the complete task boundary.",),
-        "## Blocked work": (
-            "Do not infer an unobserved cause.",
-        ),
-        "## Strict rules": (
-            BOUNDARY_ENFORCEMENT_POLICY,
-            WORKER_FAILURE_EVIDENCE_POLICY,
-            "Do not modify files.",
-            "Do not run terminal commands.",
-            "Do not call another agent.",
-            "Perform browser interactions that are necessary to carry out the delegated flow within its stated application, route, screen, and side-effect constraints.",
-            "Do not introduce an additional persistent effect or leave the delegated application flow.",
-            "Prefer the narrowest available browser capability that can enforce the delegated interaction boundary.",
-            "If an interaction could cause a persistent effect not clearly required by the delegated flow, stop before performing it and report the uncertainty.",
-        ),
-    },
     "Researcher": {
         "## Delegated task contract": ("Treat the delegated request as the complete task boundary.",),
         "## Fixed runner operations": (
@@ -423,6 +415,14 @@ BUNDLED_WORKER_REQUIRED_SECTION_MARKERS: dict[str, dict[str, tuple[str, ...]]] =
         ),
     },
     "Writer": {
+        "## User-shared browser-tab interaction": (
+            "Operate only in browser tabs the human has explicitly shared",
+            "Buttons and links may navigate within the same shared tab",
+            "Never open a page or navigate by supplying a URL",
+            "Do not target a separate tab unless the human explicitly shares",
+            "UI interaction is not an alternate route around GitHub MCP",
+            "Browser observations are self-check evidence",
+        ),
         "## Delegated task contract": ("Treat the delegated request as the complete task boundary.",),
         "## Fixed runner operations": (
             "A delegated list of exact authorized command operations permits selection among those listed IDs,",
@@ -531,6 +531,8 @@ ORCHESTRATOR_REQUIRED_SECTION_MARKERS: dict[str, tuple[str, ...]] = {
         "An authorized exact file create may derive `create_directory+change_local` operations only for missing ancestor paths",
         "consume no additional affect target/cap",
         "A newly discovered subject cannot be affected in the same invocation unless",
+        "For a user-shared browser tab, the stable UI operation subject",
+        "Within that pre-approved shared-tab UI flow, controls discovered after rendering",
         "Registered checks require audit of definition, arguments, workspace and effects.",
         "If a required exact ID is unknown, delegate bounded registered-command metadata discovery",
         "Terminal-backed status queries require actual `observe+execute` effects under a `run_local` grant",
@@ -539,6 +541,7 @@ ORCHESTRATOR_REQUIRED_SECTION_MARKERS: dict[str, tuple[str, ...]] = {
     ),
     "## Planning and Task Cards": (
         "A Task Card may list multiple exact permitted operations",
+        "For a shared-tab UI flow Task Card, one `operations.observe` entry may authorize",
         "When the exact command ID is unavailable, authorize discovery of registered-command metadata",
         "Terminal-backed metadata and runs need exact `operations.affect` entries",
         "Keep `operation_id` stable in the outward Card and its internal provenance mapping",
