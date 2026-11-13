@@ -263,7 +263,6 @@ If the current session's authorization or cumulative loop-control state cannot b
     Researcher.agent.md
     Writer.agent.md
     Reviewer.agent.md
-    BrowserQA.agent.md
   skills/
     code-review/
       SKILL.md
@@ -312,7 +311,7 @@ assets/
 - DANDORI agents explicitly target VS Code.
 - Only the GitHub Copilot delegated-agent harness is supported. Workers use Copilot's `task` delegation and terminal tools; confirm actual tool/hook availability with the [conformance cases](./tests/conformance.md), especially `CONF-024`.
 - Copilot worker routing names only the approved custom agents. The instruction-level routing list is not a host-enforced authorization boundary; scoped grants and Task Cards remain mandatory.
-- `BrowserQA` requires the configured browser tool set.
+- `Writer` also performs delegated browser QA; enable the integrated browser tools and include browser interactions and effects in its Task Card.
 - Unavailable or unrecognized tool names can be ignored by the runtime; verify actual tool availability before use.
 - A bundled Worker calls a tool only when the tool arguments and runtime behavior can enforce the delegated boundary. If the available tool can operate only on a broader scope, the Worker returns `blocked` and identifies the narrower capability required.
 - Researcher and Writer call the shared fixed runner CLI directly. Install the unified runner Skill from `.copilot/skills/command-runner/` and enable agent-scoped hooks with `chat.useCustomAgentHooks`. Copilot workers load the declared `command-runner` Skill and verify availability before terminal use. Skill availability is not execution permission. Synchronous terminal tabs may remain until host-specific cleanup is validated.
@@ -325,7 +324,7 @@ DANDORI works best with a capable reasoning model for the Orchestrator.
 
 The Orchestrator must distinguish execution-method ambiguity from authorization ambiguity, normalize contracts without widening them, create minimal Task Cards, audit worker results, resolve conflicts, and stop when containment cannot be established.
 
-The bundled agents pin **GPT-6.1 Sol (copilot)** with `medium` effort for Orchestrator and Reviewer; **GPT-6.1 Terra (copilot)** with `medium` for Writer and `low` for BrowserQA; and **GPT-6 Luna (copilot)** with `medium` for Researcher. The `reasoning-effort` frontmatter field is applied by the Copilot harness; model availability and actual model selection still require runtime verification. Custom or external Workers may select their own models.
+The bundled agents pin **GPT-6.1 Sol (copilot)** with `medium` effort for Orchestrator and Reviewer; **GPT-6.1 Terra (copilot)** with `medium` for Writer; and **GPT-6 Luna (copilot)** with `medium` for Researcher. The `reasoning-effort` frontmatter field is applied by the Copilot harness; model availability and actual model selection still require runtime verification. Custom or external Workers may select their own models.
 
 ## GitHub MCP and per-call human approval
 
