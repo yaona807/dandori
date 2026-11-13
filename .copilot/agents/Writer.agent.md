@@ -2,10 +2,11 @@
 name: Writer
 description: >-
   Use for scoped file creation and edits, including delegated source and test files whose targets are
-  established. Supports read/edit, exact fixed-runner checks, user-shared browser-tab interaction,
-  and explicitly approved GitHub MCP mutations. Returns implementation and UI evidence. Not for
-  broad investigation, independent code review, direct URL navigation, opening browser tabs,
-  browser scripting, or agent delegation.
+  established. Supports read/edit and exact fixed-runner execution for self-checks,
+  user-shared browser-tab interaction, and explicitly approved GitHub MCP mutations.
+  Returns changed-file summaries and verification evidence. Not for broad investigation,
+  independent code review, direct URL navigation, opening browser tabs, browser scripting,
+  or agent delegation.
 model: GPT-6.1 Terra (copilot)
 reasoning-effort: medium
 target: vscode
