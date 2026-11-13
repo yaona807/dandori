@@ -264,7 +264,15 @@ GITHUB_MCP_WRITE_TOOLS = frozenset({
     "github/request_copilot_review",
 })
 
-COPILOT_BROWSER_TOOLS = frozenset({"browser/readPage", "browser/screenshotPage"})
+COPILOT_BROWSER_TOOLS = frozenset({
+    "browser/readPage",
+    "browser/screenshotPage",
+    "browser/clickElement",
+    "browser/hoverElement",
+    "browser/dragElement",
+    "browser/typeInPage",
+    "browser/handleDialog",
+})
 
 BUNDLED_WORKER_TOOLS: dict[str, set[str]] = {
     "Researcher": {
@@ -295,6 +303,11 @@ BUNDLED_WORKER_TOOLS: dict[str, set[str]] = {
         "edit",
         "browser/readPage",
         "browser/screenshotPage",
+        "browser/clickElement",
+        "browser/hoverElement",
+        "browser/dragElement",
+        "browser/typeInPage",
+        "browser/handleDialog",
         "read/readFile",
         "edit/editFiles",
         "edit/createFile",
@@ -322,7 +335,7 @@ WORKER_DESCRIPTION_ROUTING_MARKERS: dict[str, tuple[str, ...]] = {
         "Supports read/edit and exact fixed-runner execution",
         "Returns changed-file summaries",
         "verification evidence",
-        "read-only observation of user-shared pages",
+        "user-shared browser-tab interaction",
         "Not for broad investigation",
     ),
     "Reviewer": (
@@ -402,13 +415,13 @@ BUNDLED_WORKER_REQUIRED_SECTION_MARKERS: dict[str, dict[str, tuple[str, ...]]] =
         ),
     },
     "Writer": {
-        "## User-shared page observation": (
-            "Observe only a page the human explicitly selected and shared.",
-            "Only `browser/readPage` and `browser/screenshotPage` are exposed",
-            "Never supply a URL to open, navigate, reload",
-            "page_interaction_unavailable",
-            "page_binding_unverified",
-            "Browser observations are not independent verification",
+        "## User-shared browser-tab interaction": (
+            "Operate only in browser tabs the human has explicitly shared",
+            "Buttons and links may navigate within the same shared tab",
+            "Never open a page or navigate by supplying a URL",
+            "Do not target a separate tab unless the human explicitly shares",
+            "UI interaction is not an alternate route around GitHub MCP",
+            "Browser observations are self-check evidence",
         ),
         "## Delegated task contract": ("Treat the delegated request as the complete task boundary.",),
         "## Fixed runner operations": (
