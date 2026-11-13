@@ -338,6 +338,23 @@ test('GitHub MCP approval hook allows reads, asks for writes, and denies unknown
   });
 });
 
+test('Writer browser QA tools pass the fixed hook without admitting unknown browser operations', async () => {
+  await withFixture(async (fixture) => {
+    const invoke = (name) => {
+      const result = spawnSync(process.execPath, [path.join(fixture.scripts, 'hook.mjs')], {
+        cwd: fixture.alpha, encoding: 'utf8',
+        input: JSON.stringify({ toolName: name, toolArgs: {} }),
+      });
+      assert.equal(result.status, 0, result.stderr);
+      return JSON.parse(result.stdout);
+    };
+    for (const name of ["browser/openBrowserPage","browser/navigatePage","browser/readPage","browser/screenshotPage","browser/clickElement","browser/hoverElement","browser/dragElement","browser/typeInPage","browser/handleDialog","browser/runPlaywrightCode"]) {
+      assert.deepEqual(invoke(name), {}, name);
+    }
+    assert.equal(invoke('browser/unknownAction').permissionDecision, 'deny');
+  });
+});
+
 test('shared CLI worker agents expose the fixed runner without arbitrary shell permissions', async () => {
   for (const agentSource of AGENT_SOURCES) {
     const source = await readFile(agentSource, 'utf8');
