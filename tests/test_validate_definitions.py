@@ -336,6 +336,21 @@ class ValidatorMutationTests(unittest.TestCase):
             path.write_text(text.replace(marker, "A Task Card is limited to one operation", 1))
             self.assert_invalid(repo, marker)
 
+    def test_shared_tab_ui_flow_policy_is_required(self) -> None:
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".copilot/agents/Orchestrator.agent.md"
+            original = path.read_text(encoding="utf-8")
+            for marker in (
+                "For a user-shared browser tab, the stable UI operation subject",
+                "Within that pre-approved shared-tab UI flow, controls discovered after rendering",
+                "For a shared-tab UI flow Task Card, one `operations.observe` entry may authorize",
+            ):
+                self.assertIn(marker, original)
+                path.write_text(original.replace(marker, "Removed UI flow policy", 1), encoding="utf-8")
+                self.assert_invalid(repo, marker)
+            path.write_text(original, encoding="utf-8")
+
     def test_missing_description_is_rejected(self) -> None:
         temp, repo = self.make_repo()
         with temp:
