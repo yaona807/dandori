@@ -267,7 +267,6 @@ DANDORIは**実質的進捗**（Criterionの検証済み改善）と**診断上�
     Researcher.agent.md
     Writer.agent.md
     Reviewer.agent.md
-    BrowserQA.agent.md
   skills/
     code-review/
       SKILL.md
@@ -316,7 +315,7 @@ assets/
 - DANDORI Agentは明示的にVS Codeを対象とします。
 - GitHub CopilotのAgent委任のみをサポートします。`task`による委譲とCopilotのターミナルToolを使用します。実際のTool・Hookの可用性は[conformanceケース](./tests/conformance.md)（特に`CONF-024`）で確認してください。
 - Copilotの委譲先は承認された名前付きCustom Agentに限定します。名前指定はHostによる認可の強制ではないため、許可範囲とTask Cardの制約を維持します。
-- `BrowserQA`には設定済みのbrowser Tool群が必要です。
+- `Writer`が委譲されたブラウザQAも実施します。統合ブラウザToolを有効化し、Task Cardで操作と副作用を明示してください。
 - 利用できない、または認識されないTool名はruntimeに無視される場合があるため、実際のTool可用性を確認してください。
 - 同梱Workerは、Toolの引数とruntime挙動で委譲境界を強制できる場合だけ、そのToolを呼び出します。利用可能なToolがより広い範囲でしか動作できない場合は、実行せず`blocked`を返し、必要な狭いcapabilityを示します。
 - ResearcherとWriterは共通の固定CLIを直接利用します。`.copilot/skills/command-runner/` からRunnerをインストールし、Agent固有Hookのため `chat.useCustomAgentHooks` を有効にしてください。 Copilot Workerは宣言済みの`command-runner` Skillを読み込み、利用可否を確認してからターミナルを使います。Skill自体は権限ではありません。同期実行のターミナルタブが残る問題は、環境別に検証が必要です。
@@ -329,7 +328,7 @@ DANDORI は、Orchestratorへ推論能力の高いモデルを使用すること
 
 Orchestrator は、実行方法の曖昧さと権限の曖昧さを区別し、契約を広げずに正規化し、最小Task Cardを作り、Worker結果を監査し、矛盾を処理し、包含関係を確認できない場合に停止する必要があります。
 
-同梱のAgent定義では、**OrchestratorとReviewerに GPT-6.1 Sol (copilot)**（`medium`）、**Writerに GPT-6.1 Terra (copilot)**（`medium`）、**BrowserQAに GPT-6.1 Terra (copilot)**（`low`）、**Researcherに GPT-6 Luna (copilot)**（`medium`）を指定します。`reasoning-effort`はCopilot harness向けのフィールドであり、モデルの実際の認識・選択はVS Codeで確認が必要です。追加した外部Workerのモデルは別途選択できます。
+同梱のAgent定義では、**OrchestratorとReviewerに GPT-6.1 Sol (copilot)**（`medium`）、**Writerに GPT-6.1 Terra (copilot)**（`medium`）、**Researcherに GPT-6 Luna (copilot)**（`medium`）を指定します。`reasoning-effort`はCopilot harness向けのフィールドであり、モデルの実際の認識・選択はVS Codeで確認が必要です。追加した外部Workerのモデルは別途選択できます。
 
 ## GitHub MCP と実行直前の人間承認
 
