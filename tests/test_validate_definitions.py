@@ -79,7 +79,7 @@ class ValidatorMutationTests(unittest.TestCase):
 
     def test_copilot_profiles_normalize_model_and_preserve_effort(self) -> None:
         for name in ("Orchestrator", "Researcher", "Writer",
-                     "Reviewer", "BrowserQA"):
+                     "Reviewer"):
             source = ROOT / ".copilot/agents" / f"{name}.agent.md"
             bundled = ROOT / "packages/copilot/agents" / f"{name}.agent.md"
             _, source_front, _ = source.read_text().split("---\n", 2)
@@ -191,18 +191,20 @@ class ValidatorMutationTests(unittest.TestCase):
         self.assertEqual(["task"], meta["tools"])
         self.assertLessEqual(len(body), validator.MAX_AGENT_BODY_CHARS)
         for name in ("Researcher", "Writer",
-                     "Reviewer", "BrowserQA"):
+                     "Reviewer"):
             self.assertIn("- " + chr(96) + name + chr(96), body)
         self.assertIn("Never use a default or general-purpose subagent", body)
         self.assertIn("do not substitute any built-in or unlisted agent", body)
 
     def test_copilot_browser_uses_qualified_tools(self) -> None:
-        profile = ROOT / "packages/copilot/agents/BrowserQA.agent.md"
+        profile = ROOT / "packages/copilot/agents/Writer.agent.md"
         _, front, _ = profile.read_text().split("---\n", 2)
         meta = yaml.safe_load(front)
-        self.assertTrue(meta["tools"])
-        self.assertTrue(all(t.startswith("browser/") for t in meta["tools"]))
+        browser_tools = {tool for tool in meta["tools"] if tool.startswith("browser/")}
+        self.assertEqual(validator.COPILOT_BROWSER_TOOLS, browser_tools)
         self.assertNotIn("browser", meta["tools"])
+        for agent_dir in (".copilot/agents", "packages/copilot/agents"):
+            self.assertFalse((ROOT / agent_dir / "BrowserQA.agent.md").exists())
 
     def test_copilot_bundle_drift_is_rejected(self) -> None:
         temp, repo = self.make_repo()
@@ -230,7 +232,7 @@ class ValidatorMutationTests(unittest.TestCase):
             self.assertEqual(
                 set(metadata["tools"][len(expected_tools):]),
                 validator.GITHUB_MCP_READ_TOOLS
-                | (validator.GITHUB_MCP_WRITE_TOOLS if worker == "Writer" else frozenset()),
+                | ((validator.GITHUB_MCP_WRITE_TOOLS | validator.COPILOT_BROWSER_TOOLS) if worker == "Writer" else frozenset()),
             )
             self.assertFalse(metadata["user-invocable"])
             self.assertFalse(metadata["disable-model-invocation"])
@@ -360,8 +362,8 @@ class ValidatorMutationTests(unittest.TestCase):
         with temp:
             path = repo / ".copilot/agents/Orchestrator.agent.md"
             text = path.read_text().replace(
-                "agents: [Researcher, Writer, Reviewer, BrowserQA]",
-                "agents: [Researcher, Writer, Reviewer, BrowserQA, ExternalWorker]",
+                "agents: [Researcher, Writer, Reviewer]",
+                "agents: [Researcher, Writer, Reviewer, ExternalWorker]",
                 1,
             )
             path.write_text(text)
@@ -374,7 +376,7 @@ class ValidatorMutationTests(unittest.TestCase):
         temp, repo = self.make_repo()
         with temp:
             path = repo / ".copilot/agents/Orchestrator.agent.md"
-            text = path.read_text().replace(", BrowserQA]", "]", 1)
+            text = path.read_text().replace(", Reviewer]", "]", 1)
             path.write_text(text)
             self.assert_invalid(repo, "bundled workers missing from allowlist")
 
@@ -1063,7 +1065,6 @@ class ValidatorMutationTests(unittest.TestCase):
             ("Orchestrator", "model: GPT-6.1 Sol (copilot)", "model: Auto (copilot)", "must use model"),
             ("Writer", "model: GPT-6.1 Terra (copilot)", "model: Auto (copilot)", "must use model"),
             ("Reviewer", "model: GPT-6.1 Sol (copilot)", "model: Auto (copilot)", "must use model"),
-            ("BrowserQA", "model: GPT-6.1 Terra (copilot)", "model: Auto (copilot)", "must use model"),
             ("Researcher", "reasoning-effort: medium", "reasoning-effort: low", "must use reasoning-effort"),
             ("Writer", "reasoning-effort: medium", "reasoning-effort: low", "must use reasoning-effort"),
             ("Orchestrator", "reasoning-effort: medium", "reasoning-effort: high", "must use reasoning-effort"),
@@ -1107,8 +1108,8 @@ Inspect only the delegated resource. Do not call another agent.
             orchestrator = repo / ".copilot/agents/Orchestrator.agent.md"
             orchestrator.write_text(
                 orchestrator.read_text().replace(
-                    "agents: [Researcher, Writer, Reviewer, BrowserQA]",
-                    "agents: [Researcher, Writer, Reviewer, BrowserQA, CustomInspector]",
+                    "agents: [Researcher, Writer, Reviewer]",
+                    "agents: [Researcher, Writer, Reviewer, CustomInspector]",
                     1,
                 )
             )
