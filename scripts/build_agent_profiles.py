@@ -15,7 +15,6 @@ COPILOT_WORKER_ROUTING = (
     "- `Researcher`\n"
     "- `Writer`\n"
     "- `Reviewer`\n"
-    "- `BrowserQA`\n"
     "Never use a default or general-purpose subagent (built-in Explore/Plan/Agent or unnamed).\n"
     "If none, return `no_suitable_worker`; do not substitute any built-in or unlisted agent.\n"
     "Keep Card scope/audit. Routing is instruction-only; enforce the approved Task Card.\n"
@@ -29,7 +28,7 @@ def replace_exactly_once(text: str, old: str, new: str, label: str) -> str:
     return text.replace(old, new, 1)
 
 
-WORKERS = ("Researcher", "Writer", "Reviewer", "BrowserQA")
+WORKERS = ("Researcher", "Writer", "Reviewer")
 NAMES = ("Orchestrator", *WORKERS)
 def transform(source: str, name: str, profile: str) -> str:
     if not source.startswith("---\n"):
@@ -95,11 +94,22 @@ def transform(source: str, name: str, profile: str) -> str:
         "github/create_branch",
         "github/request_copilot_review",
     )
+    browser_tools = (
+        "browser/openBrowserPage",
+        "browser/navigatePage",
+        "browser/readPage",
+        "browser/screenshotPage",
+        "browser/clickElement",
+        "browser/hoverElement",
+        "browser/dragElement",
+        "browser/typeInPage",
+        "browser/handleDialog",
+        "browser/runPlaywrightCode",
+    )
     tools = {
         "Researcher": ("read", "search", "web", "execute") + github_read,
-        "Writer": ("read", "edit", "execute") + github_read + github_write,
+        "Writer": ("read", "edit", "execute") + github_read + github_write + browser_tools,
         "Reviewer": ("read", "search") + github_read,
-        "BrowserQA": ("browser/openBrowserPage", "browser/navigatePage", "browser/readPage", "browser/screenshotPage", "browser/clickElement", "browser/hoverElement", "browser/dragElement", "browser/typeInPage", "browser/handleDialog", "browser/runPlaywrightCode"),
     }
     if name in tools:
         front = re.sub(
