@@ -264,18 +264,7 @@ GITHUB_MCP_WRITE_TOOLS = frozenset({
     "github/request_copilot_review",
 })
 
-COPILOT_BROWSER_TOOLS = frozenset({
-    "browser/openBrowserPage",
-    "browser/navigatePage",
-    "browser/readPage",
-    "browser/screenshotPage",
-    "browser/clickElement",
-    "browser/hoverElement",
-    "browser/dragElement",
-    "browser/typeInPage",
-    "browser/handleDialog",
-    "browser/runPlaywrightCode",
-})
+COPILOT_BROWSER_TOOLS = frozenset({"browser/readPage", "browser/screenshotPage"})
 
 BUNDLED_WORKER_TOOLS: dict[str, set[str]] = {
     "Researcher": {
@@ -304,7 +293,8 @@ BUNDLED_WORKER_TOOLS: dict[str, set[str]] = {
     "Writer": {
         "read",
         "edit",
-        "browser",
+        "browser/readPage",
+        "browser/screenshotPage",
         "read/readFile",
         "edit/editFiles",
         "edit/createFile",
@@ -332,7 +322,7 @@ WORKER_DESCRIPTION_ROUTING_MARKERS: dict[str, tuple[str, ...]] = {
         "Supports read/edit and exact fixed-runner execution",
         "Returns changed-file summaries",
         "verification evidence",
-        "browser UI verification",
+        "read-only observation of user-shared pages",
         "Not for broad investigation",
     ),
     "Reviewer": (
@@ -412,12 +402,13 @@ BUNDLED_WORKER_REQUIRED_SECTION_MARKERS: dict[str, dict[str, tuple[str, ...]]] =
         ),
     },
     "Writer": {
-        "## Browser verification": (
-            "Perform browser interactions that are necessary to carry out the delegated flow within its stated application, route, screen, and side-effect constraints.",
-            "Do not introduce an additional persistent effect or leave the delegated application flow.",
-            "Prefer the narrowest available browser capability that can enforce the delegated interaction boundary.",
-            "If an interaction could cause a persistent effect not clearly required by the delegated flow, stop before performing it and report the uncertainty.",
-            "Browser checks are self-verification, not independent review.",
+        "## User-shared page observation": (
+            "Observe only a page the human explicitly selected and shared.",
+            "Only `browser/readPage` and `browser/screenshotPage` are exposed",
+            "Never supply a URL to open, navigate, reload",
+            "page_interaction_unavailable",
+            "page_binding_unverified",
+            "Browser observations are not independent verification",
         ),
         "## Delegated task contract": ("Treat the delegated request as the complete task boundary.",),
         "## Fixed runner operations": (
