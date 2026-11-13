@@ -338,7 +338,7 @@ test('GitHub MCP approval hook allows reads, asks for writes, and denies unknown
   });
 });
 
-test('Writer allows only read-only page observation tool names; browser interaction is denied', async () => {
+test('Writer permits user-shared tab interactions but denies direct URL navigation', async () => {
   await withFixture(async (fixture) => {
     const invoke = (name) => {
       const result = spawnSync(process.execPath, [path.join(fixture.scripts, 'hook.mjs')], {
@@ -348,13 +348,11 @@ test('Writer allows only read-only page observation tool names; browser interact
       assert.equal(result.status, 0, result.stderr);
       return JSON.parse(result.stdout);
     };
-    for (const name of ['browser/readPage', 'browser/screenshotPage']) {
+    for (const name of ["browser/readPage","browser/screenshotPage","browser/clickElement","browser/hoverElement","browser/dragElement","browser/typeInPage","browser/handleDialog"]) {
       assert.deepEqual(invoke(name), {}, name);
     }
     for (const name of ['browser', 'browser/openBrowserPage', 'browser/navigatePage',
-      'browser/clickElement', 'browser/hoverElement', 'browser/dragElement',
-      'browser/typeInPage', 'browser/handleDialog', 'browser/runPlaywrightCode',
-      'browser/unknownAction']) {
+      'browser/runPlaywrightCode', 'browser/unknownAction']) {
       assert.equal(invoke(name).permissionDecision, 'deny', name);
     }
   });
