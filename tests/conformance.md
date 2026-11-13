@@ -194,7 +194,7 @@ Perform a pure narrowing, a display-only wording correction, and a mixed revisio
 
 **Input**
 
-Delegate a Task Card, create a valid new contract revision before accepting the older Worker result, and then process that late result. Separately delegate a Task Card whose assigned operation boundary is narrower than a Worker's available tool can technically enforce. Also delegate one Writer task that explicitly includes a browser interaction and another whose next interaction has an unclear target or effect.
+Delegate a Task Card, create a valid new contract revision before accepting the older Worker result, and then process that late result. Separately delegate a Task Card whose assigned operation boundary is narrower than a Worker's available tool can technically enforce. Also delegate a Writer request to observe a user-shared page and an interactive request (click, navigation or typing) on that same page.
 
 **Expected**
 
@@ -204,8 +204,8 @@ Delegate a Task Card, create a valid new contract revision before accepting the 
 - A general-purpose tool is usable when the specific call targets only delegated resources with permitted effects; potential broader tool capability alone does not block work.
 - The Worker returns `blocked` with the needed narrower capability only when a call cannot be scoped safely.
 - Writer does not use workspace-wide Problems data as implementation context.
-- Writer may choose the browser interactions necessary to carry out the delegated flow while staying within its stated application, route, screen, and side-effect constraints.
-- Writer does not introduce an additional persistent effect or leave the delegated flow, and stops before a persistent effect that is not clearly required by the flow.
+- Writer observes a shared page only when exact Host-provided page identity is available and can be enforced before the tool call; otherwise reports `page_binding_unverified` without calling the tool.
+- Writer does not click, type, navigate, launch pages or execute scripts; a requested interactive action reports `page_interaction_unavailable` without an alternate browser or terminal route.
 
 ### CONF-007 — Route using runtime-visible descriptions without trial-and-error calls
 
@@ -213,7 +213,7 @@ Delegate a Task Card, create a valid new contract revision before accepting the 
 
 Provide (a) a read-only codebase investigation task, (b) a scoped code edit,
 (c) a registered test command or authorized command registration/update/removal, (d) an independent code review,
-(e) browser-visible UI verification, and (f) an exact GitHub issue/PR read task.
+(e) human-shared-page observation with a verified Host page binding, (f) an exact GitHub issue/PR read task, and (g) page interaction without a verified page-bound operation interface.
 For each, expose one suitable custom Worker description and multiple plausible but
 incompatible descriptions. Then supply a mixed edit-plus-test task, an unavailable
 description, an expressly prohibited operation, and a `blocked` result with
@@ -277,8 +277,8 @@ Install DANDORI, optionally add an external Worker, and open VS Code Chat Diagno
 - Orchestrator allowlist entries resolve to the intended Worker definitions.
 - External Worker sources and actual tool availability are confirmed before use.
 - Missing or unrecognized individual tools are not assumed available; failed discovery alone does not prove the underlying capability unavailable.
-- When Writer cannot continue, it reports the last confirmed browser state, the interaction that could not be completed, and observed errors or remaining unknowns.
-- Writer does not infer an unobserved cause and does not require a framework-specific blocker taxonomy or retry recommendation.
+- When Writer lacks an enforced page binding, it returns `page_binding_unverified` without observing another page.
+- When Writer is asked to click, type, navigate, or run browser automation, it returns `page_interaction_unavailable` and does not use another tool to bypass the restriction.
 
 
 ### CONF-010 — Allow bounded incidental verification outputs
