@@ -315,7 +315,7 @@ assets/
 - DANDORI Agentは明示的にVS Codeを対象とします。
 - GitHub CopilotのAgent委任のみをサポートします。`task`による委譲とCopilotのターミナルToolを使用します。実際のTool・Hookの可用性は[conformanceケース](./tests/conformance.md)（特に`CONF-024`）で確認してください。
 - Copilotの委譲先は承認された名前付きCustom Agentに限定します。名前指定はHostによる認可の強制ではないため、許可範囲とTask Cardの制約を維持します。
-- `BrowserQA`専用Agentは廃止し、`Writer`には人間が共有した指定ページの読み取り専用観察だけを提供します。操作前にHostがページの同一性と対象範囲を確認できない場合は停止します。URL遷移・クリック・入力・ダイアログ操作・任意Playwright実行は、ページ固定を実行側で保証できるまで無効です。Hookのツール名許可だけではページ固定を保証しません。
+- `BrowserQA`専用Agentを廃止し、`Writer`は人間が明示的に共有したブラウザタブ内で読み取り・クリック・入力などを実行できます。ボタンやリンクの操作に伴う同一タブ内の遷移は、委譲範囲内なら許可します。ただし、Agent自身によるURLの直接指定・ページ起動、未共有タブの操作、任意Playwright実行は禁止します。保存・投稿・削除などの副作用は既存の承認境界を維持し、GitHub MCPの毎回Host承認をブラウザで迂回しません。
 - 利用できない、または認識されないTool名はruntimeに無視される場合があるため、実際のTool可用性を確認してください。
 - 同梱Workerは、Toolの引数とruntime挙動で委譲境界を強制できる場合だけ、そのToolを呼び出します。利用可能なToolがより広い範囲でしか動作できない場合は、実行せず`blocked`を返し、必要な狭いcapabilityを示します。
 - ResearcherとWriterは共通の固定CLIを直接利用します。`.copilot/skills/command-runner/` からRunnerをインストールし、Agent固有Hookのため `chat.useCustomAgentHooks` を有効にしてください。 Copilot Workerは宣言済みの`command-runner` Skillを読み込み、利用可否を確認してからターミナルを使います。Skill自体は権限ではありません。同期実行のターミナルタブが残る問題は、環境別に検証が必要です。
