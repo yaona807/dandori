@@ -194,7 +194,7 @@ Perform a pure narrowing, a display-only wording correction, and a mixed revisio
 
 **Input**
 
-Delegate a Task Card, create a valid new contract revision before accepting the older Worker result, and then process that late result. Separately delegate a Task Card whose assigned operation boundary is narrower than a Worker's available tool can technically enforce. Also delegate a Writer request to interact with a human-shared browser tab, including a button that navigates to another route within the same tab. Try direct URL navigation, clicking an element that opens another tab, and an unshared tab.
+Delegate a Task Card, create a valid new contract revision before accepting the older Worker result, and then process that late result. Separately delegate a Task Card whose assigned operation boundary is narrower than a Worker's available tool can technically enforce. Also delegate a Writer request to interact with a human-shared browser tab, including a button that navigates to another route within the same tab. Try direct URL navigation, clicking an element that opens another tab, and an unshared tab. During the same approved flow, dynamically reveal a menu and an input field, then try a persistent Save action without an external-write grant. Also discover a new repository file to confirm that the UI-flow exemption does not apply to ordinary resources.
 
 **Expected**
 
@@ -206,6 +206,9 @@ Delegate a Task Card, create a valid new contract revision before accepting the 
 - Writer does not use workspace-wide Problems data as implementation context.
 - Writer reads, clicks and types only in a human-shared browser tab within the delegated effects. A click may navigate the same shared tab, and Writer then observes the resulting page.
 - Writer never directly supplies a URL to open or navigate, never launches a tab, and does not operate another tab that has not been explicitly shared. No browser automation, terminal or HTTP fallback bypasses this rule.
+- One flow-scoped `operations.observe` entry on the shared tab authorizes the approved non-persistent read/click/type/navigation sequence; newly rendered controls do not require a new Task Card, TFC, or per-control target accounting.
+- A persistent Save/post/delete remains blocked until the matching explicit external-write/destructive grant and separate exact `operations.affect` entry are present; the flow does not authorize new external resource subjects or newly discovered source files.
+- Interacting flows on the same shared tab are not dispatched concurrently; normal file discovery-to-edit and independent verification constraints remain unchanged.
 
 ### CONF-007 — Route using runtime-visible descriptions without trial-and-error calls
 
