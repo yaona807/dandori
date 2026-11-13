@@ -194,7 +194,7 @@ Perform a pure narrowing, a display-only wording correction, and a mixed revisio
 
 **Input**
 
-Delegate a Task Card, create a valid new contract revision before accepting the older Worker result, and then process that late result. Separately delegate a Task Card whose assigned operation boundary is narrower than a Worker's available tool can technically enforce. Also delegate one BrowserQA task that explicitly includes a browser interaction and another whose next interaction has an unclear target or effect.
+Delegate a Task Card, create a valid new contract revision before accepting the older Worker result, and then process that late result. Separately delegate a Task Card whose assigned operation boundary is narrower than a Worker's available tool can technically enforce. Also delegate one Writer task that explicitly includes a browser interaction and another whose next interaction has an unclear target or effect.
 
 **Expected**
 
@@ -204,8 +204,8 @@ Delegate a Task Card, create a valid new contract revision before accepting the 
 - A general-purpose tool is usable when the specific call targets only delegated resources with permitted effects; potential broader tool capability alone does not block work.
 - The Worker returns `blocked` with the needed narrower capability only when a call cannot be scoped safely.
 - Writer does not use workspace-wide Problems data as implementation context.
-- BrowserQA may choose the browser interactions necessary to carry out the delegated flow while staying within its stated application, route, screen, and side-effect constraints.
-- BrowserQA does not introduce an additional persistent effect or leave the delegated flow, and stops before a persistent effect that is not clearly required by the flow.
+- Writer may choose the browser interactions necessary to carry out the delegated flow while staying within its stated application, route, screen, and side-effect constraints.
+- Writer does not introduce an additional persistent effect or leave the delegated flow, and stops before a persistent effect that is not clearly required by the flow.
 
 ### CONF-007 — Route using runtime-visible descriptions without trial-and-error calls
 
@@ -277,8 +277,8 @@ Install DANDORI, optionally add an external Worker, and open VS Code Chat Diagno
 - Orchestrator allowlist entries resolve to the intended Worker definitions.
 - External Worker sources and actual tool availability are confirmed before use.
 - Missing or unrecognized individual tools are not assumed available; failed discovery alone does not prove the underlying capability unavailable.
-- When BrowserQA cannot continue, it reports the last confirmed browser state, the interaction that could not be completed, and observed errors or remaining unknowns.
-- BrowserQA does not infer an unobserved cause and does not require a framework-specific blocker taxonomy or retry recommendation.
+- When Writer cannot continue, it reports the last confirmed browser state, the interaction that could not be completed, and observed errors or remaining unknowns.
+- Writer does not infer an unobserved cause and does not require a framework-specific blocker taxonomy or retry recommendation.
 
 
 ### CONF-010 — Allow bounded incidental verification outputs
