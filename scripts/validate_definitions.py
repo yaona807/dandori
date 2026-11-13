@@ -358,7 +358,7 @@ BUNDLED_AGENT_MODEL_SETTINGS = {
 BUNDLED_AGENT_MIN_BODY_CHARS = {
     "Researcher": 1_100,
     "Reviewer": 1_000,
-    "Writer": 2_000,
+    "Writer": 3_000,
 }
 BUNDLED_AGENT_FRONTMATTER_KEYS = frozenset(
     {
