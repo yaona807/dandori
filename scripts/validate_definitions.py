@@ -531,6 +531,8 @@ ORCHESTRATOR_REQUIRED_SECTION_MARKERS: dict[str, tuple[str, ...]] = {
         "An authorized exact file create may derive `create_directory+change_local` operations only for missing ancestor paths",
         "consume no additional affect target/cap",
         "A newly discovered subject cannot be affected in the same invocation unless",
+        "For a user-shared browser tab, the stable UI operation subject",
+        "Within that pre-approved shared-tab UI flow, controls discovered after rendering",
         "Registered checks require audit of definition, arguments, workspace and effects.",
         "If a required exact ID is unknown, delegate bounded registered-command metadata discovery",
         "Terminal-backed status queries require actual `observe+execute` effects under a `run_local` grant",
@@ -539,6 +541,7 @@ ORCHESTRATOR_REQUIRED_SECTION_MARKERS: dict[str, tuple[str, ...]] = {
     ),
     "## Planning and Task Cards": (
         "A Task Card may list multiple exact permitted operations",
+        "For a shared-tab UI flow Task Card, one `operations.observe` entry may authorize",
         "When the exact command ID is unavailable, authorize discovery of registered-command metadata",
         "Terminal-backed metadata and runs need exact `operations.affect` entries",
         "Keep `operation_id` stable in the outward Card and its internal provenance mapping",
