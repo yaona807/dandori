@@ -264,8 +264,20 @@ GITHUB_MCP_WRITE_TOOLS = frozenset({
     "github/request_copilot_review",
 })
 
+COPILOT_BROWSER_TOOLS = frozenset({
+    "browser/openBrowserPage",
+    "browser/navigatePage",
+    "browser/readPage",
+    "browser/screenshotPage",
+    "browser/clickElement",
+    "browser/hoverElement",
+    "browser/dragElement",
+    "browser/typeInPage",
+    "browser/handleDialog",
+    "browser/runPlaywrightCode",
+})
+
 BUNDLED_WORKER_TOOLS: dict[str, set[str]] = {
-    "BrowserQA": {"browser"},
     "Researcher": {
         "read",
         "search",
@@ -292,6 +304,7 @@ BUNDLED_WORKER_TOOLS: dict[str, set[str]] = {
     "Writer": {
         "read",
         "edit",
+        "browser",
         "read/readFile",
         "edit/editFiles",
         "edit/createFile",
@@ -319,6 +332,7 @@ WORKER_DESCRIPTION_ROUTING_MARKERS: dict[str, tuple[str, ...]] = {
         "Supports read/edit and exact fixed-runner execution",
         "Returns changed-file summaries",
         "verification evidence",
+        "browser UI verification",
         "Not for broad investigation",
     ),
     "Reviewer": (
@@ -326,12 +340,6 @@ WORKER_DESCRIPTION_ROUTING_MARKERS: dict[str, tuple[str, ...]] = {
         "Supports read/search and code-review guidance",
         "Returns evidence-linked actionable findings",
         "Not for editing files",
-    ),
-    "BrowserQA": (
-        "Use for browser-visible UI verification",
-        "Supports integrated-browser navigation",
-        "Returns observed interaction evidence",
-        "Not for source editing",
     ),
 }
 
@@ -346,10 +354,8 @@ BUNDLED_AGENT_MODEL_SETTINGS = {
     "Researcher": ("GPT-6 Luna (copilot)", "medium"),
     "Writer": ("GPT-6.1 Terra (copilot)", "medium"),
     "Reviewer": ("GPT-6.1 Sol (copilot)", "medium"),
-    "BrowserQA": ("GPT-6.1 Terra (copilot)", "low"),
 }
 BUNDLED_AGENT_MIN_BODY_CHARS = {
-    "BrowserQA": 1_000,
     "Researcher": 1_100,
     "Reviewer": 1_000,
     "Writer": 2_000,
@@ -370,23 +376,6 @@ BUNDLED_AGENT_FRONTMATTER_KEYS = frozenset(
 FORBIDDEN_AGENT_FRONTMATTER_KEYS = frozenset({"hooks", "handoffs", "mcp-servers"})
 
 BUNDLED_WORKER_REQUIRED_SECTION_MARKERS: dict[str, dict[str, tuple[str, ...]]] = {
-    "BrowserQA": {
-        "## Delegated task contract": ("Treat the delegated request as the complete task boundary.",),
-        "## Blocked work": (
-            "Do not infer an unobserved cause.",
-        ),
-        "## Strict rules": (
-            BOUNDARY_ENFORCEMENT_POLICY,
-            WORKER_FAILURE_EVIDENCE_POLICY,
-            "Do not modify files.",
-            "Do not run terminal commands.",
-            "Do not call another agent.",
-            "Perform browser interactions that are necessary to carry out the delegated flow within its stated application, route, screen, and side-effect constraints.",
-            "Do not introduce an additional persistent effect or leave the delegated application flow.",
-            "Prefer the narrowest available browser capability that can enforce the delegated interaction boundary.",
-            "If an interaction could cause a persistent effect not clearly required by the delegated flow, stop before performing it and report the uncertainty.",
-        ),
-    },
     "Researcher": {
         "## Delegated task contract": ("Treat the delegated request as the complete task boundary.",),
         "## Fixed runner operations": (
@@ -423,6 +412,13 @@ BUNDLED_WORKER_REQUIRED_SECTION_MARKERS: dict[str, dict[str, tuple[str, ...]]] =
         ),
     },
     "Writer": {
+        "## Browser verification": (
+            "Perform browser interactions that are necessary to carry out the delegated flow within its stated application, route, screen, and side-effect constraints.",
+            "Do not introduce an additional persistent effect or leave the delegated application flow.",
+            "Prefer the narrowest available browser capability that can enforce the delegated interaction boundary.",
+            "If an interaction could cause a persistent effect not clearly required by the delegated flow, stop before performing it and report the uncertainty.",
+            "Browser checks are self-verification, not independent review.",
+        ),
         "## Delegated task contract": ("Treat the delegated request as the complete task boundary.",),
         "## Fixed runner operations": (
             "A delegated list of exact authorized command operations permits selection among those listed IDs,",
