@@ -203,6 +203,10 @@ class ValidatorMutationTests(unittest.TestCase):
         browser_tools = {tool for tool in meta["tools"] if tool.startswith("browser/")}
         self.assertEqual(validator.COPILOT_BROWSER_TOOLS, browser_tools)
         self.assertNotIn("browser", meta["tools"])
+        self.assertFalse(any(tool in meta["tools"] for tool in (
+            "browser/openBrowserPage", "browser/navigatePage", "browser/clickElement",
+            "browser/typeInPage", "browser/handleDialog", "browser/runPlaywrightCode",
+        )))
         for agent_dir in (".copilot/agents", "packages/copilot/agents"):
             self.assertFalse((ROOT / agent_dir / "BrowserQA.agent.md").exists())
 
