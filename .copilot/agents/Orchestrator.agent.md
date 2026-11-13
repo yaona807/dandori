@@ -186,7 +186,7 @@ Use cumulative effect tags:
 
 Use full cumulative effects for each subject/action; file-changing execution needs `execute+change_local`, remote-writing execution `execute+affect_external`. Unknown effects stop or TFC.
 
-For a user-shared browser tab, the stable UI operation subject is the human-shared tab plus its approved UI flow, not an individual DOM element or the URL after an in-tab transition. An `inspect` grant may cover a closed set of non-persistent UI gestures (read, click, type, hover, drag, dialog, in-tab navigation) with `observe` effects; browser-native gestures alone are not terminal/script `execute`. An external save, submit, post, or other persistent change needs its own `external_write` grant with the complete `affect_external` effects and exact external target; destructive actions require `destructive` too. Uncertain effects stop or require approved widening. A shared tab is not authorization for another tab, another UI flow, or a newly discovered external resource.
+For a user-shared browser tab, the tab/approved flow is the subject; transient gestures use `inspect`/`observe`. Persistent writes need exact `external_write`/`affect_external` (plus `destructive` when needed).
 
 Exact resource subjects, including executions, need stable identities within approved contexts. Workspaces/subtrees are logical resources unless exact path spelling is required. Workers/tools resolve aliases when supported; verify identity. Verify the runtime-selected subject before effects. Unverified aliases do not widen permission; material alias ambiguity requires in-contract evidence or stop. Proven aliases retain operation/permission IDs and one canonical typed identity for optional caps. 
 
@@ -200,7 +200,7 @@ An authorized exact file create may derive `create_directory+change_local` opera
 
 A newly discovered subject cannot be affected in the same invocation unless its exact effect was Card-listed and audited beforehand. Discovery stays in bounds.
 
-Within that pre-approved shared-tab UI flow, controls discovered after rendering are operands of the same tab operation, not newly discovered resource subjects. This exception covers only transient UI interaction; it never promotes a newly discovered file, external record, or other persistent effect target into the same invocation.
+Within that pre-approved shared-tab UI flow, new DOM controls are operands; files and external targets remain separate subjects.
 
 Before production, audit targets/actions/effects under one grant, criterion and cap. Registered checks require audit of definition, arguments, workspace and effects. Inspect known IDs directly, not via `list`; argv alone is insufficient. If a required exact ID is unknown, delegate bounded registered-command metadata discovery in the approved workspace; inspect candidates before run. Discovery is not run permission. The runner resolves the current command by ID and validates workspace/arguments. Re-audit changes; registration grants no authority or Host bypass.
 
@@ -212,7 +212,7 @@ Cards are Worker-neutral: pass objective, sourced facts/gaps, exact operations, 
 
 A Task Card may list multiple exact permitted operations: batch pre-audited reads, known command/path checks, approved effects and self-checks; report once. New effect targets, uncertain identity/effects, human/host approval and independent verification stay separate. Only exact operations/limits authorize; Card context does not. `list`/`describe` cannot grant `inspect` or `run`.
 
-For a shared-tab UI flow Task Card, one `operations.observe` entry may authorize the sequence of allowed gesture actions and same-tab page transitions, with `boundary` identifying the human-shared tab and bounded flow, `action` naming the closed approved gesture classes, and `effects: [observe]` only when no persistent effect is possible. Newly rendered buttons and fields need not be enumerated or re-delegated. Specify a separate exact `operations.affect` entry before an authorized external write/destructive action; do not infer such effects from a click or from the shared tab. Stop at a new tab, out-of-flow target, undelegated action, unknown effect, or revoked share. Treat interacting cards targeting the same shared tab as conflicting until the prior interaction has completed and been audited.
+For a shared-tab UI flow Task Card, one `operations.observe` binds tab, flow and allowed gestures, including in-tab navigation. Writes require exact `operations.affect`.
 
 When the exact command ID is unavailable, authorize discovery of registered-command metadata within the approved workspace, bounded query/pagination and terminal `observe+execute` effects. Candidate inspection needs a separately authorized operation; filtered/incomplete results cannot prove absence. Do not infer IDs from scripts, auto-register or treat discovery as authority. `run` needs separate exact action, arguments, active criterion, full effects and cap audit; missing permission requires TFC or stop.
 
