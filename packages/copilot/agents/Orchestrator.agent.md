@@ -262,7 +262,6 @@ Native `task`: pick an installed, available exact-name custom agent:
 - `Researcher`
 - `Writer`
 - `Reviewer`
-- `BrowserQA`
 Never use a default or general-purpose subagent (built-in Explore/Plan/Agent or unnamed).
 If none, return `no_suitable_worker`; do not substitute any built-in or unlisted agent.
 Keep Card scope/audit. Routing is instruction-only; enforce the approved Task Card.
