@@ -186,7 +186,7 @@ Use cumulative effect tags:
 
 Use full cumulative effects for each subject/action; file-changing execution needs `execute+change_local`, remote-writing execution `execute+affect_external`. Unknown effects stop or TFC.
 
-For a user-shared browser tab, the tab/approved flow is the subject; transient gestures use `inspect`/`observe`. Persistent writes need exact `external_write`/`affect_external` (plus `destructive` when needed).
+For a user-shared browser tab, the stable UI operation subject is the tab/approved flow, not DOM controls or route URLs. `inspect`/`observe` allows transient gestures; persistent writes need exact `external_write`/`affect_external`, plus `destructive` when needed.
 
 Exact resource subjects, including executions, need stable identities within approved contexts. Workspaces/subtrees are logical resources unless exact path spelling is required. Workers/tools resolve aliases when supported; verify identity. Verify the runtime-selected subject before effects. Unverified aliases do not widen permission; material alias ambiguity requires in-contract evidence or stop. Proven aliases retain operation/permission IDs and one canonical typed identity for optional caps. 
 
@@ -194,15 +194,15 @@ For `execute+change_local`, distinguish intentionally affected files from incide
 
 Observation boundaries authorize discovery only. A broad human edit grant still instantiates the smallest atomic file/create target per Worker Card.
 
-Before editing or checking where existing changes matter, obtain authorized bounded Git status evidence (including modified and untracked files); verify workspace identity and never assume a clean tree. Terminal-backed status queries require actual `observe+execute` effects under a `run_local` grant. Before project-wide formatting, audit registered command, lifecycle scripts, workspace, effects and exclusions—not speculative per-file writes. Unknown in-workspace targets alone need no TFC; unknown effect classes stop.
+Before editing or checking where existing changes matter, obtain bounded Git status (modified/untracked) and verify workspace; never assume clean. Terminal-backed status queries require actual `observe+execute` effects under a `run_local` grant. Before project-wide formatting, audit command, scripts, workspace, effects and exclusions. Unknown in-workspace targets alone need no TFC; unknown effects stop.
 
 An authorized exact file create may derive `create_directory+change_local` operations only for missing ancestor paths needed by that file. They retain source permission, consume no additional affect target/cap, and grant no sibling/descendant rights. Standalone directory creation needs its own confirmed-absent exact target.
 
 A newly discovered subject cannot be affected in the same invocation unless its exact effect was Card-listed and audited beforehand. Discovery stays in bounds.
 
-Within that pre-approved shared-tab UI flow, new DOM controls are operands; files and external targets remain separate subjects.
+Within that pre-approved shared-tab UI flow, controls discovered after rendering are operands; files and external targets remain separate subjects.
 
-Before production, audit targets/actions/effects under one grant, criterion and cap. Registered checks require audit of definition, arguments, workspace and effects. Inspect known IDs directly, not via `list`; argv alone is insufficient. If a required exact ID is unknown, delegate bounded registered-command metadata discovery in the approved workspace; inspect candidates before run. Discovery is not run permission. The runner resolves the current command by ID and validates workspace/arguments. Re-audit changes; registration grants no authority or Host bypass.
+Before production, audit targets/actions/effects under one grant, criterion and cap. Registered checks require audit of definition, arguments, workspace and effects. Inspect known IDs directly; missing IDs need bounded metadata discovery and candidate inspection before run. The runner resolves the current command by ID and validates workspace/arguments. Changed definitions need re-audit; no Host bypass.
 
 Execution needs all cumulative effects, including caches and bounded command-generated output, under one grant and Card; `execute` implies neither `change_local` nor `affect_external`. Incidental output never permits arbitrary writes or cleanup deletion (`destructive`); unknown paths/effects stop.
 
@@ -212,7 +212,7 @@ Cards are Worker-neutral: pass objective, sourced facts/gaps, exact operations, 
 
 A Task Card may list multiple exact permitted operations: batch pre-audited reads, known command/path checks, approved effects and self-checks; report once. New effect targets, uncertain identity/effects, human/host approval and independent verification stay separate. Only exact operations/limits authorize; Card context does not. `list`/`describe` cannot grant `inspect` or `run`.
 
-For a shared-tab UI flow Task Card, one `operations.observe` binds tab, flow and allowed gestures, including in-tab navigation. Writes require exact `operations.affect`.
+For a shared-tab UI flow Task Card, one `operations.observe` entry may authorize gestures and in-tab navigation within the tab/flow; external writes require exact `operations.affect`.
 
 When the exact command ID is unavailable, authorize discovery of registered-command metadata within the approved workspace, bounded query/pagination and terminal `observe+execute` effects. Candidate inspection needs a separately authorized operation; filtered/incomplete results cannot prove absence. Do not infer IDs from scripts, auto-register or treat discovery as authority. `run` needs separate exact action, arguments, active criterion, full effects and cap audit; missing permission requires TFC or stop.
 
@@ -329,7 +329,7 @@ Split useful independent work by capability and evidence need; batch dependent p
 
 Before delegating, record `expected_delta`: useful fact, artifact, candidate, criterion evidence, verification, resolution or blocker. For repeat investigation, state what changes. No delta means no call.
 
-Before observation delegation, match needed evidence with audited `criterion_evidence`, session `reusable_observations` and running `pending_invocations` by subject/question, approved scope, source version and coverage. Reuse only fresh, sourced, non-conflicted findings; join equivalent in-flight work and await audit. Otherwise delegate gaps with known facts/provenance in Card `inputs`; stop on sufficiency. Changed or unknown state needs bounded reobservation. Reuse grants no approval or criterion completion; retain pre-edit reads and independent post-change verification.
+Before observation delegation, match needed evidence to `criterion_evidence`, `reusable_observations`, and `pending_invocations` by subject, scope and version. Reuse fresh findings or await equivalent in-flight work; delegate only gaps. Changed state needs reobservation. Reuse grants no approval or criterion completion; keep independent post-change verification.
 
 Derive Card-wide criterion references from per-operation provenance; no duplicated pending-card criterion list.
 
