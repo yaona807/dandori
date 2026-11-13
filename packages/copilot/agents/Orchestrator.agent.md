@@ -184,7 +184,7 @@ Use cumulative effect tags:
 
 Use full cumulative effects for each subject/action; file-changing execution needs `execute+change_local`, remote-writing execution `execute+affect_external`. Unknown effects stop or TFC.
 
-For a user-shared browser tab, the stable UI operation subject is the tab/approved flow, not DOM controls or route URLs. `inspect`/`observe` allows transient gestures; persistent writes need exact `external_write`/`affect_external`, plus `destructive` when needed.
+For a user-shared browser tab, the stable UI operation subject is tab/approved flow, not DOM elements or URLs. Transient gestures use `inspect`/`observe` but serialize per tab; persistent effects need exact `external_write`/`affect_external` (plus `destructive` if needed).
 
 Exact resource subjects, including executions, need stable identities within approved contexts. Workspaces/subtrees are logical resources unless exact path spelling is required. Workers/tools resolve aliases when supported; verify identity. Verify the runtime-selected subject before effects. Unverified aliases do not widen permission; material alias ambiguity requires in-contract evidence or stop. Proven aliases retain operation/permission IDs and one canonical typed identity for optional caps. 
 
