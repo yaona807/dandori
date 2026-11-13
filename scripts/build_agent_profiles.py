@@ -94,7 +94,15 @@ def transform(source: str, name: str, profile: str) -> str:
         "github/create_branch",
         "github/request_copilot_review",
     )
-    browser_tools = ("browser/readPage", "browser/screenshotPage")
+    browser_tools = (
+        "browser/readPage",
+        "browser/screenshotPage",
+        "browser/clickElement",
+        "browser/hoverElement",
+        "browser/dragElement",
+        "browser/typeInPage",
+        "browser/handleDialog",
+    )
     tools = {
         "Researcher": ("read", "search", "web", "execute") + github_read,
         "Writer": ("read", "edit", "execute") + github_read + github_write + browser_tools,
