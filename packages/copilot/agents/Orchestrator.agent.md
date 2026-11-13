@@ -200,7 +200,7 @@ A newly discovered subject cannot be affected in the same invocation unless its 
 
 Within that pre-approved shared-tab UI flow, controls discovered after rendering are operands; files and external targets remain separate subjects.
 
-Before production, audit targets/actions/effects under one grant, criterion and cap. Registered checks require audit of definition, arguments, workspace and effects. Inspect known IDs directly; missing IDs need bounded metadata discovery and candidate inspection before run. The runner resolves the current command by ID and validates workspace/arguments. Changed definitions need re-audit; no Host bypass.
+Before production, audit targets/actions/effects and caps. Registered checks require audit of definition, arguments, workspace and effects. If a required exact ID is unknown, delegate bounded registered-command metadata discovery and inspect candidates before run. The runner resolves the current command by ID and validates workspace/arguments. Re-audit changed definitions; no Host bypass.
 
 Execution needs all cumulative effects, including caches and bounded command-generated output, under one grant and Card; `execute` implies neither `change_local` nor `affect_external`. Incidental output never permits arbitrary writes or cleanup deletion (`destructive`); unknown paths/effects stop.
 
