@@ -310,6 +310,13 @@ test('GitHub MCP approval hook allows reads, asks for writes, and denies unknown
     };
     const scope = { owner: 'example', repo: 'project' };
     assert.deepEqual(invoke('github/pull_request_read', { ...scope, pullNumber: 8, method: 'get' }), {});
+    for (const [name, args] of [
+      ['github/get_me', {}],
+      ['github/search_repositories', { query: 'example' }],
+    ]) {
+      assert.deepEqual(invoke(name, args), {}, name);
+      assert.deepEqual(invoke(name, args, 'hook.mjs'), {}, name);
+    }
     assert.deepEqual(invoke('read', { path: 'README.md' }), {});
     for (const [name, args] of [
       ['github/create_pull_request', { ...scope, head: 'topic', base: 'main', title: 'Fix' }],
