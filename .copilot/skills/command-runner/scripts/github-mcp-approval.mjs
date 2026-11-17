@@ -11,6 +11,7 @@ import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
 const READ = new Set([
+  'get_me', 'search_repositories',
   'pull_request_read', 'list_pull_requests', 'search_pull_requests',
   'issue_read', 'list_issues', 'search_issues',
   'actions_get', 'actions_list', 'get_job_logs',

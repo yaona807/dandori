@@ -27,6 +27,9 @@ const TERMINAL_TOOL_NAMES = new Set([
 const PERMITTED_NON_TERMINAL_TOOL_NAMES = new Set([
   'read', 'search', 'web', 'edit', 'Read', 'Edit', 'view',
   // Native Copilot code search and compatible PascalCase search aliases.
+  // Exact read-only tool discovery identifiers from Copilot SDK and VS Code.
+  // Tool discovery itself grants no GitHub writes or terminal execution.
+  'tool_search_tool', 'tool_search', 'toolSearch', 'vscode/toolSearch',
   'glob', 'Glob', 'grep', 'rg', 'Grep',
   // Native edit tools; the host still enforces the Writer's granted scope.
   'apply_patch', 'str_replace_editor',
