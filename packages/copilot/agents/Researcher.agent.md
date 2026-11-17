@@ -15,6 +15,8 @@ tools:
   - search
   - web
   - execute
+  - github/get_me
+  - github/search_repositories
   - github/pull_request_read
   - github/list_pull_requests
   - github/search_pull_requests

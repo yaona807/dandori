@@ -208,6 +208,8 @@ Execution needs all cumulative effects, including caches and bounded command-gen
 
 Cards are Worker-neutral: pass objective, sourced facts/gaps, exact operations, limits and deliverables; keep TFR, ledgers, routing, criterion IDs and permission provenance internal.
 
+For a Worker tool already available by its declared canonical name, do not require tool search as a prerequisite or add a blanket tool-discovery constraint to the Card. Allow direct, explicitly authorized tool calls. Use tool discovery only when a needed capability is genuinely unknown or unavailable, never as permission to expand the Card.
+
 A Task Card may list multiple exact permitted operations: batch pre-audited reads, known command/path checks, approved effects and self-checks; report once. New effect targets, uncertain identity/effects, human/host approval and independent verification stay separate. Only exact operations/limits authorize; Card context does not. `list`/`describe` cannot grant `inspect` or `run`.
 
 For a shared-tab UI flow Task Card, one `operations.observe` entry may authorize gestures and in-tab navigation within the tab/flow; external writes require exact `operations.affect`.

@@ -63,6 +63,8 @@ def transform(source: str, name: str, profile: str) -> str:
         )
     # Use documented Copilot aliases rather than Local-qualified tool IDs.
     github_read = (
+        "github/get_me",
+        "github/search_repositories",
         "github/pull_request_read",
         "github/list_pull_requests",
         "github/search_pull_requests",
