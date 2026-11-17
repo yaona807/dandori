@@ -345,6 +345,33 @@ test('GitHub MCP approval hook allows reads, asks for writes, and denies unknown
   });
 });
 
+
+test('shared Hook allows only exact Copilot tool-search identifiers without expanding execution permissions', async () => {
+  await withFixture(async (fixture) => {
+    const invoke = (name, format = 'copilot') => {
+      const event = format === 'copilot'
+        ? { toolName: name, toolArgs: { query: 'GitHub PR search' } }
+        : { hook_event_name: 'PreToolUse', tool_name: name, tool_input: { query: 'GitHub PR search' } };
+      const result = spawnSync(process.execPath, [path.join(fixture.scripts, 'hook.mjs')], {
+        cwd: fixture.alpha, encoding: 'utf8', input: JSON.stringify(event),
+      });
+      assert.equal(result.status, 0, result.stderr);
+      return JSON.parse(result.stdout);
+    };
+    // Exact runtime/client identifiers. A neutral response never grants Host approval.
+    for (const name of ['tool_search_tool', 'tool_search', 'toolSearch', 'vscode/toolSearch']) {
+      assert.deepEqual(invoke(name), {}, name);
+      assert.deepEqual(invoke(name, 'local'), { continue: true }, name);
+    }
+    for (const name of ['tool_search_tool/execute', 'tool_search_write', 'toolSearch/write',
+      'vscode/toolSearch/write', 'vscode/tool_search_other', 'github/delete_repository']) {
+      assert.equal(invoke(name).permissionDecision, 'deny', name);
+    }
+    assert.equal(invoke('run_in_terminal').permissionDecision, 'deny');
+    assert.equal(invoke('github/merge_pull_request').permissionDecision, 'deny');
+  });
+});
+
 test('Writer permits user-shared tab interactions but denies direct URL navigation', async () => {
   await withFixture(async (fixture) => {
     const invoke = (name) => {

@@ -80,6 +80,8 @@ Install the GitHub MCP read and write profiles with the shared approval Hook and
 **Expected**
 
 - Read-only GitHub MCP operations work without obtaining write privileges or creating an external effect; GitHubResearcher is absent from both discovery locations.
+- The Worker inventory covers identity (`get_me`), repository discovery (`search_repositories`), code/commit exploration, PR/issue reads, and (where configured) CI reads; Reader and Reviewer do not inherit Writer mutations. A declared tool that is actually exposed is called directly without an unconditional Tool Search prerequisite.
+- For Copilot tool discovery, verify runtime `tool_search_tool` and VS Code `tool_search`/`toolSearch` identifiers are not denied by the shared Hook; aliases outside the exact allowlist remain denied. A neutral Hook result must not bypass Host tool permission or authorize GitHub writes.
 - For every Writer mutation in an interactive Manual-permissions session, the actual tool arguments (repository, exact target, content and consequences) are visible and a fresh human approval is requested even after TFR approval and a previous tool approval.
 - Denial, malformed arguments and unknown GitHub tool aliases cannot cause GitHub writes or an alternate-tool bypass. In particular, merge requires an expected HEAD SHA and rejects changed heads.
 - Shared user-level and Writer-scoped preToolUse Hook coverage is observed in real subagents. Host auto-approval settings, cached approvals and organization permissions are audited rather than inferred from configuration.
