@@ -542,6 +542,7 @@ ORCHESTRATOR_REQUIRED_SECTION_MARKERS: dict[str, tuple[str, ...]] = {
         "The runner resolves the current command by ID and validates workspace/arguments.",
     ),
     "## Planning and Task Cards": (
+        "No mandatory tool search.",
         "A Task Card may list multiple exact permitted operations",
         "For a shared-tab UI flow Task Card, one `operations.observe` entry may authorize",
         "When the exact command ID is unavailable, authorize discovery of registered-command metadata",
