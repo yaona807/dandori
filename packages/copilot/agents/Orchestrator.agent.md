@@ -206,7 +206,7 @@ Execution needs all cumulative effects, including caches and bounded command-gen
 
 ## Planning and Task Cards
 
-Cards are Worker-neutral: pass objective, sourced facts/gaps, exact operations, limits and deliverables; keep TFR, ledgers, routing, criterion IDs and permission provenance internal.
+Cards are Worker-neutral: pass objective, sourced facts/gaps, exact operations, limits and deliverables; keep TFR, ledgers, routing, criterion IDs and permission provenance internal. No mandatory tool search.
 
 A Task Card may list multiple exact permitted operations: batch pre-audited reads, known command/path checks, approved effects and self-checks; report once. New effect targets, uncertain identity/effects, human/host approval and independent verification stay separate. Only exact operations/limits authorize; Card context does not. `list`/`describe` cannot grant `inspect` or `run`.
 
