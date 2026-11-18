@@ -2,7 +2,6 @@
 """Validate DANDORI's two-worker boundaries and generated Copilot artifacts."""
 from __future__ import annotations
 
-import importlib.util
 import os
 from pathlib import Path
 import re
@@ -21,6 +20,8 @@ REQUIRED_REPOSITORY_FILES = frozenset({
     "tests/conformance.md", "tests/test_validate_definitions.py",
     "tests/test_validate_release_archive.py",
     ".copilot/skills/command-runner/SKILL.md",
+    ".copilot/skills/task-reflection/SKILL.md",
+    "packages/copilot/skills/task-reflection/SKILL.md",
     ".copilot/skills/command-runner/scripts/cli.mjs",
     ".copilot/skills/command-runner/scripts/hook.mjs",
     ".copilot/skills/command-runner/scripts/orchestrator-guard.mjs",
@@ -132,38 +133,49 @@ def validate_repository(root: Path) -> ValidationResult:
             actual = {file.name for file in folder.glob("*.agent.md")}
             require(actual == expected, f"{directory}: agent inventory must be Orchestrator, Executor, Reviewer", errors)
 
+    agent_tools: dict[str, list[str]] = {}
     for name in NAMES:
         path = root / ".copilot/agents" / (name + ".agent.md")
         if not path.is_file():
             continue
         meta, body = read_agent(path, errors)
-        require(meta.get("name") == name and meta.get("target") == "vscode",
-                f"{name}: invalid source identity", errors)
+        require(meta.get("name") == name and meta.get("target") == "github-copilot",
+                f"{name}: invalid Copilot-only agent identity or target", errors)
+        require("agents" not in meta and "handoffs" not in meta,
+                f"{name}: Local-harness agent fields are forbidden", errors)
         require(meta.get("user-invocable") is (name == "Orchestrator"),
                 f"{name}: invalid invocability", errors)
-        require(meta.get("disable-model-invocation") is True,
-                f"{name}: source must disable model invocation", errors)
+        require(meta.get("disable-model-invocation") is (name == "Orchestrator"),
+                f"{name}: invalid Copilot model invocation policy", errors)
         hooks = meta.get("hooks")
-        require(isinstance(hooks, dict) and "PreToolUse" in hooks,
-                f"{name}: scoped Hook is required", errors)
+        require(isinstance(hooks, dict) and "preToolUse" in hooks,
+                f"{name}: scoped Copilot Hook is required", errors)
         if isinstance(hooks, dict):
             expected_hook = "orchestrator-guard.mjs" if name == "Orchestrator" else "hook.mjs"
             expected_command = "node ~/.copilot/skills/command-runner/scripts/" + expected_hook
-            hook_entries = hooks.get("PreToolUse")
+            hook_entries = hooks.get("preToolUse")
+            expected_timeout = 5 if name == "Orchestrator" else 30
             require(isinstance(hook_entries, list) and len(hook_entries) == 1
                     and isinstance(hook_entries[0], dict)
-                    and hook_entries[0].get("command") == expected_command,
+                    and hook_entries[0].get("type") == "command"
+                    and hook_entries[0].get("command") == expected_command
+                    and hook_entries[0].get("timeoutSec") == expected_timeout
+                    and "PreToolUse" not in hooks,
                     f"{name}: exact scoped Hook command is required", errors)
         tools = meta.get("tools")
         require(isinstance(tools, list) and len(tools) == len(set(tools)),
                 f"{name}: tools must be a unique list", errors)
         if not isinstance(tools, list):
             continue
+        agent_tools[name] = tools
+        require(not any(tool == "execute/runInTerminal" or tool == "agent"
+                        for tool in tools),
+                f"{name}: Local-harness tool aliases are forbidden", errors)
         if name == "Orchestrator":
-            require(meta.get("agents") == ["Executor", "Reviewer"],
-                    "Orchestrator: only Executor and Reviewer may be delegated", errors)
-            require(set(tools) == {"agent", "store_memory", "vote_memory", "read_memories"},
-                    "Orchestrator: only delegation and memory tools permitted", errors)
+            for needed in ("task", "store_memory", "vote_memory", "read_memories"):
+                require(needed in tools, "Orchestrator: missing delegation or memory tool " + needed, errors)
+            require(meta.get("skills") == ["task-reflection"],
+                    "Orchestrator: must preload task-reflection Skill", errors)
             for marker in (
                 "Missing permission is denied.", "Task Flow Review",
                 "Task Flow Change", "APPROVE:TFR-", "APPROVE:TFC-",
@@ -173,15 +185,18 @@ def validate_repository(root: Path) -> ValidationResult:
                 require(marker.lower() in body.lower(),
                         "Orchestrator: missing policy " + marker, errors)
         elif name == "Executor":
+            require(meta.get("skills") == ["command-runner"],
+                    "Executor: command-runner Skill required", errors)
             for expected_tool in ("read", "search", "web", "edit", "execute",
-                                  "execute/runInTerminal", "browser/readPage",
-                                  "github/create_pull_request"):
+                                  "browser/readPage", "github/create_pull_request"):
                 require(expected_tool in tools, "Executor: missing tool " + expected_tool, errors)
             require("Do not execute raw project commands" in body,
                     "Executor: fixed runner policy missing", errors)
         else:
-            require("execute/runInTerminal" in tools and "execute" in tools,
+            require("execute" in tools,
                     "Reviewer: fixed CommandRunner execution required", errors)
+            require(meta.get("skills") == ["command-runner", "code-review"],
+                    "Reviewer: command-runner and code-review Skills required", errors)
             require(not any(
                 tool in ("edit", "agent", "task") or tool.startswith(("edit/", "browser/"))
                 or (tool.startswith("github/") and tool not in READ_GITHUB)
@@ -198,29 +213,31 @@ def validate_repository(root: Path) -> ValidationResult:
             require(not re.search(r"\b(?:Task Card|Flow Ledger|Orchestrator)\b", body),
                     f"{name}: worker should not embed orchestration internals", errors)
 
-    builder_path = root / "scripts/build_agent_profiles.py"
-    if builder_path.is_file():
-        try:
-            spec = importlib.util.spec_from_file_location("dandori_validator_builder", builder_path)
-            if spec is None or spec.loader is None:
-                raise ValueError("unable to load builder")
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
-            for name in NAMES:
-                source = root / ".copilot/agents" / (name + ".agent.md")
-                bundle = root / "packages/copilot/agents" / (name + ".agent.md")
-                if source.is_file() and bundle.is_file():
-                    expected_bundle = module.transform(source.read_text(encoding="utf-8"), name)
-                    require(bundle.read_text(encoding="utf-8") == expected_bundle,
-                            "outdated bundle file: copilot/agents/" + name + ".agent.md", errors)
-                    if name == "Reviewer":
-                        reviewer_meta, _ = read_agent(bundle, errors)
-                        skills = reviewer_meta.get("skills", [])
-                        require(isinstance(skills, list) and "code-review" in skills
-                                and "command-runner" in skills,
-                                "Reviewer bundle must load code-review and command-runner Skills", errors)
-        except (OSError, ValueError, yaml.YAMLError, ImportError) as exc:
-            errors.append("invalid generated profile: " + str(exc))
+    if all(name in agent_tools for name in NAMES):
+        inherited = set(agent_tools["Executor"]) | set(agent_tools["Reviewer"])
+        required_parent = {"task", "store_memory", "vote_memory", "read_memories"} | inherited
+        require(set(agent_tools["Orchestrator"]) == required_parent,
+                "Orchestrator: temporary worker-tool union must remain complete and guarded", errors)
+
+    for name in NAMES:
+        source = root / ".copilot/agents" / (name + ".agent.md")
+        bundle = root / "packages/copilot/agents" / (name + ".agent.md")
+        if source.is_file() and bundle.is_file():
+            require(source.read_bytes() == bundle.read_bytes(),
+                    "outdated bundle file: copilot/agents/" + name + ".agent.md", errors)
+
+    reflection = root / ".copilot/skills/task-reflection/SKILL.md"
+    if reflection.is_file():
+        reflection_meta, reflection_body = read_agent(reflection, errors)
+        require(reflection_meta.get("name") == "task-reflection"
+                and isinstance(reflection_meta.get("description"), str)
+                and "allowed-tools" not in reflection_meta,
+                "task-reflection: invalid Skill identity or elevated tool permissions", errors)
+        for phrase in ("final audit", "Skip", "Contract", "Host approval",
+                       "at most one", "not authority"):
+            require(phrase.lower() in reflection_body.lower(),
+                    "task-reflection: missing safety or selectivity rule " + phrase, errors)
+
     skill_root, skill_bundle = root / ".copilot/skills", root / "packages/copilot/skills"
     if skill_root.is_dir():
         expected_skills = {p.relative_to(skill_root): p.read_bytes()

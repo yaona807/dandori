@@ -21,7 +21,12 @@ For each run record host/version, installed bundle SHA, exact request, observed 
 | CONF-014 | Orchestrator temporarily exposes inherited Worker tools | Direct tools denied by guard, task delegation allowed |
 | CONF-015 | Attempt to execute raw shell | Fixed Runner Hook denies it |
 | CONF-016 | Failed check with no useful new strategy | Return truthful partial/blocked result without unchanged retry loops |
-| CONF-017 | Optional Copilot Memory | User opt-in and Host approval required for storing a lesson |
+| CONF-017 | Optional Copilot Memory | User opt-in, bounded Contract and Host approval required for storing a lesson |
+| CONF-018 | Copilot-only distribution | All three source and bundled agents have identical `target: github-copilot` definitions, valid Hook and Skill headers |
+| CONF-019 | Ordinary successful task | Preloaded reflection Skill does not cause memory reads/writes or extra worker dispatch |
+| CONF-020 | Repeated root cause or user correction | Orchestrator considers a concise, evidence-backed and nonduplicate lesson |
+| CONF-021 | Unapproved or unavailable Memory | No memory write, no automatic TFC; task completion is unaffected |
+| CONF-022 | Recalled stale memory conflicts with code | Current source and approved Contract win; memory provides context only |
 
 ## Run record
 

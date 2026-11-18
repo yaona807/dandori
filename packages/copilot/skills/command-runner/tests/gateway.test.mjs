@@ -420,7 +420,8 @@ test('Writer permits user-shared tab interactions but denies direct URL navigati
 test('shared CLI worker agents expose the fixed runner without arbitrary shell permissions', async () => {
   for (const agentSource of AGENT_SOURCES) {
     const source = await readFile(agentSource, 'utf8');
-    assert.match(source, /execute\/runInTerminal/u);
+    assert.match(source, /^  - execute$/mu);
+    assert.match(source, /^target: github-copilot$/mu);
     assert.match(source, /cli\.mjs/u);
     assert.match(source, /hook\.mjs/u);
     assert.match(source, /Do not execute raw project commands/u);

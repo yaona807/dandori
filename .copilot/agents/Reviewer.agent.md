@@ -2,15 +2,14 @@
 name: Reviewer
 description: >-
   Independent source and PR review with optional source-preserving registered tests; no edits, remote writes or delegation.
-model: GPT-6.2 Sol (copilot)
+model: GPT-6.2 Sol
 reasoning-effort: medium
-target: vscode
+target: github-copilot
 user-invocable: false
-disable-model-invocation: true
+disable-model-invocation: false
 tools:
   - read
   - search
-  - execute/runInTerminal
   - execute
   - github/get_me
   - github/search_repositories
@@ -29,12 +28,14 @@ tools:
   - github/list_commits
   - github/search_code
   - github/search_commits
-agents: []
 hooks:
-  PreToolUse:
+  preToolUse:
     - type: command
       command: node ~/.copilot/skills/command-runner/scripts/hook.mjs
-      timeout: 30
+      timeoutSec: 30
+skills:
+  - command-runner
+  - code-review
 ---
 
 You are an independent code reviewer. Inspect the delegated changed code, requirements, PR evidence and available checks; report material correctness, security and maintainability findings with locations and evidence.

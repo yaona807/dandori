@@ -301,8 +301,12 @@ test('distributed Executor and Reviewer share the fixed runner CLI hook', async 
   for (const agentSource of AGENT_SOURCES) {
     const source = await readFile(agentSource, 'utf8');
     assert.match(source, /^user-invocable: false$/mu);
-    assert.match(source, /^disable-model-invocation: true$/mu);
-    assert.match(source, /  - execute\/runInTerminal\n  - execute\n(?:  - browser\/readPage\n  - browser\/screenshotPage\n  - browser\/clickElement\n  - browser\/hoverElement\n  - browser\/dragElement\n  - browser\/typeInPage\n  - browser\/handleDialog\n)?(?:  - github\/[a-z_]+\n)+agents: \[\]\nhooks:/u);
+    assert.match(source, /^disable-model-invocation: false$/mu);
+    assert.match(source, /^target: github-copilot$/mu);
+    assert.match(source, /^  - execute$/mu);
+    assert.match(source, /^  - github\/get_me$/mu);
+    assert.match(source, /^  preToolUse:$/mu);
+    assert.doesNotMatch(source, /^target: vscode$|^agents:|execute\/runInTerminal/mu);
     assert.match(source, /hook\.mjs/u);
     assert.match(source, /node ~\/\.copilot\/skills\/command-runner\/scripts\/cli\.mjs/u);
     assert.match(source, /request synchronous execution/u);

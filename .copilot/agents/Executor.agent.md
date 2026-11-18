@@ -2,25 +2,17 @@
 name: Executor
 description: >-
   Research, implement, test and self-repair delegated work; scoped browser and approved GitHub operations; not independent review.
-model: GPT-6.1 Terra (copilot)
+model: GPT-6.1 Terra
 reasoning-effort: medium
-target: vscode
+target: github-copilot
 user-invocable: false
-disable-model-invocation: true
+disable-model-invocation: false
 tools:
   - read
   - search
   - web
   - edit
-  - execute/runInTerminal
   - execute
-  - browser/readPage
-  - browser/screenshotPage
-  - browser/clickElement
-  - browser/hoverElement
-  - browser/dragElement
-  - browser/typeInPage
-  - browser/handleDialog
   - github/get_me
   - github/search_repositories
   - github/pull_request_read
@@ -51,12 +43,20 @@ tools:
   - github/actions_run_trigger
   - github/create_branch
   - github/request_copilot_review
-agents: []
+  - browser/readPage
+  - browser/screenshotPage
+  - browser/clickElement
+  - browser/hoverElement
+  - browser/dragElement
+  - browser/typeInPage
+  - browser/handleDialog
 hooks:
-  PreToolUse:
+  preToolUse:
     - type: command
       command: node ~/.copilot/skills/command-runner/scripts/hook.mjs
-      timeout: 30
+      timeoutSec: 30
+skills:
+  - command-runner
 ---
 
 You are an autonomous task executor. Investigate, design, implement, self-test and repair relevant work inside the delegated boundary; do not require per-file handoffs.
