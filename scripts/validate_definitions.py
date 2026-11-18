@@ -63,6 +63,62 @@ def read_agent(path: Path, errors: list[str]) -> tuple[dict, str]:
         errors.append(f"invalid agent {path.name}: {error}")
         return {}, ""
 
+
+def validate_ci_workflow(path: Path, errors: list[str]) -> None:
+    """Keep CI read-only, SHA-pinned and unable to silently skip the checks."""
+    try:
+        workflow = yaml.load(path.read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
+    except (OSError, yaml.YAMLError) as exc:
+        errors.append(f"invalid CI workflow: {exc}")
+        return
+    if not isinstance(workflow, dict):
+        errors.append("invalid CI workflow structure")
+        return
+    triggers = workflow.get("on")
+    if (not isinstance(triggers, dict)
+            or set(triggers) != {"pull_request", "push"}
+            or triggers.get("push") != {"branches": ["master"]}):
+        errors.append("CI workflow triggers must be pull_request and master push only")
+    if workflow.get("permissions") != {"contents": "read"}:
+        errors.append("CI workflow permissions must remain contents: read")
+    jobs = workflow.get("jobs")
+    if not isinstance(jobs, dict) or set(jobs) != {"validate"}:
+        errors.append("CI workflow must have one validate job")
+        return
+    job = jobs["validate"]
+    if not isinstance(job, dict):
+        errors.append("CI validate job must be a mapping")
+        return
+    if (job.get("runs-on") != "ubuntu-latest"
+            or job.get("timeout-minutes") != "15"
+            or job.get("if") is not None
+            or job.get("continue-on-error") is not None):
+        errors.append("CI validate job cannot skip or weaken required validation")
+    steps = job.get("steps")
+    if not isinstance(steps, list) or len(steps) != 7 or not all(isinstance(step, dict) for step in steps):
+        errors.append("CI workflow must retain the seven validation steps")
+        return
+    expected_actions = ["checkout", "setup-python"]
+    for step, action in zip(steps[:2], expected_actions):
+        use = step.get("uses", "")
+        if not isinstance(use, str) or not re.fullmatch(
+            rf"actions/{action}@[0-9a-fA-F]{{40}}", use
+        ):
+            errors.append(f"CI action {action} must be pinned to a full commit SHA")
+    if steps[0].get("with", {}).get("persist-credentials") != "false":
+        errors.append("CI checkout must not persist credentials")
+    expected_commands = [
+        "python -m pip install --disable-pip-version-check PyYAML==6.0.3",
+        "python scripts/validate_definitions.py",
+        "python scripts/run_tests.py",
+        "git archive --format=zip --output=dandori-release.zip HEAD",
+        "python scripts/validate_release_archive.py dandori-release.zip",
+    ]
+    if [step.get("run") for step in steps[2:]] != expected_commands:
+        errors.append("CI workflow may not replace or skip required validation commands")
+    if any("if" in step or "continue-on-error" in step or "shell" in step for step in steps):
+        errors.append("CI steps may not use conditional skips, ignored errors or shell overrides")
+
 def validate_repository(root: Path) -> ValidationResult:
     result = ValidationResult()
     errors = result.errors
@@ -90,6 +146,14 @@ def validate_repository(root: Path) -> ValidationResult:
         hooks = meta.get("hooks")
         require(isinstance(hooks, dict) and "PreToolUse" in hooks,
                 f"{name}: scoped Hook is required", errors)
+        if isinstance(hooks, dict):
+            expected_hook = "orchestrator-guard.mjs" if name == "Orchestrator" else "hook.mjs"
+            expected_command = "node ~/.copilot/skills/command-runner/scripts/" + expected_hook
+            hook_entries = hooks.get("PreToolUse")
+            require(isinstance(hook_entries, list) and len(hook_entries) == 1
+                    and isinstance(hook_entries[0], dict)
+                    and hook_entries[0].get("command") == expected_command,
+                    f"{name}: exact scoped Hook command is required", errors)
         tools = meta.get("tools")
         require(isinstance(tools, list) and len(tools) == len(set(tools)),
                 f"{name}: tools must be a unique list", errors)
@@ -149,6 +213,12 @@ def validate_repository(root: Path) -> ValidationResult:
                     expected_bundle = module.transform(source.read_text(encoding="utf-8"), name)
                     require(bundle.read_text(encoding="utf-8") == expected_bundle,
                             "outdated bundle file: copilot/agents/" + name + ".agent.md", errors)
+                    if name == "Reviewer":
+                        reviewer_meta, _ = read_agent(bundle, errors)
+                        skills = reviewer_meta.get("skills", [])
+                        require(isinstance(skills, list) and "code-review" in skills
+                                and "command-runner" in skills,
+                                "Reviewer bundle must load code-review and command-runner Skills", errors)
         except (OSError, ValueError, yaml.YAMLError, ImportError) as exc:
             errors.append("invalid generated profile: " + str(exc))
     skill_root, skill_bundle = root / ".copilot/skills", root / "packages/copilot/skills"
@@ -162,10 +232,7 @@ def validate_repository(root: Path) -> ValidationResult:
 
     workflow = root / ".github/workflows/validate.yml"
     if workflow.is_file():
-        text = workflow.read_text(encoding="utf-8")
-        for line in ("python scripts/validate_definitions.py", "python scripts/run_tests.py",
-                     "python scripts/validate_release_archive.py", "git archive"):
-            require(line in text, "CI workflow missing " + line, errors)
+        validate_ci_workflow(workflow, errors)
 
     for path in root.rglob("*"):
         rel = path.relative_to(root)
