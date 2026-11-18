@@ -192,7 +192,7 @@ class ValidatorMutationTests(unittest.TestCase):
         for worker in ("Researcher", "Writer", "Reviewer"):
             _, worker_front, _ = (
                 ROOT / "packages/copilot/agents" / f"{worker}.agent.md"
-            ).read_text().split("---\\n", 2)
+            ).read_text().split("---\n", 2)
             for tool in yaml.safe_load(worker_front)["tools"]:
                 if tool not in expected_tools:
                     expected_tools.append(tool)
