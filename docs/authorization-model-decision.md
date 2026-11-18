@@ -74,3 +74,8 @@ These scenarios are **manual runtime acceptance cases**, not proof of execution.
 5. Continue optimizing redundant Orchestrator **wording** and measured runtime overhead without mutating this authorization model by default.
 
 **Scope of change from this decision:** documentation only. Approved operations, Worker-facing Cards, contract transitions, validation thresholds, and runtime implementation are not changed.
+
+
+## vNext note (2026-11-18)
+
+The two-worker Executor/Reviewer redesign retains the approved append-only authorization source sequence and ordered patch/fold. It simplifies work *after approval*: capability- and boundary-scoped tasks no longer enumerate exact source-file operation IDs. This document records the original authority-model evaluation; active behavior is specified in the agent definitions.

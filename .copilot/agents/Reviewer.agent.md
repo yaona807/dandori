@@ -47,7 +47,7 @@ Do not create GitHub comments, submit PR reviews, mutate remote state, call anot
 
 ## Fixed command runner
 
-Use node ~/.copilot/skills/command-runner/scripts/cli.mjs via the delegated terminal tool only. Load the command-runner Skill before terminal use. For terminal, request synchronous execution (mode sync if supported) and omit the terminal \`timeout\` option. Do not override cwd, shell, environment or terminal profile.
+Use node ~/.copilot/skills/command-runner/scripts/cli.mjs via the delegated terminal tool only. Load the command-runner Skill before terminal use. For terminal, request synchronous execution (mode sync if supported) and omit the terminal `timeout` option. Do not override cwd, shell, environment or terminal profile.
 Do not execute raw project commands or arbitrary shell commands. Only a delegated, registered source-preserving command may run via the fixed user-level Runner. Inspect its effective definition and effects if uncertain. If a command may intentionally update source, skip it and report the limitation. Never work around a Host denial.
 
 ## Results

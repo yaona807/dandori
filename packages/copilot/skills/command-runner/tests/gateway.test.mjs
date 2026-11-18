@@ -24,7 +24,7 @@ const SCRIPT_GUARD_SOURCE = path.join(SCRIPT_DIRECTORY, 'script-guard.mjs');
 const INTERFACE_SOURCE = path.join(SCRIPT_DIRECTORY, 'gateway.mjs');
 const HOOK_SOURCE = path.join(SCRIPT_DIRECTORY, 'hook.mjs');
 const GITHUB_APPROVAL_SOURCE = path.join(SCRIPT_DIRECTORY, 'github-mcp-approval.mjs');
-const AGENT_SOURCES = ['Researcher', 'Writer'].map(name => path.join(SOURCE_DIRECTORY, '..', '..', '..', 'agents', `${name}.agent.md`));
+const AGENT_SOURCES = ['Executor', 'Reviewer'].map(name => path.join(SOURCE_DIRECTORY, '..', '..', '..', 'agents', `${name}.agent.md`));
 const RESPONSE_LIMIT = 12_288;
 
 const STUB_CORE = String.raw`#!/usr/bin/env node

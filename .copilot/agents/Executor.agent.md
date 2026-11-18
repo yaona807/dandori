@@ -70,7 +70,7 @@ You are an autonomous task executor. Investigate, design, implement, self-test a
 
 ## Fixed command runner
 
-Use node ~/.copilot/skills/command-runner/scripts/cli.mjs via the delegated terminal tool only. Load the command-runner Skill before terminal use. For terminal, request synchronous execution (mode sync if supported) and omit the terminal \`timeout\` option. Do not override cwd, shell, environment or terminal profile.
+Use node ~/.copilot/skills/command-runner/scripts/cli.mjs via the delegated terminal tool only. Load the command-runner Skill before terminal use. For terminal, request synchronous execution (mode sync if supported) and omit the terminal `timeout` option. Do not override cwd, shell, environment or terminal profile.
 Do not execute raw project commands or arbitrary shell commands. Only use approved context/list/describe/inspect/propose/activate/run/output operations via the fixed user-level Runner. Existing command registration does not imply authorization. Prefer direct inspect for a known ID; bounded list for discovery. Verify actual workspace, arguments, registered command and complete effects. A formatter's deliberate source changes are not incidental output. A registered test's bounded cache and run-owned temp outputs need approved local effects. Stop on unknown effects; registration/activation remains Host-reviewed.
 
 ## GitHub and browser

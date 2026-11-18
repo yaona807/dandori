@@ -28,7 +28,7 @@ const CLI_SOURCE = path.join(SCRIPT_DIRECTORY, 'cli.mjs');
 const INTERFACE_SOURCE = path.join(SCRIPT_DIRECTORY, 'gateway.mjs');
 const HOOK_SOURCE = path.join(SCRIPT_DIRECTORY, 'hook.mjs');
 const GITHUB_APPROVAL_SOURCE = path.join(SCRIPT_DIRECTORY, 'github-mcp-approval.mjs');
-const AGENT_SOURCES = ['Researcher', 'Writer'].map(name => path.join(SOURCE_DIRECTORY, '..', '..', '..', 'agents', `${name}.agent.md`));
+const AGENT_SOURCES = ['Executor', 'Reviewer'].map(name => path.join(SOURCE_DIRECTORY, '..', '..', '..', 'agents', `${name}.agent.md`));
 
 async function makeFixture(configure = (configuration) => configuration) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'command-runner-test-'));
@@ -297,7 +297,7 @@ async function withFixture(callback, configure) {
   }
 }
 
-test('distributed Researcher and Writer share the fixed runner CLI hook', async () => {
+test('distributed Executor and Reviewer share the fixed runner CLI hook', async () => {
   for (const agentSource of AGENT_SOURCES) {
     const source = await readFile(agentSource, 'utf8');
     assert.match(source, /^user-invocable: false$/mu);

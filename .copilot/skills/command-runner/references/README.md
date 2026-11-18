@@ -2,7 +2,7 @@
 
 [日本語](./README_ja.md)
 
-This directory contains the fixed Node.js runner, its bounded management/execution interface, its agent-scoped `PreToolUse` hook, and the example personal workspace configuration. Researcher and Writer share this CLI and its Hook; no dedicated execution agent is required.
+This directory contains the fixed Node.js runner, its bounded management/execution interface, its agent-scoped `PreToolUse` hook, and the example personal workspace configuration. Executor and Reviewer share this CLI and its Hook; no dedicated execution agent is required.
 
 The installed files live under `~/.copilot/`. No CommandRunner control files or personal command allowlists need to be added to a project repository.
 
@@ -28,7 +28,7 @@ Install the agent with the other DANDORI agents, then install the fixed runner a
 
 ```bash
 mkdir -p ~/.copilot/agents ~/.copilot/skills ~/.copilot/command-runner
-cp .copilot/agents/{Researcher,Writer}.agent.md ~/.copilot/agents/
+cp .copilot/agents/{Executor,Reviewer}.agent.md ~/.copilot/agents/
 cp -R .copilot/skills/command-runner ~/.copilot/skills/
 test -f ~/.copilot/command-runner/workspaces.json \
   || cp .copilot/skills/command-runner/assets/workspaces.example.json ~/.copilot/command-runner/workspaces.json
@@ -36,7 +36,7 @@ test -f ~/.copilot/command-runner/workspaces.json \
 
 The initial configuration starts with an empty workspace registry. Run `node ~/.copilot/skills/command-runner/scripts/cli.mjs workspace.ensure` from the exact project root (containing `.git` or `package.json`) to auto-register the workspace after the hook's first-use confirmation. The runner chooses an internal ID and canonical root; no manual `workspaces.json` edit or workspace ID is required. Legacy manual `workspace-register <id>` remains available for migration. This personal file is not part of the DANDORI repository.
 
-Set `chat.useCustomAgentHooks` to `true` in VS Code because agent-scoped hooks are a preview feature. Confirm in Chat Diagnostics that both Researcher and Writer load their hooks. Remove any previously installed `CommandRunner.agent.md` from user/workspace agent directories.
+Set `chat.useCustomAgentHooks` to `true` in VS Code because agent-scoped hooks are a preview feature. Confirm in Chat Diagnostics that both Executor and Reviewer load their hooks. Remove any previously installed `CommandRunner.agent.md` from user/workspace agent directories.
 
 If `COPILOT_HOME` is set, only the runner data/configuration lookup changes. The runner reads `$COPILOT_HOME/command-runner/workspaces.json` and stores execution output below `$COPILOT_HOME/command-runner/executions/`. The installed Agent, runner, and hook paths remain under `~/.copilot/`.
 

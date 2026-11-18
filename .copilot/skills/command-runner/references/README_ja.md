@@ -2,7 +2,7 @@
 
 [English](./README.md)
 
-このディレクトリには、固定Node.jsコマンド本体、boundedな管理・実行interface、Agent固有の `PreToolUse` Hook、個人用Workspace設定のサンプルを格納します。Researcher・WriterのAgentが同じCLIとHookを利用し、実行専用Agentは不要です。
+このディレクトリには、固定Node.jsコマンド本体、boundedな管理・実行interface、Agent固有の `PreToolUse` Hook、個人用Workspace設定のサンプルを格納します。Executor・ReviewerのAgentが同じCLIとHookを利用し、実行専用Agentは不要です。
 
 実際の利用ファイルは `~/.copilot/` 配下へインストールします。CommandRunnerの制御ファイルや個人用の許可コマンド設定を、対象プロジェクトのリポジトリへ追加する必要はありません。
 
@@ -28,7 +28,7 @@ Agentは他のDANDORI Agentと一緒に配置し、固定RunnerとHookを追加�
 
 ```bash
 mkdir -p ~/.copilot/agents ~/.copilot/skills ~/.copilot/command-runner
-cp .copilot/agents/{Researcher,Writer}.agent.md ~/.copilot/agents/
+cp .copilot/agents/{Executor,Reviewer}.agent.md ~/.copilot/agents/
 cp -R .copilot/skills/command-runner ~/.copilot/skills/
 test -f ~/.copilot/command-runner/workspaces.json \
   || cp .copilot/skills/command-runner/assets/workspaces.example.json ~/.copilot/command-runner/workspaces.json
@@ -36,7 +36,7 @@ test -f ~/.copilot/command-runner/workspaces.json \
 
 コピーされる初期設定は空のWorkspace registryです。対象プロジェクトのroot（`.git` または `package.json` があるディレクトリ）で `node ~/.copilot/skills/command-runner/scripts/cli.mjs workspace.ensure` を実行すると、Hookの初回確認後に内部IDが自動生成され登録されます。Workspace IDや `workspaces.json` の手編集は不要です。旧 `workspace-register <id>` は移行用に残します。この個人用ファイルはDANDORIリポジトリへコミットしません。
 
-Agent固有HookはPreview機能のため、VS Codeの `chat.useCustomAgentHooks` を `true` にします。Chat DiagnosticsでResearcher・WriterのHookを確認してください。旧 `CommandRunner.agent.md` はユーザー／WorkspaceのAgentディレクトリから削除してください。
+Agent固有HookはPreview機能のため、VS Codeの `chat.useCustomAgentHooks` を `true` にします。Chat DiagnosticsでExecutor・ReviewerのHookを確認してください。旧 `CommandRunner.agent.md` はユーザー／WorkspaceのAgentディレクトリから削除してください。
 
 `COPILOT_HOME`を設定した場合、Runnerの設定・データ参照先だけが変わります。Runnerは `$COPILOT_HOME/command-runner/workspaces.json` を読み、実行出力を `$COPILOT_HOME/command-runner/executions/` 配下へ保存します。Agent・Runner・Hook本体のインストール先は引き続き `~/.copilot/` です。
 
