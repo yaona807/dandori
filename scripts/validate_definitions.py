@@ -355,10 +355,10 @@ SHARED_RUNNER_HOOKS = {
 BUNDLED_WORKER_NAMES = frozenset(BUNDLED_WORKER_TOOLS)
 BUNDLED_AGENT_NAMES = frozenset({"Orchestrator", *BUNDLED_WORKER_NAMES})
 BUNDLED_AGENT_MODEL_SETTINGS = {
-    "Orchestrator": ("GPT-6.1 Sol (copilot)", "medium"),
+    "Orchestrator": ("GPT-6.2 Sol (copilot)", "medium"),
     "Researcher": ("GPT-6 Luna (copilot)", "medium"),
     "Writer": ("GPT-6.1 Terra (copilot)", "medium"),
-    "Reviewer": ("GPT-6.1 Sol (copilot)", "medium"),
+    "Reviewer": ("GPT-6.2 Sol (copilot)", "medium"),
 }
 BUNDLED_AGENT_MIN_BODY_CHARS = {
     "Researcher": 1_100,
