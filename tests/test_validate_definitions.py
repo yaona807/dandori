@@ -188,7 +188,7 @@ class ValidatorMutationTests(unittest.TestCase):
         profile = ROOT / "packages/copilot/agents/Orchestrator.agent.md"
         _, front, body = profile.read_text().split("---\n", 2)
         meta = yaml.safe_load(front)
-        expected_tools = ["task"]
+        expected_tools = ["task", "store_memory", "vote_memory", "read_memories"]
         for worker in ("Researcher", "Writer", "Reviewer"):
             _, worker_front, _ = (
                 ROOT / "packages/copilot/agents" / f"{worker}.agent.md"
@@ -197,6 +197,9 @@ class ValidatorMutationTests(unittest.TestCase):
                 if tool not in expected_tools:
                     expected_tools.append(tool)
         self.assertEqual(expected_tools, meta["tools"])
+        for worker in ("Researcher", "Writer", "Reviewer"):
+            worker_front = (ROOT / "packages/copilot/agents" / f"{worker}.agent.md").read_text().split("---\n", 2)[1]
+            self.assertTrue(set(yaml.safe_load(worker_front)["tools"]).isdisjoint({"store_memory", "vote_memory", "read_memories"}))
         self.assertEqual(
             {"preToolUse": [{
                 "type": "command",
