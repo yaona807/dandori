@@ -1779,8 +1779,8 @@ def validate_repository(root: Path) -> ValidationResult:
             f"{relative(orchestrator.path, root)}: Orchestrator must set disable-model-invocation: true"
         )
     # Temporary Copilot harness workaround: the parent exposes the exact union
-    # of Worker tool declarations, but the scoped Hook must prohibit direct use.
-    expected_orchestrator_tools = ["agent", "task"]
+    # of Worker tools plus root Copilot Memory; the scoped Hook blocks Worker calls.
+    expected_orchestrator_tools = ["agent", "task", "store_memory", "vote_memory", "read_memories"]
     for worker_name in ("Researcher", "Writer", "Reviewer"):
         worker = definitions.get(worker_name)
         if worker is None:

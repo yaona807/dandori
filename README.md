@@ -308,6 +308,12 @@ assets/
 | `code-review` skill | Focused review guidance used by the reference review worker |
 | `command-runner` skill | Shared CLI operating and recovery guide for execution workers |
 
+## Copilot Memory (optional)
+
+Orchestrator declares the Copilot harness `store_memory`, `vote_memory`, and `read_memories` tools. Its scoped Hook passes only these exact memory names and delegation to the Host; inherited Worker tools remain blocked. Memory is context, never authorization or completion evidence. Save/vote only verified, reusable, non-sensitive facts with an approved bounded external-write scope. The main task continues when memory is unavailable.
+
+Use the **Copilot harness** in VS Code. Enable Copilot Memory in your GitHub account settings (and organization policy if applicable), and verify `chat.copilot.memory.enabled` is `true` (the current default). Install the updated Orchestrator and command-runner Skill, then start or resume a Copilot session. Explicitly authorize remembering a verified repository convention, check the tool result, and confirm it under repository **Settings > Copilot > Memory**. Repository files cannot override GitHub account policies or force unsupported Host tools to appear.
+
 ## Compatibility and prerequisites
 
 - DANDORI agents explicitly target VS Code.
