@@ -95,7 +95,7 @@ class ValidatorMutationTests(unittest.TestCase):
         with temp:
             path = repo / ".copilot/agents/Executor.agent.md"
             path.write_text(path.read_text().replace("  preToolUse:", "  preToolUseLost:", 1))
-            self.assert_invalid(repo, "scoped Hook is required")
+            self.assert_invalid(repo, "scoped Copilot Hook is required")
 
     def test_symlink_is_rejected(self):
         temp, repo = self.make_repo()
@@ -122,7 +122,7 @@ class ValidatorMutationTests(unittest.TestCase):
         with temp:
             path = repo / "packages/copilot/agents/Reviewer.agent.md"
             path.write_text(path.read_text().replace("  - code-review\n", "", 1))
-            self.assert_invalid(repo, "Reviewer bundle must load code-review")
+            self.assert_invalid(repo, "outdated bundle file")
 
     def test_ci_write_permissions_are_rejected(self):
         temp, repo = self.make_repo()
