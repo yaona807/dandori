@@ -41,6 +41,8 @@ REQUIRED_TEST_METHODS = {
         "test_ci_validation_required",
         "test_reviewer_declares_code_review_skill",
         "test_reviewer_diff_first_guidance_is_required",
+        "test_verification_evidence_policies_cannot_be_removed",
+        "test_review_skill_checks_weakened_verification",
         "test_ci_write_permissions_are_rejected",
         "test_ci_unpinned_action_is_rejected",
         "test_ci_target_event_is_rejected",

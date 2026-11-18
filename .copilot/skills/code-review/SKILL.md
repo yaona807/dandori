@@ -17,6 +17,7 @@ Review the delegated changes to protect merge quality and long-term product qual
 - Consider the benefits, complexity, and regression risks of remediation when recommending fixes or prioritizing findings.
 - Respect established project patterns and equally valid implementation choices. Avoid personal preferences, speculative issues, and low-value improvements.
 - Distinguish supported findings from significant unresolved risks or verification gaps. Do not claim coverage of code that could not be inspected.
+- Assess verification credibility when tests, expected outputs, fixtures, baselines, validators or review gates change. Compare weakened verification criteria with requirements and prior behavior; passing results under modified criteria alone do not establish correctness. Legitimate test updates remain allowed.
 - Continue reviewing after finding an issue. If no material findings exist, report none.
 
 No findings does not establish that a change is safe to merge.

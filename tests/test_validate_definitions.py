@@ -238,5 +238,30 @@ class ValidatorMutationTests(unittest.TestCase):
                 "", 1))
             self.assert_invalid(repo, "code-review: missing diff-first investigation rule targeted search")
 
+    def test_verification_evidence_policies_cannot_be_removed(self):
+        markers = {
+            "Orchestrator": "HEAD alone does not cover uncommitted changes",
+            "Executor": "never claim an unexecuted check passed",
+            "Reviewer": "HEAD alone does not capture uncommitted edits",
+        }
+        for name, marker in markers.items():
+            with self.subTest(agent=name):
+                temp, repo = self.make_repo()
+                with temp:
+                    path = repo / ".copilot/agents" / (name + ".agent.md")
+                    content = path.read_text()
+                    self.assertIn(marker, content)
+                    path.write_text(content.replace(marker, "omitted verification", 1))
+                    self.assert_invalid(repo, "missing verification evidence policy")
+
+    def test_review_skill_checks_weakened_verification(self):
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".copilot/skills/code-review/SKILL.md"
+            content = path.read_text()
+            self.assertIn("verification credibility", content)
+            path.write_text(content.replace("verification credibility", "test status", 1))
+            self.assert_invalid(repo, "missing diff-first investigation rule verification credibility")
+
 if __name__ == "__main__":
     unittest.main()
