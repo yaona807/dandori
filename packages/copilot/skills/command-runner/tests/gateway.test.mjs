@@ -310,6 +310,31 @@ test('GitHub MCP approval hook allows reads, asks for writes, and denies unknown
     };
     const scope = { owner: 'example', repo: 'project' };
     assert.deepEqual(invoke('github/pull_request_read', { ...scope, pullNumber: 8, method: 'get' }), {});
+    // Copilot runtime names may wrap operation names with arbitrary prefixes and suffixes.
+    for (const name of [
+      'github-mcp-server-search_pull_requests',
+      'mcp__github__search_pull_requests',
+      'copilot-search_pull_requests-v2',
+    ]) {
+      assert.deepEqual(invoke(name, { query: 'is:pr author:@me' }), {}, name);
+      assert.deepEqual(invoke(name, { query: 'is:pr author:@me' }, 'hook.mjs'), {}, name);
+    }
+    for (const [name, args] of [
+      ['github-mcp-server-update_pull_request_branch', { ...scope, pullNumber: 8 }],
+      ['github-mcp-server-update_pull_request', { ...scope, pullNumber: 8, title: 'Updated' }],
+      ['mcp__github__merge_pull_request', { ...scope, pullNumber: 8, expectedHeadSha: 'a'.repeat(40) }],
+      ['prefix-add_issue_comment-v2', { ...scope, issue_number: 8, body: 'Review' }],
+    ]) {
+      assert.equal(invoke(name, args).permissionDecision, 'ask', name);
+      assert.equal(invoke(name, args, 'hook.mjs').permissionDecision, 'ask', name);
+    }
+    for (const name of ['github-mcp-server-update_pull_request_branch', 'github-mcp-server-update_pull_request']) {
+      const invalid = { ...scope, pullNumber: 8 };
+      if (name.includes('update_pull_request_branch')) {
+        delete invalid.pullNumber;
+      }
+      assert.equal(invoke(name, invalid).permissionDecision, 'deny', name);
+    }
     for (const [name, args] of [
       ['github/get_me', {}],
       ['github/search_repositories', { query: 'example' }],
