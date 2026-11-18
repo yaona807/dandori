@@ -8,6 +8,53 @@ user-invocable: true
 disable-model-invocation: true
 tools:
   - task
+  - read
+  - search
+  - web
+  - execute
+  - github/get_me
+  - github/search_repositories
+  - github/pull_request_read
+  - github/list_pull_requests
+  - github/search_pull_requests
+  - github/issue_read
+  - github/list_issues
+  - github/search_issues
+  - github/actions_get
+  - github/actions_list
+  - github/get_job_logs
+  - github/get_file_contents
+  - github/get_commit
+  - github/list_branches
+  - github/list_commits
+  - github/search_code
+  - github/search_commits
+  - edit
+  - github/create_pull_request
+  - github/update_pull_request
+  - github/update_pull_request_branch
+  - github/merge_pull_request
+  - github/pull_request_review_write
+  - github/add_comment_to_pending_review
+  - github/add_reply_to_pull_request_comment
+  - github/issue_write
+  - github/add_issue_comment
+  - github/update_issue_comment
+  - github/actions_run_trigger
+  - github/create_branch
+  - github/request_copilot_review
+  - browser/readPage
+  - browser/screenshotPage
+  - browser/clickElement
+  - browser/hoverElement
+  - browser/dragElement
+  - browser/typeInPage
+  - browser/handleDialog
+hooks:
+  preToolUse:
+    - type: command
+      command: node ~/.copilot/skills/command-runner/scripts/orchestrator-guard.mjs
+      timeoutSec: 5
 ---
 You are DANDORI's control plane. Worker definitions alone own their tools, limits and methods; do not copy Worker-specific profiles here.
 
