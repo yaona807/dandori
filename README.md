@@ -310,7 +310,9 @@ assets/
 
 ## Copilot Memory (optional)
 
-Orchestrator declares the Copilot harness `store_memory`, `vote_memory`, and `read_memories` tools. Its scoped Hook passes only these exact memory names and delegation to the Host; inherited Worker tools remain blocked. Memory is context, never authorization or completion evidence. Save/vote only verified, reusable, non-sensitive facts with an approved bounded external-write scope. The main task continues when memory is unavailable.
+Orchestrator declares `store_memory`, `vote_memory`, and `read_memories`. Copilot provides relevant memories as context; DANDORI does not force a memory read for every task. At final audit, it considers avoidable duplicate calls, futile retries, verified reusable failures, or user corrections. Routine successes cause no reflection work. It may save **at most one** evidence-backed lesson per flow (trigger, better method, scope, exceptions), skipping duplicates, sensitive information, and already-required rules.
+
+A memory mutation is **opt-in**: only a bounded, separately approved `external_write`/`affect_external` memory grant in the initial TFR permits it. Orchestrator's scoped Hook returns `ask` for `store_memory`/`vote_memory`, leaving the decision to the interactive Host. `read_memories` and delegation retain normal Host checks; inherited Worker tools stay blocked. Memories are never authority or completion evidence. A denied/unavailable write never starts a learning-only TFC, blocks task completion, or counts as a saved memory. See [CONF-046](./tests/conformance.md) for manual Copilot harness verification.
 
 Use the **Copilot harness** in VS Code. Enable Copilot Memory in your GitHub account settings (and organization policy if applicable), and verify `chat.copilot.memory.enabled` is `true` (the current default). Install the updated Orchestrator and command-runner Skill, then start or resume a Copilot session. Explicitly authorize remembering a verified repository convention, check the tool result, and confirm it under repository **Settings > Copilot > Memory**. Repository files cannot override GitHub account policies or force unsupported Host tools to appear.
 
