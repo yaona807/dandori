@@ -1,6 +1,6 @@
 # DANDORI（段取り）
 
-VS Code の GitHub Copilot Custom Agents による、承認範囲内の自律作業と独立検証。
+GitHub Copilotハーネス専用のCustom Agentsによる、承認範囲内の自律作業と独立検証。VS Code上のCopilotセッションは対象ですが、旧Localハーネス（`target: vscode`）は非対応です。
 
 **人間が目的・権限を一度承認し、Executorが調査から自己修正まで完遂し、Reviewerが独立検証する。**
 
@@ -30,11 +30,17 @@ Reviewerは必要時にCommandRunnerで登録済みの読み取り系コマン�
 
 重複調査、同一状態での無益な再実行を避け、結果不明の外部副作用は実際の状態を確認してから判断します。
 
+## Copilot Memoryによる振り返り
+
+Orchestratorの`skills`ヘッダーに軽量な`task-reflection`を明示登録し、最終監査でユーザーからの指摘、繰り返す根本原因、再利用可能な発見があるかを簡潔に検討します。通常はメモリ操作不要です。保存は最大1件の実用的な教訓に限定し、ユーザーの事前オプトイン、Contractの外部書き込み許可、Host個別承認を必要とします。Memoryは権限や恒久的なルールの正本にはなりません。
+
+Agentの正本は`.copilot/agents`で、配布先の`packages/copilot/agents`は**同一のCopilot形式をそのままコピー**します。旧Local形式からの変換は廃止しました。
+
 ## インストール・検証
 
 1. [CommandRunner](.copilot/skills/command-runner/references/README_ja.md)をユーザーレベルにインストールしAgent-scoped Hooksを有効化。
 2. packages/copilot/agents と packages/copilot/skills の生成成果物をCopilotの探索場所へコピー。
-3. 旧Researcher.agent.md・Writer.agent.mdを削除し、Orchestrator・Executor・Reviewerだけを認識させる。
+3. 旧Researcher.agent.md・Writer.agent.md・`target: vscode`のLocal専用定義を削除し、`target: github-copilot`の3 Agentだけを認識させる。
 4. Orchestratorの直接Workerツール使用拒否、各GitHub書込みのHost承認、Reviewerのターミナル実行を実機確認する。
 
 ~~~sh

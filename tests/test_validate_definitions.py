@@ -43,8 +43,8 @@ class ValidatorMutationTests(unittest.TestCase):
         temp, repo = self.make_repo()
         with temp:
             path = repo / ".copilot/agents/Orchestrator.agent.md"
-            path.write_text(path.read_text().replace("  - agent\n", "  - agent\n  - edit\n", 1))
-            self.assert_invalid(repo, "only delegation and memory tools")
+            path.write_text(path.read_text().replace("  - task\n", "  - task\n  - unauthorized_tool\n", 1))
+            self.assert_invalid(repo, "temporary worker-tool union must remain complete and guarded")
 
     def test_approval_boundary_marker_is_required(self):
         temp, repo = self.make_repo()
@@ -59,14 +59,14 @@ class ValidatorMutationTests(unittest.TestCase):
                 temp, repo = self.make_repo()
                 with temp:
                     path = repo / ".copilot/agents/Reviewer.agent.md"
-                    path.write_text(path.read_text().replace("agents: []\n", "  - " + tool + "\nagents: []\n", 1))
+                    path.write_text(path.read_text().replace("  - execute\n", "  - execute\n  - " + tool + "\n", 1))
                     self.assert_invalid(repo, "Reviewer: write, browser and delegation tools forbidden")
 
     def test_reviewer_requires_fixed_runner(self):
         temp, repo = self.make_repo()
         with temp:
             path = repo / ".copilot/agents/Reviewer.agent.md"
-            path.write_text(path.read_text().replace("  - execute/runInTerminal\n", "", 1))
+            path.write_text(path.read_text().replace("  - execute\n", "", 1))
             self.assert_invalid(repo, "Reviewer: fixed CommandRunner execution required")
 
     def test_executor_requires_edit_tool(self):
@@ -94,8 +94,8 @@ class ValidatorMutationTests(unittest.TestCase):
         temp, repo = self.make_repo()
         with temp:
             path = repo / ".copilot/agents/Executor.agent.md"
-            path.write_text(path.read_text().replace("  PreToolUse:", "  PreToolUseLost:", 1))
-            self.assert_invalid(repo, "scoped Hook is required")
+            path.write_text(path.read_text().replace("  preToolUse:", "  preToolUseLost:", 1))
+            self.assert_invalid(repo, "scoped Copilot Hook is required")
 
     def test_symlink_is_rejected(self):
         temp, repo = self.make_repo()
@@ -122,7 +122,7 @@ class ValidatorMutationTests(unittest.TestCase):
         with temp:
             path = repo / "packages/copilot/agents/Reviewer.agent.md"
             path.write_text(path.read_text().replace("  - code-review\n", "", 1))
-            self.assert_invalid(repo, "Reviewer bundle must load code-review")
+            self.assert_invalid(repo, "outdated bundle file")
 
     def test_ci_write_permissions_are_rejected(self):
         temp, repo = self.make_repo()
@@ -164,6 +164,69 @@ class ValidatorMutationTests(unittest.TestCase):
                 "command: node ~/.copilot/skills/command-runner/scripts/hook.mjs",
                 "command: node ~/.copilot/skills/command-runner/scripts/noop.mjs", 1))
             self.assert_invalid(repo, "exact scoped Hook command is required")
+
+
+    def test_local_target_is_rejected(self):
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".copilot/agents/Executor.agent.md"
+            path.write_text(path.read_text().replace(
+                "target: github-copilot", "target: vscode", 1))
+            self.assert_invalid(repo, "invalid Copilot-only agent identity or target")
+
+    def test_local_tool_alias_is_rejected(self):
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".copilot/agents/Executor.agent.md"
+            path.write_text(path.read_text().replace(
+                "  - execute\n", "  - execute/runInTerminal\n", 1))
+            self.assert_invalid(repo, "Local-harness tool aliases are forbidden")
+
+    def test_orchestrator_reflection_skill_cannot_be_removed(self):
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".copilot/agents/Orchestrator.agent.md"
+            path.write_text(path.read_text().replace(
+                "skills:\n  - task-reflection\n", "", 1))
+            self.assert_invalid(repo, "must preload task-reflection Skill")
+
+    def test_reflection_skill_must_exist(self):
+        temp, repo = self.make_repo()
+        with temp:
+            (repo / ".copilot/skills/task-reflection/SKILL.md").unlink()
+            self.assert_invalid(repo, "missing required repository file")
+
+    def test_reflection_skill_cannot_grant_tools(self):
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".copilot/skills/task-reflection/SKILL.md"
+            path.write_text(path.read_text().replace(
+                "user-invocable: false\n",
+                "user-invocable: false\nallowed-tools: [store_memory]\n", 1))
+            self.assert_invalid(repo, "elevated tool permissions")
+
+    def test_reflection_skill_bundle_drift(self):
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / "packages/copilot/skills/task-reflection/SKILL.md"
+            path.write_text(path.read_text() + "\nunauthorized\n")
+            self.assert_invalid(repo, "outdated bundle files")
+
+    def test_copilot_agents_are_distributed_without_transformation(self):
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / "packages/copilot/agents/Orchestrator.agent.md"
+            path.write_text(path.read_text().replace(
+                "target: github-copilot", "target: vscode", 1))
+            self.assert_invalid(repo, "outdated bundle file")
+
+    def test_parent_cannot_drop_workaround_tool_union(self):
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".copilot/agents/Orchestrator.agent.md"
+            path.write_text(path.read_text().replace(
+                "  - github/get_file_contents\n", "", 1))
+            self.assert_invalid(repo, "temporary worker-tool union")
 
 if __name__ == "__main__":
     unittest.main()
