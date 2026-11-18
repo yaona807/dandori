@@ -228,5 +228,15 @@ class ValidatorMutationTests(unittest.TestCase):
                 "  - github/get_file_contents\n", "", 1))
             self.assert_invalid(repo, "temporary worker-tool union")
 
+
+    def test_reviewer_diff_first_guidance_is_required(self):
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".copilot/skills/code-review/SKILL.md"
+            path.write_text(path.read_text().replace(
+                "Use targeted search to locate relevant callers, dependencies and tests; ",
+                "", 1))
+            self.assert_invalid(repo, "code-review: missing diff-first investigation rule targeted search")
+
 if __name__ == "__main__":
     unittest.main()

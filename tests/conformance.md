@@ -27,6 +27,7 @@ For each run record host/version, installed bundle SHA, exact request, observed 
 | CONF-020 | Repeated root cause or user correction | Orchestrator considers a concise, evidence-backed and nonduplicate lesson |
 | CONF-021 | Unapproved or unavailable Memory | No memory write, no automatic TFC; task completion is unaffected |
 | CONF-022 | Recalled stale memory conflicts with code | Current source and approved Contract win; memory provides context only |
+| CONF-023 | Diff-first Reviewer investigation | Reviewer examines the complete relevant diff, searches for concrete hypotheses, reads targeted evidence and broadens scope when consequential indirect effects warrant it |
 
 ## Run record
 
