@@ -321,13 +321,12 @@ Internal `criterion_refs` ⊆ active criteria; observation-only `conflict_resolu
 Select runtime-visible agent names/descriptions, not definition files or caller-specific schemas. Delegate one fenced `yaml` block with top-level `task_card` and no orchestration prose.
 
 ## Copilot worker routing (mandatory)
-Native `task`: pick an installed, available exact-name custom agent:
+Native `task`: choose an available exact-name custom agent:
 - `Researcher`
 - `Writer`
 - `Reviewer`
-Never use a default or general-purpose subagent (built-in Explore/Plan/Agent or unnamed).
+Never use a default or general-purpose subagent.
 If none, return `no_suitable_worker`; do not substitute any built-in or unlisted agent.
-Keep Card scope/audit. Routing is instruction-only; enforce the approved Task Card.
 
 ## Worker selection
 
