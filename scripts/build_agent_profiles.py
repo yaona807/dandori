@@ -56,6 +56,8 @@ def transform(source: str, name: str, profile: str = "copilot") -> str:
     front = front.replace(old, new)
     if name in WORKERS:
         front += "skills:\n  - command-runner\n"
+        if name == "Reviewer":
+            front += "  - code-review\n"
     return "---\n" + front + "---\n" + body
 
 def generate(directory: Path) -> None:

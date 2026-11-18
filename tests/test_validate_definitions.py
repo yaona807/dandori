@@ -116,5 +116,54 @@ class ValidatorMutationTests(unittest.TestCase):
             path.write_text(path.read_text().replace("python scripts/validate_definitions.py", "echo skipped", 1))
             self.assert_invalid(repo, "CI workflow missing python scripts/validate_definitions.py")
 
+
+    def test_reviewer_declares_code_review_skill(self):
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / "packages/copilot/agents/Reviewer.agent.md"
+            path.write_text(path.read_text().replace("  - code-review\n", "", 1))
+            self.assert_invalid(repo, "Reviewer bundle must load code-review")
+
+    def test_ci_write_permissions_are_rejected(self):
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".github/workflows/validate.yml"
+            path.write_text(path.read_text().replace("contents: read", "contents: write", 1))
+            self.assert_invalid(repo, "CI workflow permissions")
+
+    def test_ci_unpinned_action_is_rejected(self):
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".github/workflows/validate.yml"
+            text = path.read_text()
+            import re
+            path.write_text(re.sub(r"actions/checkout@[a-f0-9]{40}", "actions/checkout@main", text, count=1))
+            self.assert_invalid(repo, "pinned to a full commit SHA")
+
+    def test_ci_target_event_is_rejected(self):
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".github/workflows/validate.yml"
+            path.write_text(path.read_text().replace("  pull_request:", "  pull_request_target:", 1))
+            self.assert_invalid(repo, "CI workflow triggers")
+
+    def test_ci_shell_injection_is_rejected(self):
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".github/workflows/validate.yml"
+            path.write_text(path.read_text().replace(
+                "run: python scripts/validate_definitions.py",
+                "run: python scripts/validate_definitions.py; echo bypass", 1))
+            self.assert_invalid(repo, "required validation commands")
+
+    def test_replaced_hook_command_is_rejected(self):
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".copilot/agents/Executor.agent.md"
+            path.write_text(path.read_text().replace(
+                "command: node ~/.copilot/skills/command-runner/scripts/hook.mjs",
+                "command: node ~/.copilot/skills/command-runner/scripts/noop.mjs", 1))
+            self.assert_invalid(repo, "exact scoped Hook command is required")
+
 if __name__ == "__main__":
     unittest.main()

@@ -39,6 +39,12 @@ REQUIRED_TEST_METHODS = {
         "test_symlink_is_rejected",
         "test_missing_readme_is_rejected",
         "test_ci_validation_required",
+        "test_reviewer_declares_code_review_skill",
+        "test_ci_write_permissions_are_rejected",
+        "test_ci_unpinned_action_is_rejected",
+        "test_ci_target_event_is_rejected",
+        "test_ci_shell_injection_is_rejected",
+        "test_replaced_hook_command_is_rejected",
     ),
     "ReleaseArchiveValidationTests": (
         "test_release_archive_is_valid",
