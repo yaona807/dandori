@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Agent-scoped PreToolUse: a temporarily over-exposed Orchestrator may only
-// delegate, never execute the tools inherited for Copilot subagent visibility.
+// delegate or manage approved Copilot Memory; inherited Worker tools stay blocked.
 import process from 'node:process';
 
 let input = '';
@@ -15,11 +15,12 @@ try {
   // Malformed input is denied rather than treated as normal permission.
 }
 
-if (name === 'task' || name === 'agent') {
+const memoryTools = new Set(['store_memory', 'vote_memory', 'read_memories']);
+if (name === 'task' || name === 'agent' || memoryTools.has(name)) {
   // Leave the host's ordinary permission checks in place.
   process.stdout.write('{}\n');
 } else {
-  const reason = 'Orchestrator may only delegate through task/agent. Direct worker-tool execution is prohibited.';
+  const reason = 'Orchestrator may only delegate through task/agent or use exact Copilot Memory tools. Direct worker-tool execution is prohibited.';
   // Copilot CLI uses top-level decision fields; VS Code compatibility hooks
   // use hookSpecificOutput. Emit both to support either hook payload format.
   process.stdout.write(JSON.stringify({
