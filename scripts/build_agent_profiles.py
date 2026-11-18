@@ -112,8 +112,8 @@ def transform(source: str, name: str, profile: str) -> str:
     if name == "Orchestrator":
         # Temporary Copilot harness workaround: expose the union of worker tools
         # to the parent for subagent visibility. The agent-scoped hook denies
-        # every direct tool execution except named-worker delegation.
-        exposed = list(dict.fromkeys(("task",) + tuple(
+        # inherited Worker tools but allows exact root Copilot Memory tools.
+        exposed = list(dict.fromkeys(("task", "store_memory", "vote_memory", "read_memories") + tuple(
             tool for worker in WORKERS for tool in tools[worker]
         )))
         front = re.sub(
