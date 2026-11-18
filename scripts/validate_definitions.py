@@ -33,6 +33,7 @@ REQUIRED_REPOSITORY_FILES = frozenset(
         "README_ja.md",
         ".github/workflows/validate.yml",
         ".copilot/skills/command-runner/scripts/hook.mjs",
+        ".copilot/skills/command-runner/scripts/orchestrator-guard.mjs",
         ".copilot/skills/command-runner/scripts/cli.mjs",
         ".copilot/skills/command-runner/scripts/script-guard.mjs",
         ".copilot/skills/command-runner/scripts/builtins.mjs",
@@ -119,7 +120,7 @@ REQUIRED_MUTATION_TEST_METHODS = frozenset(
     {
         "test_repository_is_valid",
         "test_adaptive_task_decomposition_policy_is_required",
-        "test_orchestrator_rejects_edit_tool",
+        "test_orchestrator_rejects_unlisted_tool",
         "test_orchestrator_command_discovery_and_status_grants_are_required",
         "test_worker_rejects_agent_tool",
         "test_missing_bundled_worker_definition_is_rejected",
@@ -348,6 +349,13 @@ WORKER_DESCRIPTION_ROUTING_MARKERS: dict[str, tuple[str, ...]] = {
     ),
 }
 
+ORCHESTRATOR_GUARD_HOOKS = {
+    "PreToolUse": [{
+        "type": "command",
+        "command": "node ~/.copilot/skills/command-runner/scripts/orchestrator-guard.mjs",
+        "timeout": 5,
+    }]
+}
 SHARED_RUNNER_WORKERS = frozenset({"Researcher", "Writer"})
 SHARED_RUNNER_HOOKS = {
     "PreToolUse": [{"type": "command", "command": "node ~/.copilot/skills/command-runner/scripts/hook.mjs", "timeout": 30}]
@@ -1662,7 +1670,7 @@ def validate_repository(root: Path) -> ValidationResult:
             result.errors.append(f"{relative(path, root)}: invalid frontmatter: {exc}")
             continue
 
-        allowed_forbidden_keys = {"hooks"} if path.stem.removesuffix(".agent") in SHARED_RUNNER_WORKERS else set()
+        allowed_forbidden_keys = {"hooks"} if path.stem.removesuffix(".agent") in SHARED_RUNNER_WORKERS | {"Orchestrator"} else set()
         forbidden_keys = sorted(
             (set(meta) & FORBIDDEN_AGENT_FRONTMATTER_KEYS) - allowed_forbidden_keys
         )
@@ -1677,7 +1685,7 @@ def validate_repository(root: Path) -> ValidationResult:
             continue
         name = name.strip()
         if name in BUNDLED_AGENT_NAMES:
-            expected_keys = BUNDLED_AGENT_FRONTMATTER_KEYS | ({"hooks"} if name in SHARED_RUNNER_WORKERS else set())
+            expected_keys = BUNDLED_AGENT_FRONTMATTER_KEYS | ({"hooks"} if name in SHARED_RUNNER_WORKERS | {"Orchestrator"} else set())
             missing_keys = sorted(expected_keys - set(meta))
             unexpected_keys = sorted(set(meta) - expected_keys - FORBIDDEN_AGENT_FRONTMATTER_KEYS)
             if missing_keys:
@@ -1696,6 +1704,10 @@ def validate_repository(root: Path) -> ValidationResult:
         if name in SHARED_RUNNER_WORKERS and meta.get("hooks") != SHARED_RUNNER_HOOKS:
             result.errors.append(
                 f"{relative(path, root)}: shared runner hooks must match the fixed runner hook"
+            )
+        if name == "Orchestrator" and meta.get("hooks") != ORCHESTRATOR_GUARD_HOOKS:
+            result.errors.append(
+                f"{relative(path, root)}: Orchestrator must use the delegation-only guard hook"
             )
         if name in definitions:
             result.errors.append(f"duplicate agent name {name!r}: {definitions[name].path.name}, {path.name}")
@@ -1766,9 +1778,23 @@ def validate_repository(root: Path) -> ValidationResult:
         result.errors.append(
             f"{relative(orchestrator.path, root)}: Orchestrator must set disable-model-invocation: true"
         )
-    if orchestrator_tools != ["agent", "task"]:
+    # Temporary Copilot harness workaround: the parent exposes the exact union
+    # of Worker tool declarations, but the scoped Hook must prohibit direct use.
+    expected_orchestrator_tools = ["agent", "task"]
+    for worker_name in ("Researcher", "Writer", "Reviewer"):
+        worker = definitions.get(worker_name)
+        if worker is None:
+            continue
+        try:
+            declared_tools = normalize_tools(worker.meta.get("tools"))
+        except DefinitionError:
+            continue
+        for declared_tool in declared_tools:
+            if declared_tool not in expected_orchestrator_tools:
+                expected_orchestrator_tools.append(declared_tool)
+    if orchestrator_tools != expected_orchestrator_tools:
         result.errors.append(
-            f"{relative(orchestrator.path, root)}: Orchestrator tools must be exactly ['agent', 'task']"
+            f"{relative(orchestrator.path, root)}: Orchestrator temporary tools must exactly match Worker union"
         )
 
     for marker in ORCHESTRATOR_REQUIRED_MARKERS:

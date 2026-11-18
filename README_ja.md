@@ -332,7 +332,7 @@ Orchestrator は、実行方法の曖昧さと権限の曖昧さを区別し、�
 
 ## GitHub MCP と実行直前の人間承認
 
-GitHubの読み取りはResearcherとReviewerに統合し、Writerには限定されたPR・Issue・Actions書き込みツールを公開します。Orchestratorは従来どおりTask Cardを委譲するだけです。ツール公開は操作許可を意味しません。
+GitHubの読み取りはResearcherとReviewerに統合し、Writerには限定されたPR・Issue・Actions書き込みツールを公開します。Orchestratorの役割は従来どおりTask Cardの委譲のみです。暫定的にCopilot harnessの委譲先ツール公開不具合を回避するため、OrchestratorにもWorkerの全ツールを列挙しますが、Agent-scoped `preToolUse` Hookは`task`以外の直接呼び出しを拒否します。ツール公開は操作許可を意味しません。Hookが無効またはタイムアウトの場合、この制限は強制できません。`chat.useCustomAgentHooks`を有効にしてAgent Debug Logsで直接呼び出しの拒否と委譲先の動作を確認してください。不具合解消後に全列挙を撤去します。
 
 **GitHub MCPの書き込みは毎回人間が承認する運用です。** Writerの既存`preToolUse` Hookが書き込み時に`ask`を返し、未知のGitHubツール名・形式は`deny`にします。さらに、配布物の`skills/command-runner/assets/github-mcp-hooks.example.json`を`~/.copilot/hooks/dandori-github-mcp.json`へ設置し、共通Hookを有効化してください。`chat.useCustomAgentHooks`も有効化し、Manual permissionsを選択し、GitHub書き込みツールごとに自動承認を無効化します。保存済みツール承認も解除します。
 
@@ -492,7 +492,7 @@ Validatorは、同梱定義をclosed release inventoryとして扱います。
 Agent定義では、次の制約を検査します。
 
 - Agentディレクトリでは`*.agent.md`以外を拒否する
-- Tool境界を迂回し得る `hooks`、`handoffs`、`mcp-servers` を禁止する。ただしResearcherとWriterの固定Runner用 `hooks` だけは許可する
+- Tool境界を迂回し得る `hooks`、`handoffs`、`mcp-servers` を禁止する。ただしResearcher・Writerの固定Runner用 `hooks` とOrchestratorの委譲専用ガード `hooks` だけは許可する
 - 同梱Agentのfrontmatter、Tool、ファイル名、必須Section、安全Policy anchorを固定する
 - 十分な圧縮余地を持つ本文回帰下限を固定する
 - Orchestratorの中核Invariantが、意図したSection内に残っていることを検査する

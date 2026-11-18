@@ -53,7 +53,7 @@ REQUIRED_TEST_METHODS = {
         "test_no_progress_triggers_replan_not_fixed_stop",
         "test_orchestrator_command_discovery_and_status_grants_are_required",
         "test_orchestrator_invariant_must_remain_in_its_required_section",
-        "test_orchestrator_rejects_edit_tool",
+        "test_orchestrator_rejects_unlisted_tool",
         "test_parallel_conflict_policy_is_required",
         "test_parallel_pending_invocations_are_required",
         "test_parallel_timeout_containment_is_required",
