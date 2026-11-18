@@ -1221,3 +1221,39 @@ test('hook permits only bounded execution and management interface shapes', asyn
     }
   });
 });
+
+const ORCHESTRATOR_GUARD_SOURCE = path.join(SCRIPT_DIRECTORY, 'orchestrator-guard.mjs');
+
+test('Orchestrator guard permits delegation, denies direct tools and malformed input', () => {
+  const cases = [
+    [{ toolName: 'task' }, true],
+    [{ toolName: 'agent' }, true],
+    [{ hook_event_name: 'PreToolUse', tool_name: 'Agent' }, true],
+    [{ toolName: 'bash' }, false],
+    [{ toolName: 'github/merge_pull_request' }, false],
+    [{ hook_event_name: 'PreToolUse', tool_name: 'Read' }, false],
+    [{ toolName: 'tool_search_tool' }, false],
+    [{ toolName: '' }, false],
+    [{}, false],
+  ];
+  for (const [event, delegated] of cases) {
+    const result = spawnSync(process.execPath, [ORCHESTRATOR_GUARD_SOURCE], {
+      encoding: 'utf8',
+      input: JSON.stringify(event),
+      timeout: 5000,
+    });
+    assert.equal(result.status, 0, result.stderr);
+    const output = JSON.parse(result.stdout.trim());
+    if (delegated) {
+      assert.deepEqual(output, {}, JSON.stringify(event));
+    } else {
+      assert.equal(output.permissionDecision, 'deny', JSON.stringify(event));
+      assert.equal(output.hookSpecificOutput.permissionDecision, 'deny', JSON.stringify(event));
+    }
+  }
+  const malformed = spawnSync(process.execPath, [ORCHESTRATOR_GUARD_SOURCE], {
+    encoding: 'utf8', input: '{broken', timeout: 5000,
+  });
+  assert.equal(malformed.status, 0, malformed.stderr);
+  assert.equal(JSON.parse(malformed.stdout).permissionDecision, 'deny');
+});
