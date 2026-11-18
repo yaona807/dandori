@@ -50,7 +50,6 @@ def transform(source: str, name: str, profile: str) -> str:
         front = front.replace("disable-model-invocation: true", "disable-model-invocation: false")
     if name == "Orchestrator":
         # Copilot invokes a named custom worker via its native task tool.
-        front = re.sub(r"(?m)^tools:\n(?:  - [^\n]+\n)+", "tools:\n  - task\n", front)
         body = replace_exactly_once(
             body,
             "Use frontmatter-listed agents only.",
@@ -110,6 +109,31 @@ def transform(source: str, name: str, profile: str) -> str:
         "Writer": ("read", "edit", "execute") + github_read + github_write + browser_tools,
         "Reviewer": ("read", "search") + github_read,
     }
+    if name == "Orchestrator":
+        # Temporary Copilot harness workaround: expose the union of worker tools
+        # to the parent for subagent visibility. The agent-scoped hook denies
+        # every direct tool execution except named-worker delegation.
+        exposed = list(dict.fromkeys(("task",) + tuple(
+            tool for worker in WORKERS for tool in tools[worker]
+        )))
+        front = re.sub(
+            r"(?m)^tools:\n(?:  - [^\n]+\n)+",
+            "tools:\n" + "".join(f"  - {tool}\n" for tool in exposed),
+            front,
+        )
+        original_hook = (
+            "hooks:\n  PreToolUse:\n    - type: command\n"
+            "      command: node ~/.copilot/skills/command-runner/scripts/orchestrator-guard.mjs\n"
+            "      timeout: 5\n"
+        )
+        copilot_hook = (
+            "hooks:\n  preToolUse:\n    - type: command\n"
+            "      command: node ~/.copilot/skills/command-runner/scripts/orchestrator-guard.mjs\n"
+            "      timeoutSec: 5\n"
+        )
+        if original_hook not in front:
+            raise ValueError("Orchestrator: unrecognized delegation guard configuration")
+        front = front.replace(original_hook, copilot_hook)
     if name in tools:
         front = re.sub(
             r"(?m)^tools:\n(?:  - [^\n]+\n)+",
