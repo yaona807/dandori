@@ -208,6 +208,12 @@ class ValidatorMutationTests(unittest.TestCase):
             }]}, meta["hooks"],
         )
         self.assertLessEqual(len(body), validator.MAX_AGENT_BODY_CHARS)
+        for marker in ("At final audit, consider avoidable duplicate calls",
+                       "At most one evidenced lesson per flow",
+                       "Offer a bounded memory `external_write`/`affect_external` TFR grant only on user opt-in.",
+                       "No extra Worker or mandatory recall.",
+                       "No TFC solely to learn"):
+            self.assertIn(marker, body)
         for name in ("Researcher", "Writer",
                      "Reviewer"):
             self.assertIn("- " + chr(96) + name + chr(96), body)

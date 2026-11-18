@@ -1224,15 +1224,15 @@ test('hook permits only bounded execution and management interface shapes', asyn
 
 const ORCHESTRATOR_GUARD_SOURCE = path.join(SCRIPT_DIRECTORY, 'orchestrator-guard.mjs');
 
-test('Orchestrator guard permits delegation and memory, denies worker tools and malformed input', () => {
+test('Orchestrator guard permits delegation and memory reads, asks for writes, and denies worker tools', () => {
   const cases = [
     [{ toolName: 'task' }, true],
     [{ toolName: 'agent' }, true],
     [{ hook_event_name: 'PreToolUse', tool_name: 'Agent' }, true],
-    [{ toolName: 'store_memory' }, true],
-    [{ toolName: 'vote_memory' }, true],
+    [{ toolName: 'store_memory' }, 'ask'],
+    [{ toolName: 'vote_memory' }, 'ask'],
     [{ hook_event_name: 'PreToolUse', tool_name: 'read_memories' }, true],
-    [{ toolName: 'STORE_MEMORY' }, true],
+    [{ toolName: 'STORE_MEMORY' }, 'ask'],
     [{ toolName: 'github/store_memory' }, false],
     [{ toolName: 'store_memory/execute' }, false],
     [{ toolName: 'store_memory_unverified' }, false],
@@ -1251,8 +1251,11 @@ test('Orchestrator guard permits delegation and memory, denies worker tools and 
     });
     assert.equal(result.status, 0, result.stderr);
     const output = JSON.parse(result.stdout.trim());
-    if (delegated) {
+    if (delegated === true) {
       assert.deepEqual(output, {}, JSON.stringify(event));
+    } else if (delegated === 'ask') {
+      assert.equal(output.permissionDecision, 'ask', JSON.stringify(event));
+      assert.equal(output.hookSpecificOutput.permissionDecision, 'ask', JSON.stringify(event));
     } else {
       assert.equal(output.permissionDecision, 'deny', JSON.stringify(event));
       assert.equal(output.hookSpecificOutput.permissionDecision, 'deny', JSON.stringify(event));

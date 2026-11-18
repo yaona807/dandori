@@ -312,7 +312,9 @@ assets/
 
 ## Copilot Memory（任意）
 
-OrchestratorにCopilot harnessの`store_memory`、`vote_memory`、`read_memories`を定義します。司令塔専用Hookはこれらの完全一致するメモリツールと委譲だけをHost側の通常判定へ渡し、暫定公開されたWorkerツールの直接実行は引き続き拒否します。記憶は参考情報であり、認可・完了根拠になりません。保存・投票は明示的に承認された外部書き込み範囲内で、検証済みの再利用可能な非機微情報に限定します。メモリが利用できない場合も本来の作業を継続します。
+OrchestratorにCopilot harnessの`store_memory`、`vote_memory`、`read_memories`を定義します。Copilotが提供する関連メモリを参考にし、タスクごとの強制読み込みは行いません。通常の作業成功時は振り返りを省略し、重複呼び出し・無益な再試行・根拠のある再発可能な失敗・ユーザーの指摘があった場合だけ、完了監査と同時に改善策を検討します。保存候補は**1フロー最大1件**で、適用条件、改善方法、例外を含む根拠のある教訓に限ります。既存ルールと重複する内容、推測、機微情報は保存しません。
+
+メモリ保存は**オプトイン**です。初回TFRで独立した対象範囲付き`external_write`/`affect_external`権限を承認した場合だけ保存・評価変更を試みます。司令塔専用Hookは`store_memory`と`vote_memory`で`ask`を返し、対話的Hostの承認を要求します。`read_memories`と委譲は通常のHost判定を維持し、暫定公開されたWorkerツールの直接実行は禁止です。メモリは認可や完了の証拠ではなく、保存の拒否・機能不足でTFCを増やしたり、元の作業完了を妨げたりしません。実機確認は[CONF-046](./tests/conformance.md)を使用します。
 
 VS Codeの**Copilot harness**を使用し、GitHub個人設定（必要なら組織ポリシーも）でCopilot Memoryを有効にしてください。`chat.copilot.memory.enabled`が`true`であることも確認します（現行の既定値）。更新したOrchestratorとcommand-runner SkillをインストールしてCopilotセッションを開始・再開し、検証済みのリポジトリ規約を明示的に許可して記憶させ、ツール結果とリポジトリの**Settings > Copilot > Memory**で確認します。リポジトリ側からGitHubアカウント設定やHost側の未公開ツールを強制的に有効化することはできません。
 

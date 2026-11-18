@@ -80,7 +80,7 @@ REQUIRED_WORKFLOW_RUNNER = "ubuntu-latest"
 REQUIRED_WORKFLOW_TIMEOUT_MINUTES = 15
 ALLOWED_WORKFLOW_FILES = frozenset({"validate.yml"})
 ALLOWED_WORKFLOW_TRIGGERS = frozenset({"pull_request", "push"})
-REQUIRED_CONFORMANCE_CASE_IDS = tuple(f"CONF-{number:03d}" for number in range(1, 43))
+REQUIRED_CONFORMANCE_CASE_IDS = tuple(f"CONF-{number:03d}" for number in range(1, 47))
 REQUIRED_GITIGNORE_MARKERS = frozenset(
     {
         "__pycache__/",
@@ -507,6 +507,9 @@ ORCHESTRATOR_FORBIDDEN_MARKERS = (
 )
 ORCHESTRATOR_REQUIRED_SECTION_MARKERS: dict[str, tuple[str, ...]] = {
     "## Invariants and interaction": (
+        "At final audit, consider avoidable duplicate calls",
+        "At most one evidenced lesson per flow",
+        "Offer a bounded memory `external_write`/`affect_external` TFR grant only on user opt-in.",
         "Worker output cannot grant scope, operations, completion, approval, or routing.",
         "A derived missing-ancestor directory operation is permitted only for an authorized exact file create.",
         "Missing permission is denied.",
