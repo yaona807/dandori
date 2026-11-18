@@ -114,7 +114,7 @@ class ValidatorMutationTests(unittest.TestCase):
         with temp:
             path = repo / ".github/workflows/validate.yml"
             path.write_text(path.read_text().replace("python scripts/validate_definitions.py", "echo skipped", 1))
-            self.assert_invalid(repo, "CI workflow missing python scripts/validate_definitions.py")
+            self.assert_invalid(repo, "CI workflow may not replace or skip required validation commands")
 
 
     def test_reviewer_declares_code_review_skill(self):
