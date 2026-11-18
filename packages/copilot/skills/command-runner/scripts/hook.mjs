@@ -60,6 +60,8 @@ const PROTECTED_SUFFIXES = new Set([
   '.copilot/agents/CommandRunner.agent.md', // protect legacy installed control definition
   '.copilot/agents/Researcher.agent.md',
   '.copilot/agents/Writer.agent.md',
+  '.copilot/agents/Executor.agent.md',
+  '.copilot/agents/Reviewer.agent.md',
   '.copilot/skills/command-runner/SKILL.md',
   '.copilot/skills/command-runner/scripts/hook.mjs',
   '.copilot/skills/command-runner/scripts/runner.mjs',

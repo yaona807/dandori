@@ -1,183 +1,78 @@
 #!/usr/bin/env python3
-"""Build and verify the committed GitHub Copilot agent bundle."""
+"""Build and verify the three Copilot agent profiles."""
 from __future__ import annotations
 import argparse
 from pathlib import Path
+import re
 import shutil
 import tempfile
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-AGENTS = ROOT / ".copilot" / "agents"
-COPILOT_WORKER_ROUTING = (
-    "## Copilot worker routing (mandatory)\n"
-    "Native `task`: choose an available exact-name custom agent:\n"
-    "- `Researcher`\n"
-    "- `Writer`\n"
-    "- `Reviewer`\n"
-    "Never use a default or general-purpose subagent.\n"
-    "If none, return `no_suitable_worker`; do not substitute any built-in or unlisted agent.\n\n"
-)
-
-def replace_exactly_once(text: str, old: str, new: str, label: str) -> str:
-    """Reject missing or ambiguous Copilot-specific body transformations."""
-    if text.count(old) != 1:
-        raise ValueError(f"{label}: expected exactly one replacement anchor {old!r}")
-    return text.replace(old, new, 1)
-
-
-WORKERS = ("Researcher", "Writer", "Reviewer")
+AGENTS = ROOT / ".copilot/agents"
+WORKERS = ("Executor", "Reviewer")
 NAMES = ("Orchestrator", *WORKERS)
-def transform(source: str, name: str, profile: str) -> str:
-    if not source.startswith("---\n"):
-        raise ValueError(f"{name}: missing frontmatter")
+GITHUB_READ = "get_me search_repositories pull_request_read list_pull_requests search_pull_requests issue_read list_issues search_issues actions_get actions_list get_job_logs get_file_contents get_commit list_branches list_commits search_code search_commits".split()
+GITHUB_WRITE = "create_pull_request update_pull_request update_pull_request_branch merge_pull_request pull_request_review_write add_comment_to_pending_review add_reply_to_pull_request_comment issue_write add_issue_comment update_issue_comment actions_run_trigger create_branch request_copilot_review".split()
+BROWSER = "readPage screenshotPage clickElement hoverElement dragElement typeInPage handleDialog".split()
+READ = tuple("github/" + name for name in GITHUB_READ)
+WRITE = tuple("github/" + name for name in GITHUB_WRITE)
+BROWSER_TOOLS = tuple("browser/" + name for name in BROWSER)
+TOOLS = {
+    "Executor": ("read", "search", "web", "edit", "execute") + READ + WRITE + BROWSER_TOOLS,
+    "Reviewer": ("read", "search", "execute") + READ,
+}
+
+def transform(source: str, name: str, profile: str = "copilot") -> str:
+    if profile != "copilot" or not source.startswith("---\n"):
+        raise ValueError("invalid profile")
     _, front, body = source.split("---\n", 2)
-    meta = yaml.safe_load(front)
-    if meta.get("name") != name:
-        raise ValueError(f"{name}: name mismatch")
-    if profile != "copilot":
-        raise ValueError(profile)
-    # Retain body and frontmatter formatting while producing the Copilot target.
-    import re
-    # Copilot expects model labels without the source-template " (copilot)" suffix.
-    # Keep the model and reasoning-effort fields themselves intact.
+    if yaml.safe_load(front).get("name") != name or name not in NAMES:
+        raise ValueError("invalid agent identity")
     front = re.sub(r"(?m)^(model: .+?) \(copilot\)$", r"\1", front)
     front = re.sub(r"(?m)^agents:.*\n", "", front)
     front = front.replace("target: vscode", "target: github-copilot")
     if name in WORKERS:
         front = front.replace("disable-model-invocation: true", "disable-model-invocation: false")
-    if name == "Orchestrator":
-        # Copilot invokes a named custom worker via its native task tool.
-        body = replace_exactly_once(
-            body,
-            "Use frontmatter-listed agents only.",
-            "Use only the explicitly named custom agents in the Copilot worker routing section.",
-            "Orchestrator worker routing policy",
-        )
-        body = replace_exactly_once(
-            body, "## Worker selection", COPILOT_WORKER_ROUTING + "## Worker selection",
-            "Orchestrator worker-selection section",
-        )
-    # Use documented Copilot aliases rather than Local-qualified tool IDs.
-    github_read = (
-        "github/get_me",
-        "github/search_repositories",
-        "github/pull_request_read",
-        "github/list_pull_requests",
-        "github/search_pull_requests",
-        "github/issue_read",
-        "github/list_issues",
-        "github/search_issues",
-        "github/actions_get",
-        "github/actions_list",
-        "github/get_job_logs",
-        "github/get_file_contents",
-        "github/get_commit",
-        "github/list_branches",
-        "github/list_commits",
-        "github/search_code",
-        "github/search_commits",
+    exposed = (
+        list(dict.fromkeys(("task", "store_memory", "vote_memory", "read_memories") + tuple(
+            tool for worker in WORKERS for tool in TOOLS[worker]
+        ))) if name == "Orchestrator" else TOOLS[name]
     )
-    github_write = (
-        "github/create_pull_request",
-        "github/update_pull_request",
-        "github/update_pull_request_branch",
-        "github/merge_pull_request",
-        "github/pull_request_review_write",
-        "github/add_comment_to_pending_review",
-        "github/add_reply_to_pull_request_comment",
-        "github/issue_write",
-        "github/add_issue_comment",
-        "github/update_issue_comment",
-        "github/actions_run_trigger",
-        "github/create_branch",
-        "github/request_copilot_review",
-    )
-    browser_tools = (
-        "browser/readPage",
-        "browser/screenshotPage",
-        "browser/clickElement",
-        "browser/hoverElement",
-        "browser/dragElement",
-        "browser/typeInPage",
-        "browser/handleDialog",
-    )
-    tools = {
-        "Researcher": ("read", "search", "web", "execute") + github_read,
-        "Writer": ("read", "edit", "execute") + github_read + github_write + browser_tools,
-        "Reviewer": ("read", "search") + github_read,
-    }
-    if name == "Orchestrator":
-        # Temporary Copilot harness workaround: expose the union of worker tools
-        # to the parent for subagent visibility. The agent-scoped hook denies
-        # inherited Worker tools but allows exact root Copilot Memory tools.
-        exposed = list(dict.fromkeys(("task", "store_memory", "vote_memory", "read_memories") + tuple(
-            tool for worker in WORKERS for tool in tools[worker]
-        )))
-        front = re.sub(
-            r"(?m)^tools:\n(?:  - [^\n]+\n)+",
-            "tools:\n" + "".join(f"  - {tool}\n" for tool in exposed),
-            front,
-        )
-        original_hook = (
-            "hooks:\n  PreToolUse:\n    - type: command\n"
-            "      command: node ~/.copilot/skills/command-runner/scripts/orchestrator-guard.mjs\n"
-            "      timeout: 5\n"
-        )
-        copilot_hook = (
-            "hooks:\n  preToolUse:\n    - type: command\n"
-            "      command: node ~/.copilot/skills/command-runner/scripts/orchestrator-guard.mjs\n"
-            "      timeoutSec: 5\n"
-        )
-        if original_hook not in front:
-            raise ValueError("Orchestrator: unrecognized delegation guard configuration")
-        front = front.replace(original_hook, copilot_hook)
-    if name in tools:
-        front = re.sub(
-            r"(?m)^tools:\n(?:  - [^\n]+\n)+",
-            "tools:\n" + "".join(f"  - {tool}\n" for tool in tools[name]),
-            front,
-        )
-    if name in {"Researcher", "Writer"}:
-        # Copilot supports declarative Skill loading.
+    front, count = re.subn(r"(?m)^tools:\n(?:  - [^\n]+\n)+",
+                           "tools:\n" + "".join("  - " + tool + "\n" for tool in exposed), front)
+    if count != 1:
+        raise ValueError("missing tools definition")
+    hook_name = "orchestrator-guard" if name == "Orchestrator" else "hook"
+    timeout = 5 if name == "Orchestrator" else 30
+    old = (f"hooks:\n  PreToolUse:\n    - type: command\n"
+           f"      command: node ~/.copilot/skills/command-runner/scripts/{hook_name}.mjs\n"
+           f"      timeout: {timeout}\n")
+    new = (f"hooks:\n  preToolUse:\n    - type: command\n"
+           f"      command: node ~/.copilot/skills/command-runner/scripts/{hook_name}.mjs\n"
+           f"      timeoutSec: {timeout}\n")
+    if front.count(old) != 1:
+        raise ValueError("missing scoped Hook")
+    front = front.replace(old, new)
+    if name in WORKERS:
         front += "skills:\n  - command-runner\n"
-    if name in {"Researcher", "Writer"}:
-        original_hook = (
-            "hooks:\n  PreToolUse:\n    - type: command\n"
-            "      command: node ~/.copilot/skills/command-runner/scripts/hook.mjs\n"
-            "      timeout: 30\n"
-        )
-        copilot_hook = (
-            "hooks:\n  preToolUse:\n    - type: command\n"
-            "      command: node ~/.copilot/skills/command-runner/scripts/hook.mjs\n"
-            "      timeoutSec: 30\n"
-        )
-        if original_hook not in front:
-            raise ValueError(f"{name}: unrecognized hook configuration")
-        front = front.replace(original_hook, copilot_hook)
     return "---\n" + front + "---\n" + body
 
-def generate(destination: Path) -> None:
-    target = destination / "copilot"
+def generate(directory: Path) -> None:
+    bundle = directory / "copilot"
     for name in NAMES:
-        original = (AGENTS / f"{name}.agent.md").read_text(encoding="utf-8")
-        output = target / "agents" / f"{name}.agent.md"
-        output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_text(transform(original, name, "copilot"), encoding="utf-8")
-    source = ROOT / ".copilot" / "skills"
-    if source.exists():
-        shutil.copytree(source, target / "skills", dirs_exist_ok=True)
+        source = (AGENTS / (name + ".agent.md")).read_text(encoding="utf-8")
+        target = bundle / "agents" / (name + ".agent.md")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(transform(source, name), encoding="utf-8")
+    shutil.copytree(ROOT / ".copilot/skills", bundle / "skills", dirs_exist_ok=True)
 
-def compare(expected: Path, actual: Path) -> list[str]:
-    errors = []
-    expected_files = {p.relative_to(expected) for p in expected.rglob("*") if p.is_file()}
-    actual_files = {p.relative_to(actual) for p in actual.rglob("*") if p.is_file()}
-    for path in sorted(expected_files ^ actual_files):
-        errors.append(f"missing or unexpected bundle file: {path}")
-    for path in sorted(expected_files & actual_files):
-        if (expected / path).read_bytes() != (actual / path).read_bytes():
-            errors.append(f"outdated bundle file: {path}")
-    return errors
+def compare(expected: Path, current: Path) -> list[str]:
+    a = {p.relative_to(expected): p for p in expected.rglob("*") if p.is_file()}
+    b = {p.relative_to(current): p for p in current.rglob("*") if p.is_file()}
+    return ([f"missing or unexpected bundle file: {p}" for p in sorted(a.keys() ^ b.keys())]
+            + [f"outdated bundle file: {p}" for p in sorted(a.keys() & b.keys())
+               if a[p].read_bytes() != b[p].read_bytes()])
 
 def main() -> int:
     parser = argparse.ArgumentParser()
@@ -186,18 +81,16 @@ def main() -> int:
     group.add_argument("--check", action="store_true")
     args = parser.parse_args()
     if args.write:
-        target = ROOT / "packages"
-        if target.exists():
-            shutil.rmtree(target)
-        generate(target)
+        shutil.rmtree(ROOT / "packages", ignore_errors=True)
+        generate(ROOT / "packages")
         return 0
-    with tempfile.TemporaryDirectory() as directory:
-        expected = Path(directory)
+    with tempfile.TemporaryDirectory() as tmp:
+        expected = Path(tmp)
         generate(expected)
-        errors = compare(expected, ROOT / "packages")
-        for error in errors:
-            print(error)
-        return 1 if errors else 0
+        issues = compare(expected, ROOT / "packages")
+        for issue in issues:
+            print(issue)
+        return bool(issues)
 
 if __name__ == "__main__":
     raise SystemExit(main())

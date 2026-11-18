@@ -28,7 +28,7 @@ const CLI_SOURCE = path.join(SCRIPT_DIRECTORY, 'cli.mjs');
 const INTERFACE_SOURCE = path.join(SCRIPT_DIRECTORY, 'gateway.mjs');
 const HOOK_SOURCE = path.join(SCRIPT_DIRECTORY, 'hook.mjs');
 const GITHUB_APPROVAL_SOURCE = path.join(SCRIPT_DIRECTORY, 'github-mcp-approval.mjs');
-const AGENT_SOURCES = ['Researcher', 'Writer'].map(name => path.join(SOURCE_DIRECTORY, '..', '..', '..', 'agents', `${name}.agent.md`));
+const AGENT_SOURCES = ['Executor', 'Reviewer'].map(name => path.join(SOURCE_DIRECTORY, '..', '..', '..', 'agents', `${name}.agent.md`));
 
 async function makeFixture(configure = (configuration) => configuration) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'command-runner-test-'));
@@ -297,7 +297,7 @@ async function withFixture(callback, configure) {
   }
 }
 
-test('distributed Researcher and Writer share the fixed runner CLI hook', async () => {
+test('distributed Executor and Reviewer share the fixed runner CLI hook', async () => {
   for (const agentSource of AGENT_SOURCES) {
     const source = await readFile(agentSource, 'utf8');
     assert.match(source, /^user-invocable: false$/mu);
@@ -1290,7 +1290,7 @@ test('native Copilot web and file-creation aliases defer permission checks to Ho
       const denied = runHook(fixture, {
         sessionId: 'copilot-session', toolName,
         toolArgs: JSON.stringify({
-          path: path.join(fixture.home, 'agents', 'Writer.agent.md'), content: 'unsafe',
+          path: path.join(fixture.home, 'agents', 'Executor.agent.md'), content: 'unsafe',
         }),
       });
       assert.equal(JSON.parse(denied.stdout).permissionDecision, 'deny', toolName);
@@ -1300,26 +1300,26 @@ test('native Copilot web and file-creation aliases defer permission checks to Ho
 
 test('installed control identity is protected without blocking same-suffix repo sources', async () => {
   await withFixture(async (fixture) => {
-    const sourceFile = path.join(fixture.alpha, '.copilot', 'agents', 'Writer.agent.md');
+    const sourceFile = path.join(fixture.alpha, '.copilot', 'agents', 'Executor.agent.md');
     await mkdir(path.dirname(sourceFile), { recursive: true });
     await writeFile(sourceFile, 'source-only');
     const linkedFile = path.join(fixture.alpha, 'linked-control.md');
     const linkedDirectory = path.join(fixture.alpha, 'linked-agent-directory');
     const linkedHardFile = path.join(fixture.alpha, 'hardlinked-control.md');
-    await symlink(path.join(fixture.home, 'agents', 'Writer.agent.md'), linkedFile);
+    await symlink(path.join(fixture.home, 'agents', 'Executor.agent.md'), linkedFile);
     await symlink(path.join(fixture.home, 'agents'), linkedDirectory, 'dir');
-    await link(path.join(fixture.home, 'agents', 'Writer.agent.md'), linkedHardFile);
+    await link(path.join(fixture.home, 'agents', 'Executor.agent.md'), linkedHardFile);
     const linkedParentTraversal = linkedDirectory + path.sep + '..' + path.sep
-      + 'agents' + path.sep + 'Writer.agent.md';
+      + 'agents' + path.sep + 'Executor.agent.md';
     // This raw filesystem path reaches the installed control through the link.
     assert.equal(await readFile(linkedParentTraversal, 'utf8'),
-      await readFile(path.join(fixture.home, 'agents', 'Writer.agent.md'), 'utf8'));
+      await readFile(path.join(fixture.home, 'agents', 'Executor.agent.md'), 'utf8'));
 
     const skillSource = path.join(fixture.alpha, '.copilot', 'skills', 'command-runner', 'SKILL.md');
     await mkdir(path.dirname(skillSource), { recursive: true });
     await writeFile(skillSource, 'workspace skill source');
     for (const target of [
-      sourceFile, '.copilot/agents/Writer.agent.md', pathToFileURL(sourceFile).href,
+      sourceFile, '.copilot/agents/Executor.agent.md', pathToFileURL(sourceFile).href,
       skillSource,
     ]) {
       const result = runHook(fixture, {
@@ -1330,14 +1330,14 @@ test('installed control identity is protected without blocking same-suffix repo 
       assert.deepEqual(JSON.parse(result.stdout), {}, target);
     }
     for (const target of [
-      '~/.copilot/agents/Writer.agent.md',
-      path.join(fixture.home, 'agents', 'Writer.agent.md'),
-      pathToFileURL(path.join(fixture.home, 'agents', 'Writer.agent.md')).href,
+      '~/.copilot/agents/Executor.agent.md',
+      path.join(fixture.home, 'agents', 'Executor.agent.md'),
+      pathToFileURL(path.join(fixture.home, 'agents', 'Executor.agent.md')).href,
       path.join(fixture.home, 'agents', 'CommandRunner.agent.md'),
       linkedFile,
       linkedHardFile,
       linkedParentTraversal,
-      path.join(linkedDirectory, 'Writer.agent.md'),
+      path.join(linkedDirectory, 'Executor.agent.md'),
       path.join(fixture.alpha, '..', 'copilot-home', 'skills', 'command-runner', 'scripts', 'hook.mjs'),
     ]) {
       const result = runHook(fixture, {
@@ -1355,12 +1355,12 @@ test('custom COPILOT_HOME protects both the installed root and runner data', asy
     const config = path.join(dataHome, 'command-runner', 'workspaces.json');
     await mkdir(path.dirname(config), { recursive: true });
     await writeFile(config, '{"version":1,"workspaces":[]}');
-    const source = path.join(fixture.alpha, '.copilot', 'agents', 'Writer.agent.md');
+    const source = path.join(fixture.alpha, '.copilot', 'agents', 'Executor.agent.md');
     await mkdir(path.dirname(source), { recursive: true });
     await writeFile(source, 'project copy');
     for (const target of [
-      '~/.copilot/agents/Writer.agent.md',
-      path.join(fixture.home, 'agents', 'Writer.agent.md'),
+      '~/.copilot/agents/Executor.agent.md',
+      path.join(fixture.home, 'agents', 'Executor.agent.md'),
       path.join(fixture.home, 'skills', 'command-runner', 'scripts', 'hook.mjs'),
       path.join(fixture.home, 'command-runner', 'workspaces.json'),
       config,
@@ -1392,8 +1392,8 @@ test('long single-line edit content is never probed as a path', async () => {
       assert.deepEqual(JSON.parse(result.stdout), {}, toolName);
     }
     for (const toolArgs of [
-      '~/.copilot/agents/Writer.agent.md',
-      { files: [{ path: '~/.copilot/agents/Writer.agent.md',
+      '~/.copilot/agents/Executor.agent.md',
+      { files: [{ path: '~/.copilot/agents/Executor.agent.md',
         content: longLine }] },
     ]) {
       const result = runHook(fixture, {
