@@ -1080,9 +1080,9 @@ class ValidatorMutationTests(unittest.TestCase):
 
     def test_bundled_agents_require_role_specific_models_and_effort(self) -> None:
         cases = (
-            ("Orchestrator", "model: GPT-6.1 Sol (copilot)", "model: Auto (copilot)", "must use model"),
+            ("Orchestrator", "model: GPT-6.2 Sol (copilot)", "model: Auto (copilot)", "must use model"),
             ("Writer", "model: GPT-6.1 Terra (copilot)", "model: Auto (copilot)", "must use model"),
-            ("Reviewer", "model: GPT-6.1 Sol (copilot)", "model: Auto (copilot)", "must use model"),
+            ("Reviewer", "model: GPT-6.2 Sol (copilot)", "model: Auto (copilot)", "must use model"),
             ("Researcher", "reasoning-effort: medium", "reasoning-effort: low", "must use reasoning-effort"),
             ("Writer", "reasoning-effort: medium", "reasoning-effort: low", "must use reasoning-effort"),
             ("Orchestrator", "reasoning-effort: medium", "reasoning-effort: high", "must use reasoning-effort"),

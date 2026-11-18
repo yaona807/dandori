@@ -324,7 +324,7 @@ DANDORI works best with a capable reasoning model for the Orchestrator.
 
 The Orchestrator must distinguish execution-method ambiguity from authorization ambiguity, normalize contracts without widening them, create minimal Task Cards, audit worker results, resolve conflicts, and stop when containment cannot be established.
 
-The bundled agents pin **GPT-6.1 Sol (copilot)** with `medium` effort for Orchestrator and Reviewer; **GPT-6.1 Terra (copilot)** with `medium` for Writer; and **GPT-6 Luna (copilot)** with `medium` for Researcher. The `reasoning-effort` frontmatter field is applied by the Copilot harness; model availability and actual model selection still require runtime verification. Custom or external Workers may select their own models.
+The bundled agents pin **GPT-6.2 Sol (copilot)** with `medium` effort for Orchestrator and Reviewer; **GPT-6.1 Terra (copilot)** with `medium` for Writer; and **GPT-6 Luna (copilot)** with `medium` for Researcher. The `reasoning-effort` frontmatter field is applied by the Copilot harness; model availability and actual model selection still require runtime verification. Custom or external Workers may select their own models.
 
 ## GitHub MCP and per-call human approval
 

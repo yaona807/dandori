@@ -1,7 +1,7 @@
 ---
 name: Orchestrator
 description: Goal-bounded autonomous orchestration with capability approval, exact Worker Task Cards, audit, and adaptive loops.
-model: GPT-6.1 Sol (copilot)
+model: GPT-6.2 Sol (copilot)
 reasoning-effort: medium
 target: vscode
 user-invocable: true

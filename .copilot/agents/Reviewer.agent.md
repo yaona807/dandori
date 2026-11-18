@@ -4,7 +4,7 @@ description: >-
   Use for independent read-only review of delegated source changes, GitHub MCP PR evidence and code diffs. Supports read/search and code-review guidance to check correctness, security, maintainability and requirements. Returns
   evidence-linked actionable findings. Not for editing files, terminal execution, broad discovery, GitHub mutations,
   browser interaction, or agent delegation.
-model: GPT-6.1 Sol (copilot)
+model: GPT-6.2 Sol (copilot)
 reasoning-effort: medium
 target: vscode
 user-invocable: false
