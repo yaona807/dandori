@@ -6,6 +6,10 @@ reasoning-effort: medium
 target: github-copilot
 user-invocable: true
 disable-model-invocation: true
+# TEMPORARY WORKAROUND: Copilot harness may fail to expose Worker tools after delegation.
+# Worker tools are listed here only for subagent visibility, not Orchestrator execution.
+# The Orchestrator-scoped preToolUse hook denies direct calls except task/agent.
+# TODO: Remove the expanded tool list and guard after the upstream issue is resolved.
 tools:
   - task
   - read
