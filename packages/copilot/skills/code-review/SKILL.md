@@ -8,7 +8,10 @@ user-invocable: false
 
 Review the delegated changes to protect merge quality and long-term product quality.
 
-- Understand the intended behavior, applicable project conventions, and the complete in-scope change. Examine relevant surrounding code, callers, and tests.
+- Understand the intended behavior, applicable project conventions, and the **complete in-scope diff** before narrowing the investigation.
+- For each material changed behavior, form concrete review questions about plausible failures, contracts, invariants or regressions.
+- Use targeted search to locate relevant callers, dependencies and tests; read the source needed to resolve each question. Reuse evidence instead of broad, repeated exploration without a review question.
+- Expand the investigation beyond the diff and initial search results whenever security, impact, indirect dependencies or unresolved uncertainty warrant it. A narrow search does not prove an issue is absent.
 - Identify material defects, regressions, broken contracts, security risks, and consequential maintainability problems introduced or worsened by the change.
 - Report credible, actionable issues with concrete evidence and meaningful impact. Consider likelihood and severity; do not dismiss rare but catastrophic failures.
 - Consider the benefits, complexity, and regression risks of remediation when recommending fixes or prioritizing findings.

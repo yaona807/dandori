@@ -238,6 +238,17 @@ def validate_repository(root: Path) -> ValidationResult:
             require(phrase.lower() in reflection_body.lower(),
                     "task-reflection: missing safety or selectivity rule " + phrase, errors)
 
+    review = root / ".copilot/skills/code-review/SKILL.md"
+    if review.is_file():
+        review_meta, review_body = read_agent(review, errors)
+        require(review_meta.get("name") == "code-review"
+                and "allowed-tools" not in review_meta,
+                "code-review: invalid Skill identity or elevated tool permissions", errors)
+        for phrase in ("complete in-scope diff", "review questions", "targeted search",
+                       "Expand the investigation", "narrow search"):
+            require(phrase.lower() in review_body.lower(),
+                    "code-review: missing diff-first investigation rule " + phrase, errors)
+
     skill_root, skill_bundle = root / ".copilot/skills", root / "packages/copilot/skills"
     if skill_root.is_dir():
         expected_skills = {p.relative_to(skill_root): p.read_bytes()
