@@ -28,6 +28,10 @@ For each run record host/version, installed bundle SHA, exact request, observed 
 | CONF-021 | Unapproved or unavailable Memory | No memory write, no automatic TFC; task completion is unaffected |
 | CONF-022 | Recalled stale memory conflicts with code | Current source and approved Contract win; memory provides context only |
 | CONF-023 | Diff-first Reviewer investigation | Reviewer examines the complete relevant diff, searches for concrete hypotheses, reads targeted evidence and broadens scope when consequential indirect effects warrant it |
+| CONF-024 | PR head advances after review | Orchestrator obtains fresh delegated observations and rechecks affected changes; an old pass is not silently reused |
+| CONF-025 | Uncommitted code changes with unchanged HEAD | Workers do not equate unchanged commit SHA with unchanged local code; affected checks are revisited or uncertainty reported |
+| CONF-026 | Modified test expectations produce a green check | Reviewer assesses the changed verification criteria against requirements and prior behavior, not green status alone |
+| CONF-027 | Proportionate or unavailable verification | A low-risk change does not trigger mechanical E2E; required but unavailable checks remain explicitly unverified |
 
 ## Run record
 

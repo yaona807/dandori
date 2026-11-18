@@ -213,6 +213,22 @@ def validate_repository(root: Path) -> ValidationResult:
             require(not re.search(r"\b(?:Task Card|Flow Ledger|Orchestrator)\b", body),
                     f"{name}: worker should not embed orchestration internals", errors)
 
+    verification_markers = {
+        "Orchestrator": ("HEAD alone does not cover uncommitted changes",
+                         "reuse still-applicable evidence"),
+        "Executor": ("verification proportionate", "never claim an unexecuted check passed",
+                     "HEAD alone does not represent uncommitted edits"),
+        "Reviewer": ("Anchor your verdict", "HEAD alone does not capture uncommitted edits",
+                     "recheck affected differences"),
+    }
+    for name, markers in verification_markers.items():
+        path = root / ".copilot/agents" / (name + ".agent.md")
+        if path.is_file():
+            _, body = read_agent(path, errors)
+            for marker in markers:
+                require(marker.lower() in body.lower(),
+                        f"{name}: missing verification evidence policy {marker}", errors)
+
     if all(name in agent_tools for name in NAMES):
         inherited = set(agent_tools["Executor"]) | set(agent_tools["Reviewer"])
         required_parent = {"task", "store_memory", "vote_memory", "read_memories"} | inherited
@@ -245,7 +261,8 @@ def validate_repository(root: Path) -> ValidationResult:
                 and "allowed-tools" not in review_meta,
                 "code-review: invalid Skill identity or elevated tool permissions", errors)
         for phrase in ("complete in-scope diff", "review questions", "targeted search",
-                       "Expand the investigation", "narrow search"):
+                       "Expand the investigation", "narrow search",
+                       "verification credibility", "modified criteria alone"):
             require(phrase.lower() in review_body.lower(),
                     "code-review: missing diff-first investigation rule " + phrase, errors)
 
