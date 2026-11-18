@@ -188,7 +188,22 @@ class ValidatorMutationTests(unittest.TestCase):
         profile = ROOT / "packages/copilot/agents/Orchestrator.agent.md"
         _, front, body = profile.read_text().split("---\n", 2)
         meta = yaml.safe_load(front)
-        self.assertEqual(["task"], meta["tools"])
+        expected_tools = ["task"]
+        for worker in ("Researcher", "Writer", "Reviewer"):
+            _, worker_front, _ = (
+                ROOT / "packages/copilot/agents" / f"{worker}.agent.md"
+            ).read_text().split("---\\n", 2)
+            for tool in yaml.safe_load(worker_front)["tools"]:
+                if tool not in expected_tools:
+                    expected_tools.append(tool)
+        self.assertEqual(expected_tools, meta["tools"])
+        self.assertEqual(
+            {"preToolUse": [{
+                "type": "command",
+                "command": "node ~/.copilot/skills/command-runner/scripts/orchestrator-guard.mjs",
+                "timeoutSec": 5,
+            }]}, meta["hooks"],
+        )
         self.assertLessEqual(len(body), validator.MAX_AGENT_BODY_CHARS)
         for name in ("Researcher", "Writer",
                      "Reviewer"):
@@ -244,13 +259,13 @@ class ValidatorMutationTests(unittest.TestCase):
             self.assertEqual(30, hooks[0]["timeoutSec"])
             self.assertFalse((ROOT / "packages/copilot/agents/CommandRunner.agent.md").exists())
 
-    def test_orchestrator_rejects_edit_tool(self) -> None:
+    def test_orchestrator_rejects_unlisted_tool(self) -> None:
         temp, repo = self.make_repo()
         with temp:
             path = repo / ".copilot/agents/Orchestrator.agent.md"
-            text = path.read_text().replace("tools:\n", "tools:\n  - edit/editFiles\n", 1)
+            text = path.read_text().replace("tools:\n", "tools:\n  - edit/unsafeNewCapability\n", 1)
             path.write_text(text)
-            self.assert_invalid(repo, "Orchestrator tools must be exactly")
+            self.assert_invalid(repo, "Orchestrator temporary tools must exactly match")
 
     def test_worker_rejects_agent_tool(self) -> None:
         for delegation_tool in ("agent", "task"):
@@ -1542,7 +1557,7 @@ Inspect only the delegated resource. Do not call another agent.
         with temp:
             path = repo / "tests/test_validate_definitions.py"
             text = path.read_text()
-            start = text.index("    def test_orchestrator_rejects_edit_tool")
+            start = text.index("    def test_orchestrator_rejects_unlisted_tool")
             end = text.index("    def test_worker_rejects_agent_tool", start)
             path.write_text(text[:start] + text[end:])
             self.assert_invalid(repo, "missing required tests in ValidatorMutationTests")
@@ -1552,9 +1567,9 @@ Inspect only the delegated resource. Do not call another agent.
         with temp:
             path = repo / "tests/test_validate_definitions.py"
             text = path.read_text()
-            start = text.index("    def test_orchestrator_rejects_edit_tool")
+            start = text.index("    def test_orchestrator_rejects_unlisted_tool")
             end = text.index("    def test_worker_rejects_agent_tool", start)
-            replacement = "    def test_orchestrator_rejects_edit_tool(self) -> None:\n        pass\n\n"
+            replacement = "    def test_orchestrator_rejects_unlisted_tool(self) -> None:\n        pass\n\n"
             path.write_text(text[:start] + replacement + text[end:])
             self.assert_invalid(repo, "required test body is incomplete")
 
@@ -1598,8 +1613,8 @@ Inspect only the delegated resource. Do not call another agent.
             path = repo / "tests/test_validate_definitions.py"
             path.write_text(
                 path.read_text().replace(
-                    "    def test_orchestrator_rejects_edit_tool",
-                    '    @unittest.skip("disabled")\n    def test_orchestrator_rejects_edit_tool',
+                    "    def test_orchestrator_rejects_unlisted_tool",
+                    '    @unittest.skip("disabled")\n    def test_orchestrator_rejects_unlisted_tool',
                     1,
                 )
             )
