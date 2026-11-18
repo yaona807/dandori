@@ -310,6 +310,12 @@ assets/
 | `code-review` skill | Reference Reviewerが使用するfocused review guidance |
 | `command-runner` skill | 実行ワーカー用の共通CLI操作・復旧ガイド |
 
+## Copilot Memory（任意）
+
+OrchestratorにCopilot harnessの`store_memory`、`vote_memory`、`read_memories`を定義します。司令塔専用Hookはこれらの完全一致するメモリツールと委譲だけをHost側の通常判定へ渡し、暫定公開されたWorkerツールの直接実行は引き続き拒否します。記憶は参考情報であり、認可・完了根拠になりません。保存・投票は明示的に承認された外部書き込み範囲内で、検証済みの再利用可能な非機微情報に限定します。メモリが利用できない場合も本来の作業を継続します。
+
+VS Codeの**Copilot harness**を使用し、GitHub個人設定（必要なら組織ポリシーも）でCopilot Memoryを有効にしてください。`chat.copilot.memory.enabled`が`true`であることも確認します（現行の既定値）。更新したOrchestratorとcommand-runner SkillをインストールしてCopilotセッションを開始・再開し、検証済みのリポジトリ規約を明示的に許可して記憶させ、ツール結果とリポジトリの**Settings > Copilot > Memory**で確認します。リポジトリ側からGitHubアカウント設定やHost側の未公開ツールを強制的に有効化することはできません。
+
 ## 互換性と前提条件
 
 - DANDORI Agentは明示的にVS Codeを対象とします。
