@@ -11,14 +11,12 @@ ROOT = Path(__file__).resolve().parents[1]
 AGENTS = ROOT / ".copilot" / "agents"
 COPILOT_WORKER_ROUTING = (
     "## Copilot worker routing (mandatory)\n"
-    "Native `task`: pick an installed, available exact-name custom agent:\n"
+    "Native `task`: choose an available exact-name custom agent:\n"
     "- `Researcher`\n"
     "- `Writer`\n"
     "- `Reviewer`\n"
-    "Never use a default or general-purpose subagent (built-in Explore/Plan/Agent or unnamed).\n"
-    "If none, return `no_suitable_worker`; do not substitute any built-in or unlisted agent.\n"
-    "Keep Card scope/audit. Routing is instruction-only; enforce the approved Task Card.\n"
-    "\n"
+    "Never use a default or general-purpose subagent.\n"
+    "If none, return `no_suitable_worker`; do not substitute any built-in or unlisted agent.\n\n"
 )
 
 def replace_exactly_once(text: str, old: str, new: str, label: str) -> str:
