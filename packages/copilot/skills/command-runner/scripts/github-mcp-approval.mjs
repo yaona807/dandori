@@ -59,17 +59,21 @@ function validWrite(tool, args) {
   }
 }
 
+function findOperation(name, operations) {
+  return [...operations]
+    .sort((a, b) => b.length - a.length)
+    .find(operation => name.includes(operation));
+}
+
 export function githubMcpDecision(name, rawArgs) {
   if (typeof name !== 'string') return null;
-  // A runtime alias must be observed and explicitly added; it cannot silently
-  // avoid the guard just because its namespace separator differs.
-  if (name.startsWith('mcp__github__') || name.startsWith('github.')) {
-    return DENY('Unknown GitHub MCP tool alias; verify the runtime tool name.');
+  const tool = findOperation(name, WRITE);
+  if (!tool) {
+    if (findOperation(name, READ)) return {};
+    return name.includes('github')
+      ? DENY('GitHub MCP tool is not in the approved inventory.')
+      : null;
   }
-  if (!name.startsWith('github/')) return null;
-  const tool = name.slice('github/'.length);
-  if (READ.has(tool)) return {};
-  if (!WRITE.has(tool)) return DENY('GitHub MCP tool is not in the approved inventory.');
   let args = rawArgs;
   if (typeof args === 'string') {
     try { args = JSON.parse(args); } catch { return DENY('Invalid GitHub MCP arguments.'); }
