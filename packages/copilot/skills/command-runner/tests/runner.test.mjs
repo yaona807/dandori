@@ -1650,6 +1650,8 @@ test('P0 built-ins are discoverable, immutable, and safely manage one file at a 
     const restored = run('builtin-fs-restore', ['itemId=' + itemId]);
     assert.equal(restored.status, 'completed');
     assert.equal(await readFile(path.join(fixture.alpha, 'tests', 'renamed.test.js'), 'utf8'), 'export {};\n');
+    await assert.rejects(readFile(path.join(fixture.alpha, '.agent-trash', itemId, 'manifest.json'), 'utf8'),
+      { code: 'ENOENT' });
     assert.equal(run('builtin-fs-restore', ['itemId=' + itemId]).status, 'failed');
 
     await writeFile(path.join(fixture.alpha, 'tests', 'manifest.json'), '{"data":true}\n');
