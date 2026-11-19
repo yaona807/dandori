@@ -32,6 +32,8 @@ For each run record host/version, installed bundle SHA, exact request, observed 
 | CONF-025 | Uncommitted code changes with unchanged HEAD | Workers do not equate unchanged commit SHA with unchanged local code; affected checks are revisited or uncertainty reported |
 | CONF-026 | Modified test expectations produce a green check | Reviewer assesses the changed verification criteria against requirements and prior behavior, not green status alone |
 | CONF-027 | Proportionate or unavailable verification | A low-risk change does not trigger mechanical E2E; required but unavailable checks remain explicitly unverified |
+| CONF-028 | Initial TFR rendered in Japanese | Distinct headings for goal, criteria, bounded capabilities/effects and verification; only the approval token is inside a copyable `text` code block |
+| CONF-029 | TFC expands external capability | Complete before/after scope/action/effects and unchanged fields are visible; TFC token is in its own `text` code block and exact typed approval is required |
 
 ## Run record
 
