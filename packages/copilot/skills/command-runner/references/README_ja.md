@@ -274,7 +274,7 @@ $COPILOT_HOME/command-runner/executions/<workspace-id>/<UTC-timestamp>_<UUID>/
   stderr.log
 ```
 
-このキャッシュは一時的な観測データであり監査ログではありません。通常の `run` はWorkspace照合後に、**全Workspace共通の管理対象キャッシュから24時間超の実行結果を自動削除**します。さらに次の実行用の32 MiBを確保した上で256 MiBの上限を守るために必要な場合だけ、61分超の実行結果を古い順に削除します。61分以内のログは保持し、それらだけで容量が不足する場合はコマンド起動前に `execution_cache_full` で停止します。自動整理の契機は**次回の `run` 実行時**であり、バックグラウンドの定期処理ではありません。オーナーは `node ~/.copilot/skills/command-runner/scripts/gateway.mjs cache-prune confirm=prune-managed-executions` で明示的な整理もできます。整理対象は管理対象の実行キャッシュのみで、Workspaceのソースファイル、承認候補、`.agent-trash/` は削除しません。手動の管理コマンドは引き続きWorker CLIとHookから利用できません。
+このキャッシュは一時的な観測データであり監査ログではありません。通常の `run` はWorkspace照合後に、**全Workspace共通の管理対象キャッシュから24時間超の実行結果を自動削除**します。さらに次の実行用の32 MiBを確保した上で256 MiBの上限を守るために必要な場合だけ、61分超の実行結果を古い順に削除します。61分以内のログは保持し、それらだけで容量が不足する場合はコマンド起動前に `execution_cache_full` で停止します。自動整理の契機は**次回の `run` 実行時**であり、バックグラウンドの定期処理ではありません。オーナーは `node ~/.copilot/skills/command-runner/scripts/gateway.mjs cache-prune confirm=prune-managed-executions` で明示的な整理もできます。実行キャッシュの整理は管理対象の実行ログと、空になったWorkspace／Worktree単位のキャッシュディレクトリだけを対象とします。手動の管理コマンドは引き続きWorker CLIとHookから利用できません。別途、Worker CLIの `propose` / `propose.update` / `activate` / `run` が成功すると、**有効期限（24時間）切れの承認候補JSON**を整理します。まだ有効な候補と無関係なファイルは残します。また `.agent-trash/` からファイルを復元できた場合は不要になったmanifestと空の項目ディレクトリを片付けますが、**未復元の退避ファイルは復元可能性を維持するため自動削除しません**。永続設定 `workspaces.json`、稼働中の設定ロック、Workspaceのソースファイル、その他のユーザーデータはキャッシュ整理の対象外です。
 
 ## セキュリティ境界
 
