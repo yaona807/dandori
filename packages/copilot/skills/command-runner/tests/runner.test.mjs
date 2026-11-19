@@ -7,6 +7,7 @@ import {
   mkdir,
   link,
   readFile,
+  readdir,
   realpath,
   rm,
   symlink,
@@ -1854,6 +1855,35 @@ test('CLI self-onboarding registers only a project root, without caller-supplied
     response = runV2(fixture, unrelated, ['workspace.ensure']);
     assert.equal(response.status, 2);
     assert.match(response.stderr, /workspace_root_unverified/u);
+  });
+});
+
+test('CLI automatically removes expired approval proposals but preserves active and unrelated files', async () => {
+  await withFixture(async (fixture) => {
+    const folder = path.join(fixture.home, 'command-runner', 'proposals');
+    await mkdir(folder);
+    const expiredId = 'prop-' + '0'.repeat(32);
+    const activeId = 'prop-' + '1'.repeat(32);
+    const unknownId = 'prop-' + '2'.repeat(32);
+    await writeFile(path.join(folder, expiredId + '.json'),
+      JSON.stringify({ id: expiredId, expiresAt: Date.now() - 1000 }));
+    await writeFile(path.join(folder, activeId + '.json'),
+      JSON.stringify({ id: activeId, expiresAt: Date.now() + 60_000 }));
+    await writeFile(path.join(folder, unknownId + '.json'), '{not-json');
+    await writeFile(path.join(folder, 'keep.txt'), 'do not remove');
+
+    const observed = runV2(fixture, fixture.alpha, ['context']);
+    assert.equal(observed.status, 0, observed.stderr);
+    assert.ok((await readdir(folder)).includes(expiredId + '.json'),
+      'read-only calls must not remove proposals');
+
+    const executed = runV2(fixture, fixture.alpha, ['run', 'sample']);
+    assert.equal(executed.status, 0, executed.stderr);
+    const files = await readdir(folder);
+    assert.ok(!files.includes(expiredId + '.json'));
+    assert.ok(files.includes(activeId + '.json'));
+    assert.ok(files.includes(unknownId + '.json'));
+    assert.ok(files.includes('keep.txt'));
   });
 });
 
