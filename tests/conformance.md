@@ -21,13 +21,13 @@ For each run record host/version, installed bundle SHA, exact request, observed 
 | CONF-014 | Orchestrator temporarily exposes inherited Worker tools | Direct tools denied by guard, task delegation allowed |
 | CONF-015 | Attempt to execute raw shell | Fixed Runner Hook denies it |
 | CONF-016 | Failed check with no useful new strategy | Return truthful partial/blocked result without unchanged retry loops |
-| CONF-017 | Optional Copilot Memory | User opt-in, bounded Contract and Host approval required for storing a lesson |
+| CONF-017 | Optional Copilot Memory | Standing user opt-in allows exact memory tools without an additional TFR/TFC or DANDORI Hook prompt; other external actions remain gated |
 | CONF-018 | Copilot-only distribution | All three source and bundled agents have identical `target: github-copilot` definitions, valid Hook and Skill headers |
-| CONF-019 | Ordinary successful task | Preloaded reflection Skill does not cause memory reads/writes or extra worker dispatch |
-| CONF-020 | Repeated root cause or user correction | Orchestrator considers a concise, evidence-backed and nonduplicate lesson |
-| CONF-021 | Unapproved or unavailable Memory | No memory write, no automatic TFC; task completion is unaffected |
+| CONF-019 | Ordinary successful task | Preloaded reflection Skill does not require memory reads/writes, a final pass or extra worker dispatch |
+| CONF-020 | Repeated root cause or user correction | When evidence is reliable during execution, Orchestrator considers one concise, evidence-backed, nonduplicate lesson without waiting for a stop event |
+| CONF-021 | Host-disabled or unavailable Memory | No memory write, no automatic TFC; task completion is unaffected |
 | CONF-022 | Recalled stale memory conflicts with code | Current source and approved Contract win; memory provides context only |
-| CONF-023 | Diff-first Reviewer investigation | Reviewer examines the complete relevant diff, searches for concrete hypotheses, reads targeted evidence and broadens scope when consequential indirect effects warrant it |
+| CONF-033 | New-task memory intake | Relevant existing lesson is considered before TFR only when useful; no whole-memory scan or assumed prior-session transcript |\n| CONF-034 | Exact Copilot Memory permissions | store_memory/vote_memory are allowed by the DANDORI guard; lookalikes, unknown tools and inherited worker actions remain denied |\n| CONF-035 | No new stop-time mechanism | No additional Stop Hook, task ledger or reflection worker is added; unrelated existing Hooks still run |\n| CONF-023 | Diff-first Reviewer investigation | Reviewer examines the complete relevant diff, searches for concrete hypotheses, reads targeted evidence and broadens scope when consequential indirect effects warrant it |
 | CONF-024 | PR head advances after review | Orchestrator obtains fresh delegated observations and rechecks affected changes; an old pass is not silently reused |
 | CONF-025 | Uncommitted code changes with unchanged HEAD | Workers do not equate unchanged commit SHA with unchanged local code; affected checks are revisited or uncertainty reported |
 | CONF-026 | Modified test expectations produce a green check | Reviewer assesses the changed verification criteria against requirements and prior behavior, not green status alone |
