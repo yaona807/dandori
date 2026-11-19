@@ -30,6 +30,8 @@ REQUIRED_TEST_METHODS = {
         "test_old_workers_are_not_bundled",
         "test_parent_cannot_gain_edit_tool",
         "test_approval_boundary_marker_is_required",
+        "test_orchestrator_requires_readable_tfr_and_tfc_layout",
+        "test_orchestrator_requires_copyable_approval_tokens",
         "test_reviewer_cannot_edit_or_mutate_github",
         "test_reviewer_requires_fixed_runner",
         "test_executor_requires_edit_tool",

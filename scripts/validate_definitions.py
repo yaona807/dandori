@@ -186,6 +186,20 @@ def validate_repository(root: Path) -> ValidationResult:
             ):
                 require(marker.lower() in body.lower(),
                         "Orchestrator: missing policy " + marker, errors)
+            for marker in (
+                "### Task Flow Review: TFR-<unique-id>",
+                "**Completion criteria**", "**Authorized capabilities**",
+                "**Verification**", "**Reapproval boundary**",
+                "Each GitHub mutation also requires individual Host approval",
+                "### Task Flow Change: TFC-<unique-id>",
+                "**Changed fields**", "**Unchanged**",
+            ):
+                require(marker in body,
+                        "Orchestrator: missing human-readable review layout " + marker, errors)
+            for review_type in ("TFR", "TFC"):
+                token = "APPROVE:" + review_type + "-<unique-id>"
+                require("```text\n" + token + "\n```" in body,
+                        "Orchestrator: approval token must be a fenced text block for " + review_type, errors)
         elif name == "Executor":
             require(meta.get("skills") == ["command-runner", "test-design"],
                     "Executor: command-runner and test-design Skills required", errors)
