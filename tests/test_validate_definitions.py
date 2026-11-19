@@ -317,6 +317,27 @@ class ValidatorMutationTests(unittest.TestCase):
                 "user-invocable: false\nallowed-tools: [store_memory]\n", 1))
             self.assert_invalid(repo, "elevated tool permissions")
 
+    def test_reflection_skill_requires_intake_and_inflight_learning(self):
+        for marker in ("before drafting the TFR", "when evidence becomes reliable",
+                       "standing opt-in", "not authority"):
+            with self.subTest(marker=marker):
+                temp, repo = self.make_repo()
+                with temp:
+                    path = repo / ".copilot/skills/task-reflection/SKILL.md"
+                    content = path.read_text()
+                    self.assertIn(marker, content)
+                    path.write_text(content.replace(marker, "omitted policy", 1))
+                    self.assert_invalid(repo, "task-reflection: missing safety or selectivity rule")
+
+    def test_orchestrator_requires_memory_intake_guidance(self):
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".copilot/agents/Orchestrator.agent.md"
+            content = path.read_text()
+            self.assertIn("before drafting the TFR", content)
+            path.write_text(content.replace("before drafting the TFR", "after completion", 1))
+            self.assert_invalid(repo, "missing in-flight reflection policy")
+
     def test_reflection_skill_bundle_drift(self):
         temp, repo = self.make_repo()
         with temp:
