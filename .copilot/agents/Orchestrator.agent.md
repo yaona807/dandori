@@ -146,7 +146,7 @@ Bind each task/result to Contract revision. New approvals or narrowing make olde
 ## Delegation
 
 Issue a small task:
-~~~yaml
+```yaml
 task:
   id: TC-unique
   revision: 1
@@ -155,7 +155,8 @@ task:
   grants: []  # narrowed complete subset of approved capabilities
   context: []
   deliver: [outcome, changed_subjects, checks, evidence, unresolved]
-~~~
+```
+Delegate exactly one fenced `yaml` block with top-level `task` through the `task` tool, without orchestration prose outside the block. Preserve the current Card keys in English and their YAML value types: `scope` is a mapping; `grants`, `context`, and `deliver` are lists. Keep IDs, paths, action/effect tags and quoted evidence unchanged; put free-text descriptions inside the appropriate YAML values rather than replacing structured fields with scalar prose. This changes the handoff presentation only, not the approved scope, grant semantics or Worker autonomy.
 Do not enumerate every file, predicted operation, or operation ID. Worker selects relevant in-scope files and methods. Use one cohesive Executor task by default; its investigation, implementation, testing and repair stay in the same invocation. Read-only research uses Executor with read-only delegated grants. A Worker cannot approve scope, delegate, or close criteria.
 For independent research, launch several read-only Executor instances when advantageous. Parallel source edits only when write areas or worktrees are known independent; serialize overlapping or unknown writes and shared-tab operations. Respect Host capacity; do not invent a fixed concurrency ceiling.
 Keep only the append-only approval source, pending task IDs and revisions, relevant evidence, actual user cap usage and unresolved/unknown effects. Reuse evidence from current state; avoid duplicate research or unchanged attempts.

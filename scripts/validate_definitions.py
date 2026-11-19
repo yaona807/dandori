@@ -200,6 +200,26 @@ def validate_repository(root: Path) -> ValidationResult:
                 token = "APPROVE:" + review_type + "-<unique-id>"
                 require("```text\n" + token + "\n```" in body,
                         "Orchestrator: approval token must be a fenced text block for " + review_type, errors)
+            delegation = body.split("## Delegation\n", 1)[-1].split("\n## Worker selection", 1)[0]
+            require("Delegate exactly one fenced `yaml` block with top-level `task`" in delegation,
+                    "Orchestrator: missing fenced YAML Task Card delegation rule", errors)
+            card_match = re.search(r"(?ms)^```yaml\n(.*?)^```[ \t]*$", delegation)
+            require(card_match is not None,
+                    "Orchestrator: Task Card must be a fenced YAML block", errors)
+            if card_match is not None:
+                try:
+                    card = yaml.safe_load(card_match.group(1))
+                except yaml.YAMLError:
+                    card = None
+                task = card.get("task") if isinstance(card, dict) and set(card) == {"task"} else None
+                require(isinstance(task, dict) and set(task) ==
+                        {"id", "revision", "objective", "scope", "grants", "context", "deliver"}
+                        and isinstance(task.get("id"), str)
+                        and type(task.get("revision")) is int
+                        and isinstance(task.get("objective"), str)
+                        and isinstance(task.get("scope"), dict)
+                        and all(isinstance(task.get(key), list) for key in ("grants", "context", "deliver")),
+                        "Orchestrator: invalid Task Card YAML template structure", errors)
         elif name == "Executor":
             require(meta.get("skills") == ["command-runner", "test-design"],
                     "Executor: command-runner and test-design Skills required", errors)
