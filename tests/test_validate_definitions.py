@@ -134,6 +134,10 @@ class ValidatorMutationTests(unittest.TestCase):
              "normal `run` automatically prunes managed execution logs",
              "normal `run` preserves old logs",
              "command-runner: outdated troubleshooting cleanup guidance"),
+            (".copilot/skills/command-runner/references/commands.md",
+             "Normal `run` automatically removes managed execution logs older than 24 hours",
+             "Normal `run` never deletes old logs",
+             "command-runner: outdated command reference cleanup guidance"),
         )
         for relative, marker, replacement, expected in mutations:
             with self.subTest(path=relative):
