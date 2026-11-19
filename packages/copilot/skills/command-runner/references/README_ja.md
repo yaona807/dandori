@@ -46,7 +46,7 @@ Workspace登録後、次の固定コマンドを利用できます。
 - ファイル操作：`builtin-fs-move`、`builtin-fs-copy`、`builtin-fs-trash`、`builtin-fs-restore`、`builtin-fs-trash-list`。
 - Git読み取り：`builtin-git-status`、`builtin-git-diff`、`builtin-git-log`、`builtin-git-show`、`builtin-git-ls-files`、`builtin-git-branch-info`。
 
-**登録不要は権限不要という意味ではありません。** exactなCommand IDと全Effectを含む承認済みTask Cardが必要です。Built-in IDは予約され、登録・更新・削除できません。
+**登録不要は権限不要という意味ではありません。** 現在のタスクで承認された正確なCommand IDと許可された引数で実行します。その実行権限にはコマンド内部のログ・キャッシュ・一時ファイル等の副作用が含まれ、個別のEffect列挙や追加承認は不要です。Built-in IDは予約され、登録・更新・削除できません。
 通常ファイルのみ扱い、既存ファイルの上書き、symlinkの経由、再帰的な物理削除は行いません。ゴミ箱はWorkspace直下の `.agent-trash/`。内部の `.gitignore` は `*` に固定され、通常のGit追跡から除外します。既にGit追跡済みのゴミ箱は拒否します。退避済みファイルはIDで復元可能です。**物理削除コマンドはありません。** 異なるファイルシステム間の移動は拒否します。
 Git読み取りはリポジトリrootとWorkspace rootが一致する場合に限定します。`builtin-git-show` は40桁の完全SHAを要求します。ステージング・コミット・ブランチ変更・リモート操作は人間の管理対象です。
 npm/pnpm/Yarn/Bun等のプロジェクト固有コマンドは、従来どおり人間がホワイトリスト登録したコマンドのみ実行できます。
@@ -121,7 +121,7 @@ Workerは順序付きの`arg=`トークンでargvを渡します。例：`run te
 
 1コマンドの公開 `describe` 定義にもサイズ上限を設けます。公開結果には固定argvなどを露出せず、CAS置換・削除に使う `definitionHash` を含めます。安全なサイズで返せない場合は、その `describe` 要求をfail-closedで拒否します。
 
-別の読み取り専用 `inspect` は、Task Cardで正確なIDについて個別に許可された場合に限り、登録済みコマンドの実効的な固定 `argv`、Workspace相対 `cwd`、既定値を反映したtimeout/出力上限、引数トークンとスキーマを返します。既知のIDに対する監査では、事前の `list` やPreviewの往復は不要です。`describe` の許可だけでは `inspect` は使えません。応答は10KiB以下に制限し、典型的な埋め込み認証情報が疑われる定義は `inspection_sensitive` で拒否します。ただし検出は完全な秘密情報スキャナではないため、登録定義に認証情報の値を埋め込まないでください。取得不能な定義は監査完了とみなさず、固定argvの把握だけで全副作用が判明したともみなしません。実行時は監査時のスナップショットではなく現在の登録定義が使用されます。
+別の読み取り専用 `inspect` は、Task Cardで正確なIDについて個別に許可された場合に限り、登録済みコマンドの実効的な固定 `argv`、Workspace相対 `cwd`、既定値を反映したtimeout/出力上限、引数トークンとスキーマを返します。既知のIDに対する監査では、事前の `list` やPreviewの往復は不要です。`describe` の許可だけでは `inspect` は使えません。応答は10KiB以下に制限し、典型的な埋め込み認証情報が疑われる定義は `inspection_sensitive` で拒否します。ただし検出は完全な秘密情報スキャナではないため、登録定義に認証情報の値を埋め込まないでください。定義取得は必要時の診断手段であり、承認済み登録コマンドの通常実行に内部副作用の完全監査を要求しません。実行時は監査時のスナップショットではなく現在の登録定義が使用されます。
 
 ## Runnerのインターフェース
 
