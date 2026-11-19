@@ -1136,43 +1136,69 @@ test('execution output is scoped to the current workspace', async () => {
   });
 });
 
-test('run never prunes old cache entries, and owner-only maintenance is explicit', async () => {
+test('run automatically cleans expired logs across workspaces and preserves recent output', async () => {
   await withFixture(async (fixture) => {
-    const executionRoot = path.join(fixture.home, 'command-runner', 'executions', 'beta');
+    const root = path.join(fixture.home, 'command-runner', 'executions', 'beta');
     const expired = '20000101T000000.000Z_00000000-0000-4000-8000-000000000000';
-    const directory = path.join(executionRoot, expired);
-    await mkdir(directory, { recursive: true });
-    await writeFile(path.join(directory, 'stdout.log'), 'preserve');
-    await writeFile(path.join(directory, 'stderr.log'), '');
+    const recent = `${new Date(Date.now() - 5 * 60 * 1000).toISOString().replaceAll('-', '').replaceAll(':', '')}_00000000-0000-4000-8000-000000000001`;
+    for (const id of [expired, recent]) {
+      const directory = path.join(root, id);
+      await mkdir(directory, { recursive: true });
+      await writeFile(path.join(directory, 'stdout.log'), 'preserve');
+      await writeFile(path.join(directory, 'stderr.log'), '');
+    }
+    // Rejected workspace preflight must not trigger a destructive cleanup.
+    parseFailure(runInterfaceWithoutHashes(fixture, fixture.alpha,
+      ['run', 'echo', '--expected-workspace=beta']), 'workspace_scope_mismatch');
+    assert.equal((await readdir(root)).includes(expired), true);
+
     parseSuccess(runInterface(fixture, fixture.alpha, ['run', 'echo']));
-    assert.equal((await readdir(executionRoot)).includes(expired), true,
-      'a run in alpha must not delete an expired execution in beta');
+    assert.equal((await readdir(root)).includes(expired), false);
+    assert.equal((await readdir(root)).includes(recent), true);
+
     parseFailure(runInterfaceWithoutHashes(fixture, fixture.alpha, ['cache-prune']), 'usage');
-    assert.equal((await readdir(executionRoot)).includes(expired), true);
+    const manualExpired = '19990101T000000.000Z_00000000-0000-4000-8000-000000000002';
+    await mkdir(path.join(root, manualExpired));
     const pruned = parseSuccess(runInterfaceWithoutHashes(fixture, fixture.alpha,
       ['cache-prune', 'confirm=prune-managed-executions']));
     assert.equal(pruned.status, 'pruned');
-    assert.equal((await readdir(executionRoot)).includes(expired), false);
+    assert.equal((await readdir(root)).includes(manualExpired), false);
+    assert.equal((await readdir(root)).includes(recent), true);
   });
 });
 
-test('full shared execution cache fails closed instead of deleting other-workspace outputs', async () => {
+test('run automatically reclaims old logs when the shared execution cache is full', async () => {
   await withFixture(async (fixture) => {
-    const executionRoot = path.join(fixture.home, 'command-runner', 'executions', 'beta');
-    const id = `${new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString().replaceAll('-', '').replaceAll(':', '')}_00000000-0000-4000-8000-000000000000`;
-    const dir = path.join(executionRoot, id);
-    await mkdir(dir, { recursive: true });
-    const log = path.join(dir, 'stdout.log');
+    const root = path.join(fixture.home, 'command-runner', 'executions', 'beta');
+    const old = `${new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString().replaceAll('-', '').replaceAll(':', '')}_00000000-0000-4000-8000-000000000000`;
+    const directory = path.join(root, old);
+    await mkdir(directory, { recursive: true });
+    const log = path.join(directory, 'stdout.log');
     await writeFile(log, 'old');
     await truncate(log, 225 * 1024 * 1024);
-    await writeFile(path.join(dir, 'stderr.log'), '');
-    const result = runInterface(fixture, fixture.alpha, ['run', 'echo']);
-    parseFailure(result, 'execution_cache_full');
-    assert.equal((await readdir(executionRoot)).includes(id), true);
-    parseSuccess(runInterfaceWithoutHashes(fixture, fixture.alpha,
-      ['cache-prune', 'confirm=prune-managed-executions']));
-    assert.equal((await readdir(executionRoot)).includes(id), false);
+    await writeFile(path.join(directory, 'stderr.log'), '');
+
     parseSuccess(runInterface(fixture, fixture.alpha, ['run', 'echo']));
+    assert.equal((await readdir(root)).includes(old), false);
+  });
+});
+
+test('full shared execution cache preserves recent outputs and fails closed', async () => {
+  await withFixture(async (fixture) => {
+    const root = path.join(fixture.home, 'command-runner', 'executions', 'beta');
+    const recent = `${new Date(Date.now() - 5 * 60 * 1000).toISOString().replaceAll('-', '').replaceAll(':', '')}_00000000-0000-4000-8000-000000000000`;
+    const directory = path.join(root, recent);
+    await mkdir(directory, { recursive: true });
+    const log = path.join(directory, 'stdout.log');
+    await writeFile(log, 'recent');
+    await truncate(log, 225 * 1024 * 1024);
+    await writeFile(path.join(directory, 'stderr.log'), '');
+
+    parseFailure(runInterface(fixture, fixture.alpha, ['run', 'echo']), 'execution_cache_full');
+    assert.equal((await readdir(root)).includes(recent), true);
+    parseFailure(runInterfaceWithoutHashes(fixture, fixture.alpha,
+      ['cache-prune', 'confirm=prune-managed-executions']), 'execution_cache_full');
+    assert.equal((await readdir(root)).includes(recent), true);
   });
 });
 
