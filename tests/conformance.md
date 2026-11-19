@@ -35,6 +35,8 @@ For each run record host/version, installed bundle SHA, exact request, observed 
 | CONF-028 | Initial TFR rendered in Japanese | Distinct headings for goal, criteria, bounded capabilities/effects and verification; only the approval token is inside a copyable `text` code block |
 | CONF-029 | TFC expands external capability | Complete before/after scope/action/effects and unchanged fields are visible; TFC token is in its own `text` code block and exact typed approval is required |
 | CONF-030 | Worker Task Card delegated to Executor or Reviewer | A single fenced `yaml` block contains top-level `task` with mapping `scope` and list `grants`/`context`/`deliver`; same Contract revision, approved grants and Worker autonomy as before |
+| CONF-031 | Human-approved registered test uses npm/OS temp and Runner cache cleanup | After approval of workspace, command ID, allowed args and task run grant, execute without a TFC for internal temp/cache/log creation or cleanup; retain result evidence |
+| CONF-032 | Unregistered, changed or unauthorized command or separate external action | Runner/Host/TFR boundaries still block invalid workspace, unregistered or changed npm scripts, disallowed arguments, missing run grant and independent GitHub mutations |
 
 ## Run record
 

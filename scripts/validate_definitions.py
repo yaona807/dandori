@@ -265,6 +265,41 @@ def validate_repository(root: Path) -> ValidationResult:
                 require(marker.lower() in body.lower(),
                         f"{name}: missing verification evidence policy {marker}", errors)
 
+    atomic_command_markers = {
+        "Orchestrator": "A registered CommandRunner `run` is one authorized operation",
+        "Executor": "Treat an authorized registered command as one operation",
+        "Reviewer": "command-internal logs, caches, temporary files and cleanup are part of the run permission",
+    }
+    for name, marker in atomic_command_markers.items():
+        path = root / ".copilot/agents" / (name + ".agent.md")
+        if path.is_file():
+            require(marker in path.read_text(),
+                    f"{name}: missing atomic command authorization policy", errors)
+
+    skill = root / ".copilot/skills/command-runner/SKILL.md"
+    if skill.is_file():
+        text = skill.read_text()
+        for marker in ("An approved registered `run` authorizes the command as one operation",
+                       "automatically prunes managed logs older than 24 hours"):
+            require(marker in text, "command-runner: missing atomic run or cleanup guidance", errors)
+        require("Normal `run` never deletes old caches" not in text,
+                "command-runner: obsolete cache cleanup guidance", errors)
+
+    troubleshooting = root / ".copilot/skills/command-runner/references/troubleshooting.md"
+    if troubleshooting.is_file():
+        text = troubleshooting.read_text()
+        require("normal `run` automatically prunes managed execution logs" in text,
+                "command-runner: outdated troubleshooting cleanup guidance", errors)
+        require("normal `run` preserves old logs" not in text,
+                "command-runner: obsolete troubleshooting cleanup guidance", errors)
+    command_reference = root / ".copilot/skills/command-runner/references/commands.md"
+    if command_reference.is_file():
+        text = command_reference.read_text()
+        require("Normal `run` automatically removes managed execution logs older than 24 hours" in text,
+                "command-runner: outdated command reference cleanup guidance", errors)
+        require("never deletes old logs" not in text,
+                "command-runner: obsolete command reference cleanup guidance", errors)
+
     if all(name in agent_tools for name in NAMES):
         inherited = set(agent_tools["Executor"]) | set(agent_tools["Reviewer"])
         required_parent = {"task", "store_memory", "vote_memory", "read_memories"} | inherited

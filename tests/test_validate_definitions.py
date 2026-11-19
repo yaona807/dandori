@@ -108,6 +108,47 @@ class ValidatorMutationTests(unittest.TestCase):
                     path.write_text(content.replace(original, replacement, 1))
                     self.assert_invalid(repo, "invalid Task Card YAML template structure")
 
+    def test_registered_command_authorization_is_atomic(self):
+        markers = {
+            "Orchestrator": "A registered CommandRunner `run` is one authorized operation",
+            "Executor": "Treat an authorized registered command as one operation",
+            "Reviewer": "command-internal logs, caches, temporary files and cleanup are part of the run permission",
+        }
+        for name, marker in markers.items():
+            with self.subTest(agent=name):
+                temp, repo = self.make_repo()
+                with temp:
+                    path = repo / ".copilot/agents" / (name + ".agent.md")
+                    content = path.read_text()
+                    self.assertIn(marker, content)
+                    path.write_text(content.replace(marker, "requires individual effect authorization", 1))
+                    self.assert_invalid(repo, "missing atomic command authorization policy")
+
+    def test_command_runner_cleanup_guidance_matches_runner(self):
+        mutations = (
+            (".copilot/skills/command-runner/SKILL.md",
+             "automatically prunes managed logs older than 24 hours",
+             "never deletes previously cached logs",
+             "command-runner: missing atomic run or cleanup guidance"),
+            (".copilot/skills/command-runner/references/troubleshooting.md",
+             "normal `run` automatically prunes managed execution logs",
+             "normal `run` preserves old logs",
+             "command-runner: outdated troubleshooting cleanup guidance"),
+            (".copilot/skills/command-runner/references/commands.md",
+             "Normal `run` automatically removes managed execution logs older than 24 hours",
+             "Normal `run` never deletes old logs",
+             "command-runner: outdated command reference cleanup guidance"),
+        )
+        for relative, marker, replacement, expected in mutations:
+            with self.subTest(path=relative):
+                temp, repo = self.make_repo()
+                with temp:
+                    path = repo / relative
+                    content = path.read_text()
+                    self.assertIn(marker, content)
+                    path.write_text(content.replace(marker, replacement, 1))
+                    self.assert_invalid(repo, expected)
+
     def test_reviewer_cannot_edit_or_mutate_github(self):
         for tool in ("edit", "github/merge_pull_request"):
             with self.subTest(tool=tool):
