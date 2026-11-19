@@ -178,6 +178,10 @@ def validate_repository(root: Path) -> ValidationResult:
                 require(needed in tools, "Orchestrator: missing delegation or memory tool " + needed, errors)
             require(meta.get("skills") == ["task-reflection"],
                     "Orchestrator: must preload task-reflection Skill", errors)
+            for marker in ("before drafting the TFR", "when evidence becomes reliable",
+                           "standing opt-in", "without a separate TFR/TFC"):
+                require(marker.lower() in body.lower(),
+                        "Orchestrator: missing in-flight reflection policy " + marker, errors)
             for marker in (
                 "Missing permission is denied.", "Task Flow Review",
                 "Task Flow Change", "APPROVE:TFR-", "APPROVE:TFC-",
@@ -320,8 +324,9 @@ def validate_repository(root: Path) -> ValidationResult:
                 and isinstance(reflection_meta.get("description"), str)
                 and "allowed-tools" not in reflection_meta,
                 "task-reflection: invalid Skill identity or elevated tool permissions", errors)
-        for phrase in ("final audit", "Skip", "Contract", "Host approval",
-                       "at most one", "not authority"):
+        for phrase in ("before drafting the TFR", "when evidence becomes reliable",
+                       "standing opt-in", "at most one", "not authority",
+                       "If storage is disabled", "Do not wait for the final answer"):
             require(phrase.lower() in reflection_body.lower(),
                     "task-reflection: missing safety or selectivity rule " + phrase, errors)
 
