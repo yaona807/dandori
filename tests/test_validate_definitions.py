@@ -190,6 +190,22 @@ class ValidatorMutationTests(unittest.TestCase):
                 "skills:\n  - task-reflection\n", "", 1))
             self.assert_invalid(repo, "must preload task-reflection Skill")
 
+    def test_executor_requires_test_design_skill(self):
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".copilot/agents/Executor.agent.md"
+            path.write_text(path.read_text().replace("  - test-design\n", "", 1))
+            self.assert_invalid(repo, "Executor: command-runner and test-design Skills required")
+
+    def test_test_design_skill_cannot_grant_tools(self):
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".copilot/skills/test-design/SKILL.md"
+            path.write_text(path.read_text().replace(
+                "user-invocable: false\n",
+                "user-invocable: false\nallowed-tools: [execute]\n", 1))
+            self.assert_invalid(repo, "test-design: invalid Skill identity or elevated tool permissions")
+
     def test_reflection_skill_must_exist(self):
         temp, repo = self.make_repo()
         with temp:

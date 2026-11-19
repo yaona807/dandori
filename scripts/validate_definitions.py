@@ -22,6 +22,8 @@ REQUIRED_REPOSITORY_FILES = frozenset({
     ".copilot/skills/command-runner/SKILL.md",
     ".copilot/skills/task-reflection/SKILL.md",
     "packages/copilot/skills/task-reflection/SKILL.md",
+    ".copilot/skills/test-design/SKILL.md",
+    "packages/copilot/skills/test-design/SKILL.md",
     ".copilot/skills/command-runner/scripts/cli.mjs",
     ".copilot/skills/command-runner/scripts/hook.mjs",
     ".copilot/skills/command-runner/scripts/orchestrator-guard.mjs",
@@ -185,8 +187,8 @@ def validate_repository(root: Path) -> ValidationResult:
                 require(marker.lower() in body.lower(),
                         "Orchestrator: missing policy " + marker, errors)
         elif name == "Executor":
-            require(meta.get("skills") == ["command-runner"],
-                    "Executor: command-runner Skill required", errors)
+            require(meta.get("skills") == ["command-runner", "test-design"],
+                    "Executor: command-runner and test-design Skills required", errors)
             for expected_tool in ("read", "search", "web", "edit", "execute",
                                   "browser/readPage", "github/create_pull_request"):
                 require(expected_tool in tools, "Executor: missing tool " + expected_tool, errors)
@@ -253,6 +255,15 @@ def validate_repository(root: Path) -> ValidationResult:
                        "at most one", "not authority"):
             require(phrase.lower() in reflection_body.lower(),
                     "task-reflection: missing safety or selectivity rule " + phrase, errors)
+
+    test_design = root / ".copilot/skills/test-design/SKILL.md"
+    if test_design.is_file():
+        test_design_meta, _ = read_agent(test_design, errors)
+        require(test_design_meta.get("name") == "test-design"
+                and isinstance(test_design_meta.get("description"), str)
+                and test_design_meta.get("user-invocable") is False
+                and "allowed-tools" not in test_design_meta,
+                "test-design: invalid Skill identity or elevated tool permissions", errors)
 
     review = root / ".copilot/skills/code-review/SKILL.md"
     if review.is_file():

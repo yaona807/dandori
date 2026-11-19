@@ -18,6 +18,7 @@ Review the delegated changes to protect merge quality and long-term product qual
 - Respect established project patterns and equally valid implementation choices. Avoid personal preferences, speculative issues, and low-value improvements.
 - Distinguish supported findings from significant unresolved risks or verification gaps. Do not claim coverage of code that could not be inspected.
 - Assess verification credibility when tests, expected outputs, fixtures, baselines, validators or review gates change. Compare weakened verification criteria with requirements and prior behavior; passing results under modified criteria alone do not establish correctness. Legitimate test updates remain allowed.
+- When tests change, assess whether assertions reflect independent contracts, cover credible failures, survive behavior-preserving refactors, avoid redundant cases and excessive test-only mocking or production changes, and use an appropriate test level. Do not demand a test for every change or enforce arbitrary test-count or coverage quotas.
 - Continue reviewing after finding an issue. If no material findings exist, report none.
 
 No findings does not establish that a change is safe to merge.
