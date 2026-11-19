@@ -32,7 +32,7 @@ Reviewerは必要時にCommandRunnerで登録済みの読み取り系コマン�
 
 ## Copilot Memoryによる振り返り
 
-Orchestratorの`skills`ヘッダーに軽量な`task-reflection`を明示登録し、最終監査でユーザーからの指摘、繰り返す根本原因、再利用可能な発見があるかを簡潔に検討します。通常はメモリ操作不要です。保存は最大1件の実用的な教訓に限定し、ユーザーの事前オプトイン、Contractの外部書き込み許可、Host個別承認を必要とします。Memoryは権限や恒久的なルールの正本にはなりません。
+Orchestratorの`skills`に軽量な`task-reflection`を登録します。新しいTFRを作成する前に必要な関連メモリだけを参照し、作業中に再利用可能な教訓が検証できた場合、その時点で1タスク最大1件を自動保存します。最終監査や全履歴の読み取りを必須とはしません。ユーザーの継続的な許可により、DANDORIのHookは`store_memory`・`vote_memory`の完全一致ツールだけを都度承認なしで許可します（上位Host・組織ポリシーには従います）。メモリ操作は新しいTFR/TFCを必要とせず、他の外部書き込みや作業権限を拡大しません。新たなStop Hook、ワーカー、セッション間履歴DBは追加しません。Memoryはコード・テスト・恒久的なルールの正本ではありません。
 
 Agentの正本は`.copilot/agents`で、配布先の`packages/copilot/agents`は**同一のCopilot形式をそのままコピー**します。旧Local形式からの変換は廃止しました。
 
