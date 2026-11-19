@@ -53,6 +53,29 @@ class ValidatorMutationTests(unittest.TestCase):
             path.write_text(path.read_text().replace("Missing permission is denied.", "Missing permission is allowed.", 1))
             self.assert_invalid(repo, "Missing permission is denied.")
 
+    def test_orchestrator_requires_readable_tfr_and_tfc_layout(self):
+        temp, repo = self.make_repo()
+        with temp:
+            path = repo / ".copilot/agents/Orchestrator.agent.md"
+            content = path.read_text()
+            self.assertIn("### Task Flow Review: TFR-<unique-id>", content)
+            path.write_text(content.replace("### Task Flow Review: TFR-<unique-id>",
+                                           "Plain TFR paragraph", 1))
+            self.assert_invalid(repo, "missing human-readable review layout")
+
+    def test_orchestrator_requires_copyable_approval_tokens(self):
+        for review_type in ("TFR", "TFC"):
+            with self.subTest(review_type=review_type):
+                temp, repo = self.make_repo()
+                with temp:
+                    path = repo / ".copilot/agents/Orchestrator.agent.md"
+                    content = path.read_text()
+                    token = "APPROVE:" + review_type + "-<unique-id>"
+                    fenced = "```text\n" + token + "\n```"
+                    self.assertIn(fenced, content)
+                    path.write_text(content.replace(fenced, token, 1))
+                    self.assert_invalid(repo, "approval token must be a fenced text block")
+
     def test_reviewer_cannot_edit_or_mutate_github(self):
         for tool in ("edit", "github/merge_pull_request"):
             with self.subTest(tool=tool):
