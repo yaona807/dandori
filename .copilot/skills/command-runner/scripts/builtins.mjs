@@ -3,7 +3,7 @@
 import { randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { constants as fsConstants } from 'node:fs';
-import { copyFile, link, lstat, mkdir, readFile, readdir, realpath, unlink, writeFile } from 'node:fs/promises';
+import { copyFile, link, lstat, mkdir, readFile, readdir, realpath, rmdir, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
@@ -259,6 +259,11 @@ async function restore(root, id) {
   const { manifest, fileInTrash } = await loadItem(root, id);
   const dest = await workspacePath(root, manifest.original, true);
   await noReplaceMove(fileInTrash, dest);
+  // Restored payloads no longer need recovery metadata; keep unrelated files intact.
+  try {
+    await unlink(path.join(path.dirname(fileInTrash), 'manifest.json'));
+    await rmdir(path.dirname(fileInTrash));
+  } catch { /* A successful restore must not be reported as failed by housekeeping. */ }
   return { itemId: id, restored: manifest.original };
 }
 
