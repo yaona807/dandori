@@ -2,7 +2,7 @@
 // Registration-free worker facade. The legacy management API remains internal.
 import { randomUUID, createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { lstat, mkdir, open, readFile, realpath, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, open, readFile, readdir, realpath, unlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
@@ -117,6 +117,30 @@ async function ensure() {
   const selected = await current();
   return { status: 'ready', workspace: 'current', registered: true, commandCount: selected.commands.length };
 }
+// Keep only unexpired approval candidates; unrelated or malformed files are preserved.
+async function cleanupExpiredProposals() {
+  let entries;
+  try { entries = await readdir(PROPOSALS, { withFileTypes: true }); }
+  catch (cause) {
+    if (cause?.code === 'ENOENT') return;
+    throw cause;
+  }
+  const now = Date.now();
+  for (const entry of entries) {
+    if (!entry.isFile() || !/^prop-[0-9a-f]{32}\.json$/u.test(entry.name)) continue;
+    const file = path.join(PROPOSALS, entry.name);
+    try {
+      const info = await lstat(file);
+      if (!info.isFile() || info.isSymbolicLink() || info.size > 32_768) continue;
+      const candidate = JSON.parse(await readFile(file, 'utf8'));
+      if (candidate.id === entry.name.slice(0, -'.json'.length)
+        && Number.isFinite(candidate.expiresAt) && candidate.expiresAt <= now) {
+        await unlink(file);
+      }
+    } catch { /* Unknown or concurrently changed proposals are not deleted. */ }
+  }
+}
+
 async function readProposal(id) {
   if (!PROPOSAL.test(id)) throw error('invalid_argument', 'invalid proposal ID');
   const file = path.join(PROPOSALS, id + '.json');
@@ -554,5 +578,12 @@ async function main() {
   if (!id) throw error('invalid_argument', op + ' requires an exact ID');
   return runInterface([op, id, guard, ...tokens]);
 }
-try { emit(await main()); }
+try {
+  const result = await main();
+  // Read-only queries have no cleanup side effects. Failed operations do not prune.
+  if (['propose', 'propose.update', 'activate', 'run'].includes(process.argv[2])) {
+    try { await cleanupExpiredProposals(); } catch { /* Do not mask successful operations. */ }
+  }
+  emit(result);
+}
 catch (e) { process.stderr.write(JSON.stringify({status:'error', error:{code:e.code ?? 'internal_error',message:e.message}})+'\n');process.exitCode=2; }
