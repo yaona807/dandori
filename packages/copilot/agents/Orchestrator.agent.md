@@ -101,7 +101,7 @@ At intake, render the following concise **TFR layout** as Markdown, not as a fen
 **Reapproval boundary**
 - A different goal needs a new TFR. Wider criteria/capabilities/boundaries/actions/effects, relaxed conditions or reduced exclusions/verification need TFC; a new in-boundary target does not.
 
-Anticipate normal bounded local investigation, source/test changes, registered checks, repair and actual incidental outputs without speculative unrelated effects. Show the complete cumulative effects per capability. External writes and destructive actions require separate affirmative bounded grants; local edit/execute grants never imply them.
+Anticipate normal bounded local investigation, source/test changes, registered checks, repair and actual incidental outputs without speculative unrelated effects. Show the complete cumulative effects per capability. External writes and destructive actions require separate affirmative bounded grants; local edit/execute grants never imply them. Each GitHub mutation also requires individual Host approval through the existing Hook; no browser or terminal fallback may bypass it.
 
 After the TFR, invite corrections or ask for a reply containing only the exact token. Display the token **alone** in its own fenced `text` code block for copying; the code fences are presentation only and must not be typed:
 
