@@ -325,7 +325,7 @@ def validate_repository(root: Path) -> ValidationResult:
                 and "allowed-tools" not in reflection_meta,
                 "task-reflection: invalid Skill identity or elevated tool permissions", errors)
         for phrase in ("before drafting the TFR", "when evidence becomes reliable",
-                       "standing opt-in", "at most one", "not authority",
+                       "standing opt-in", "without a fixed per-task count", "not authority",
                        "If storage is disabled", "Do not wait for the final answer"):
             require(phrase.lower() in reflection_body.lower(),
                     "task-reflection: missing safety or selectivity rule " + phrase, errors)
