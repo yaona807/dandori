@@ -13,6 +13,7 @@ import {
   realpath,
   rename,
   rm,
+  rmdir,
   stat,
   writeFile,
 } from 'node:fs/promises';
@@ -892,13 +893,43 @@ function isUtf8Continuation(byte) {
   return (byte & 0xc0) === 0x80;
 }
 
+async function existingDirectoryEntries(directory) {
+  try { return await readdir(directory, { withFileTypes: true }); }
+  catch (cause) {
+    if (cause?.code === 'ENOENT') return [];
+    throw cause;
+  }
+}
+
+async function removeEmptyDirectory(directory) {
+  try { await rmdir(directory); }
+  catch (cause) {
+    // A concurrent writer or unknown files take precedence over cleanup.
+    if (!['ENOTEMPTY', 'EEXIST', 'ENOENT'].includes(cause?.code)) throw cause;
+  }
+}
+
+async function cleanupEmptyExecutionScopes() {
+  const root = executionsRoot();
+  for (const workspace of await existingDirectoryEntries(root)) {
+    if (!workspace.isDirectory() || !COMMAND_ID_RE.test(workspace.name)) continue;
+    const workspaceRoot = path.join(root, workspace.name);
+    for (const scope of await existingDirectoryEntries(workspaceRoot)) {
+      if (scope.isDirectory() && /^[0-9a-f]{64}$/u.test(scope.name)) {
+        await removeEmptyDirectory(path.join(workspaceRoot, scope.name));
+      }
+    }
+    await removeEmptyDirectory(workspaceRoot);
+  }
+}
+
 async function managedExecutions() {
   const root = executionsRoot();
   await mkdir(root, { recursive: true, mode: 0o700 });
   const now = Date.now();
   const entries = [];
   async function collect(scope) {
-    for (const execution of await readdir(scope, { withFileTypes: true })) {
+    for (const execution of await existingDirectoryEntries(scope)) {
       if (!execution.isDirectory()) continue;
       const createdAt = executionCreatedAt(execution.name);
       if (createdAt === null) continue;
@@ -915,11 +946,11 @@ async function managedExecutions() {
       entries.push({ directory, createdAt, age: Math.max(0, now - createdAt), size });
     }
   }
-  for (const workspace of await readdir(root, { withFileTypes: true })) {
+  for (const workspace of await existingDirectoryEntries(root)) {
     if (!workspace.isDirectory() || !COMMAND_ID_RE.test(workspace.name)) continue;
     const workspaceRoot = path.join(root, workspace.name);
     await collect(workspaceRoot); // Previous layout and the registered root.
-    for (const scope of await readdir(workspaceRoot, { withFileTypes: true })) {
+    for (const scope of await existingDirectoryEntries(workspaceRoot)) {
       if (scope.isDirectory() && /^[0-9a-f]{64}$/u.test(scope.name)) {
         await collect(path.join(workspaceRoot, scope.name));
       }
@@ -928,18 +959,7 @@ async function managedExecutions() {
   return entries;
 }
 
-// Cache deletion is an explicit owner maintenance action, never part of 'run'.
-async function requireExecutionCapacity(reserveBytes = 0) {
-  const entries = await managedExecutions();
-  const total = entries.reduce((sum, entry) => sum + entry.size, 0);
-  if (total > LIMITS.executionCacheBytes - reserveBytes) {
-    throw new InterfaceError(
-      'execution_cache_full',
-      'managed execution cache is full; owner must explicitly prune it before running another command',
-    );
-  }
-}
-
+// Expired and capacity-pressure cache cleanup is shared by normal runs and owner maintenance.
 async function cleanupExecutions(reserveBytes = 0) {
   let entries = await managedExecutions();
   for (const entry of entries.filter(({ age }) => age >= LIMITS.executionTtlMs)) {
@@ -956,6 +976,7 @@ async function cleanupExecutions(reserveBytes = 0) {
     await rm(entry.directory, { recursive: true, force: true });
     total -= entry.size;
   }
+  await cleanupEmptyExecutionScopes();
   if (total > target) {
     throw new InterfaceError(
       'execution_cache_full',
@@ -996,9 +1017,15 @@ function scopedExecutionsRoot(workspace, context) {
 async function storeExecution(workspace, context, coreResult) {
   const id = executionId();
   const root = scopedExecutionsRoot(workspace, context);
-  await mkdir(root, { recursive: true, mode: 0o700 });
   const directory = path.join(root, id);
-  await mkdir(directory, { mode: 0o700 });
+  // An empty scope may be reclaimed between creation of the parent and child.
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    await mkdir(root, { recursive: true, mode: 0o700 });
+    try { await mkdir(directory, { mode: 0o700 }); break; }
+    catch (cause) {
+      if (cause?.code !== 'ENOENT' || attempt === 1) throw cause;
+    }
+  }
   const stdout = typeof coreResult.stdout === 'string' ? coreResult.stdout : '';
   const stderr = typeof coreResult.stderr === 'string' ? coreResult.stderr : '';
   await Promise.all([
@@ -1349,7 +1376,8 @@ async function main() {
     if (expectedIdentity !== undefined && preflight.workspaceIdentity !== expectedIdentity) {
       throw new InterfaceError('workspace_identity_changed', 'selected workspace identity changed');
     }
-    await requireExecutionCapacity(LIMITS.maxExecutionReserveBytes);
+    // Preflight validates the workspace before any managed cache is removed.
+    await cleanupExecutions(LIMITS.maxExecutionReserveBytes);
     const result = await runCore(['run', subject, ...rest]);
     if (result?.workspaceId !== expectedWorkspace || result?.commandId !== subject
       || (preflight.runtimeIdentity && result?.runtimeIdentity !== preflight.runtimeIdentity)) {
