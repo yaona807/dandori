@@ -26,7 +26,7 @@ Reviewer has read/search and fixed CommandRunner terminal access only for regist
 
 ## Optional Copilot Memory reflection
 
-Orchestrator preloads the short `task-reflection` Skill through its `skills` frontmatter. Before preparing a new TFR it consults relevant existing lessons when useful; while executing, it can store up to one verified actionable lesson as soon as the evidence is reliable, without a mandatory final-audit pass. Normal tasks need no memory call or full history scan. The user has granted standing opt-in for non-sensitive Copilot Memory maintenance: DANDORI's agent-scoped Hook allows the exact `store_memory` and `vote_memory` tools without per-call approval or a new TFR/TFC. Other Host/organization policies may still restrict them. Memory never grants task permissions or replaces project instructions, code or tests. No new Stop Hook, worker or cross-session transcript storage is added.
+Orchestrator preloads the short `task-reflection` Skill through its `skills` frontmatter. Before preparing a new TFR it consults relevant existing lessons when useful; while executing, it can store distinct verified actionable lessons without a per-task count limit as soon as the evidence is reliable, without a mandatory final-audit pass. Normal tasks need no memory call or full history scan. The user has granted standing opt-in for non-sensitive Copilot Memory maintenance: DANDORI's agent-scoped Hook allows the exact `store_memory` and `vote_memory` tools without per-call approval or a new TFR/TFC. Other Host/organization policies may still restrict them. Memory never grants task permissions or replaces project instructions, code or tests. No new Stop Hook, worker or cross-session transcript storage is added.
 
 ## Installation
 
