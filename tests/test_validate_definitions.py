@@ -76,6 +76,38 @@ class ValidatorMutationTests(unittest.TestCase):
                     path.write_text(content.replace(fenced, token, 1))
                     self.assert_invalid(repo, "approval token must be a fenced text block")
 
+    def test_orchestrator_requires_fenced_worker_task_card(self):
+        mutations = (
+            ("```yaml\ntask:\n", "task:\n", "Task Card must be a fenced YAML block"),
+            ("Delegate exactly one fenced `yaml` block with top-level `task`",
+             "Delegate a task", "missing fenced YAML Task Card delegation rule"),
+        )
+        for original, replacement, expected_error in mutations:
+            with self.subTest(original=original):
+                temp, repo = self.make_repo()
+                with temp:
+                    path = repo / ".copilot/agents/Orchestrator.agent.md"
+                    content = path.read_text()
+                    self.assertIn(original, content)
+                    path.write_text(content.replace(original, replacement, 1))
+                    self.assert_invalid(repo, expected_error)
+
+    def test_orchestrator_preserves_task_card_yaml_value_types(self):
+        for original, replacement in (
+            ("  scope: {}", '  scope: "free prose"'),
+            ("  grants: []  # narrowed complete subset of approved capabilities",
+             '  grants: "free prose"'),
+            ("  context: []", '  context: "free prose"'),
+        ):
+            with self.subTest(field=original):
+                temp, repo = self.make_repo()
+                with temp:
+                    path = repo / ".copilot/agents/Orchestrator.agent.md"
+                    content = path.read_text()
+                    self.assertIn(original, content)
+                    path.write_text(content.replace(original, replacement, 1))
+                    self.assert_invalid(repo, "invalid Task Card YAML template structure")
+
     def test_reviewer_cannot_edit_or_mutate_github(self):
         for tool in ("edit", "github/merge_pull_request"):
             with self.subTest(tool=tool):
