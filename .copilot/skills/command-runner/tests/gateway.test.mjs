@@ -1167,6 +1167,22 @@ test('run automatically cleans expired logs across workspaces and preserves rece
   });
 });
 
+test('run removes only empty workspace and worktree execution scopes', async () => {
+  await withFixture(async (fixture) => {
+    const root = path.join(fixture.home, 'command-runner', 'executions');
+    const obsoleteScope = path.join(root, 'beta', 'a'.repeat(64));
+    const protectedScope = path.join(root, 'gamma', 'b'.repeat(64));
+    await mkdir(obsoleteScope, { recursive: true });
+    await mkdir(protectedScope, { recursive: true });
+    await writeFile(path.join(protectedScope, 'keep.txt'), 'not a managed execution');
+
+    parseSuccess(runInterface(fixture, fixture.alpha, ['run', 'echo']));
+    assert.ok(!(await readdir(root)).includes('beta'), 'empty scopes must be reclaimed');
+    assert.equal(await readFile(path.join(protectedScope, 'keep.txt'), 'utf8'),
+      'not a managed execution');
+  });
+});
+
 test('run automatically reclaims old logs when the shared execution cache is full', async () => {
   await withFixture(async (fixture) => {
     const root = path.join(fixture.home, 'command-runner', 'executions', 'beta');
