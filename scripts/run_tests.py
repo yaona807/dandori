@@ -34,6 +34,8 @@ REQUIRED_TEST_METHODS = {
         "test_orchestrator_requires_copyable_approval_tokens",
         "test_orchestrator_requires_fenced_worker_task_card",
         "test_orchestrator_preserves_task_card_yaml_value_types",
+        "test_registered_command_authorization_is_atomic",
+        "test_command_runner_cleanup_guidance_matches_runner",
         "test_reviewer_cannot_edit_or_mutate_github",
         "test_reviewer_requires_fixed_runner",
         "test_executor_requires_edit_tool",
