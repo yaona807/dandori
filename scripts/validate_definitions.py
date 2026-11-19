@@ -190,6 +190,7 @@ def validate_repository(root: Path) -> ValidationResult:
                 "### Task Flow Review: TFR-<unique-id>",
                 "**Completion criteria**", "**Authorized capabilities**",
                 "**Verification**", "**Reapproval boundary**",
+                "Each GitHub mutation also requires individual Host approval",
                 "### Task Flow Change: TFC-<unique-id>",
                 "**Changed fields**", "**Unchanged**",
             ):
