@@ -22,7 +22,7 @@ Use this Skill without an additional Hook, worker, or mandatory reflection pass.
 - When a user correction, repeated root cause, consequential near miss, verified improvement or reusable successful method becomes sufficiently established, assess it then. Do not wait for the final answer or depend on detecting task completion.
 - Prefer a compact **situation → verified cause or insight → next-time action** that would prevent material rework or regression. Avoid speculative conclusions and premature writes; revise the proposed lesson as the evidence changes.
 - Skip transient outages, simple typos, ordinary task success, one-off implementation detail, identical existing memories and long execution summaries. There is no mandatory storage call.
-- Before storing, consider relevant existing memory to avoid duplicate lessons. Keep at most one concise actionable memory per task; a later task may refine a verified, stale lesson. Do not run a second final-audit reflection if the lesson was already considered.
+- Before storing, consider relevant existing memory to avoid duplicate lessons. Store distinct, evidence-backed actionable lessons without a fixed per-task count; a later task may refine a verified, stale lesson. Do not run a second final-audit reflection if the lesson was already considered.
 - If a lesson is a project rule or an enforceable check, prefer a source/test/documentation change within the authorized work. Memory complements these sources; it does not replace them.
 
 ## Memory safety and authority
