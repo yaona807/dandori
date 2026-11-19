@@ -928,18 +928,7 @@ async function managedExecutions() {
   return entries;
 }
 
-// Cache deletion is an explicit owner maintenance action, never part of 'run'.
-async function requireExecutionCapacity(reserveBytes = 0) {
-  const entries = await managedExecutions();
-  const total = entries.reduce((sum, entry) => sum + entry.size, 0);
-  if (total > LIMITS.executionCacheBytes - reserveBytes) {
-    throw new InterfaceError(
-      'execution_cache_full',
-      'managed execution cache is full; owner must explicitly prune it before running another command',
-    );
-  }
-}
-
+// Expired and capacity-pressure cache cleanup is shared by normal runs and owner maintenance.
 async function cleanupExecutions(reserveBytes = 0) {
   let entries = await managedExecutions();
   for (const entry of entries.filter(({ age }) => age >= LIMITS.executionTtlMs)) {
@@ -1349,7 +1338,8 @@ async function main() {
     if (expectedIdentity !== undefined && preflight.workspaceIdentity !== expectedIdentity) {
       throw new InterfaceError('workspace_identity_changed', 'selected workspace identity changed');
     }
-    await requireExecutionCapacity(LIMITS.maxExecutionReserveBytes);
+    // Preflight validates the workspace before any managed cache is removed.
+    await cleanupExecutions(LIMITS.maxExecutionReserveBytes);
     const result = await runCore(['run', subject, ...rest]);
     if (result?.workspaceId !== expectedWorkspace || result?.commandId !== subject
       || (preflight.runtimeIdentity && result?.runtimeIdentity !== preflight.runtimeIdentity)) {
