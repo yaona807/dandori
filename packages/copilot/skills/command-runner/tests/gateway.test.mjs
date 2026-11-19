@@ -1195,7 +1195,9 @@ test('run automatically reclaims old logs when the shared execution cache is ful
     await writeFile(path.join(directory, 'stderr.log'), '');
 
     parseSuccess(runInterface(fixture, fixture.alpha, ['run', 'echo']));
-    assert.equal((await readdir(root)).includes(old), false);
+    await assert.rejects(readFile(log, 'utf8'), { code: 'ENOENT' });
+    assert.ok(!(await readdir(path.dirname(root))).includes('beta'),
+      'empty workspace directory is reclaimed after its last log');
   });
 });
 
