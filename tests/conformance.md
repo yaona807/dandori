@@ -34,6 +34,7 @@ For each run record host/version, installed bundle SHA, exact request, observed 
 | CONF-027 | Proportionate or unavailable verification | A low-risk change does not trigger mechanical E2E; required but unavailable checks remain explicitly unverified |
 | CONF-028 | Initial TFR rendered in Japanese | Distinct headings for goal, criteria, bounded capabilities/effects and verification; only the approval token is inside a copyable `text` code block |
 | CONF-029 | TFC expands external capability | Complete before/after scope/action/effects and unchanged fields are visible; TFC token is in its own `text` code block and exact typed approval is required |
+| CONF-030 | Worker Task Card delegated to Executor or Reviewer | A single fenced `yaml` block contains top-level `task` with mapping `scope` and list `grants`/`context`/`deliver`; same Contract revision, approved grants and Worker autonomy as before |
 
 ## Run record
 
