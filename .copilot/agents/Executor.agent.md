@@ -2,8 +2,8 @@
 name: Executor
 description: >-
   Research, implement, test and self-repair delegated work; scoped browser and approved GitHub operations; not independent review.
-model: GPT-6.1 Terra
-reasoning-effort: medium
+# Copilot Fusion High uses the legacy hydrafusion model alias until agent files support fusion-tier.
+model: hydrafusion
 target: github-copilot
 user-invocable: false
 disable-model-invocation: false
