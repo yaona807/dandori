@@ -292,6 +292,13 @@ def validate_repository(root: Path) -> ValidationResult:
                 "command-runner: outdated troubleshooting cleanup guidance", errors)
         require("normal `run` preserves old logs" not in text,
                 "command-runner: obsolete troubleshooting cleanup guidance", errors)
+    command_reference = root / ".copilot/skills/command-runner/references/commands.md"
+    if command_reference.is_file():
+        text = command_reference.read_text()
+        require("Normal `run` automatically removes managed execution logs older than 24 hours" in text,
+                "command-runner: outdated command reference cleanup guidance", errors)
+        require("never deletes old logs" not in text,
+                "command-runner: obsolete command reference cleanup guidance", errors)
 
     if all(name in agent_tools for name in NAMES):
         inherited = set(agent_tools["Executor"]) | set(agent_tools["Reviewer"])
