@@ -397,6 +397,28 @@ test('shared Hook allows only exact Copilot tool-search identifiers without expa
   });
 });
 
+test('Worker Hook allows exact memory reads but denies write, vote and lookalike names', async () => {
+  await withFixture(async (fixture) => {
+    const invoke = (name, format = 'copilot') => {
+      const event = format === 'copilot'
+        ? { toolName: name, toolArgs: { query: 'prior coding lessons' } }
+        : { hook_event_name: 'PreToolUse', tool_name: name, tool_input: { query: 'prior coding lessons' } };
+      const result = spawnSync(process.execPath, [path.join(fixture.scripts, 'hook.mjs')], {
+        cwd: fixture.alpha, encoding: 'utf8', input: JSON.stringify(event),
+      });
+      assert.equal(result.status, 0, result.stderr);
+      return JSON.parse(result.stdout);
+    };
+    assert.deepEqual(invoke('read_memories'), {});
+    assert.deepEqual(invoke('read_memories', 'local'), { continue: true });
+    for (const name of ['store_memory', 'vote_memory', 'READ_MEMORIES',
+      'read_memories/write', 'github/read_memories', 'store_memory/execute']) {
+      assert.equal(invoke(name).permissionDecision, 'deny', name);
+      assert.equal(invoke(name, 'local').permissionDecision, 'deny', name);
+    }
+  });
+});
+
 test('Writer permits user-shared tab interactions but denies direct URL navigation', async () => {
   await withFixture(async (fixture) => {
     const invoke = (name) => {

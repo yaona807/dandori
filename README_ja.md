@@ -34,6 +34,8 @@ Reviewerは必要時にCommandRunnerで登録済みの読み取り系コマン�
 
 Orchestratorの`skills`に軽量な`task-reflection`を登録します。新しいTFRを作成する前に必要な関連メモリだけを参照し、作業中に再利用可能な教訓が検証できた場合、その時点で件数上限を設けず、重複しない有用な教訓を保存できます。最終監査や全履歴の読み取りを必須とはしません。ユーザーの継続的な許可により、DANDORIのHookは`store_memory`・`vote_memory`の完全一致ツールだけを都度承認なしで許可します（上位Host・組織ポリシーには従います）。メモリ操作は新しいTFR/TFCを必要とせず、他の外部書き込みや作業権限を拡大しません。新たなStop Hook、ワーカー、セッション間履歴DBは追加しません。Memoryはコード・テスト・恒久的なルールの正本ではありません。
 
+ExecutorとReviewerも必要な場合に限り`read_memories`で過去の教訓を参照できます。保存・評価はできず、検証済みの学習候補（`memory_suggestions`）と根拠付きの訂正提案（`memory_feedback`）を通常の結果報告に任意で含めます。Orchestratorが品質と重複を確認して保存・評価します。Reviewerの指摘だけでは確定した教訓とみなしません。メモリ利用は任意で、Task Cardの必須項目や新しいエージェント・保存基盤は追加しません。Worker Hookは正確な`read_memories`だけを許可し、保存・評価ツールは拒否します。
+
 Agentの正本は`.copilot/agents`で、配布先の`packages/copilot/agents`は**同一のCopilot形式をそのままコピー**します。旧Local形式からの変換は廃止しました。
 
 ## インストール・検証

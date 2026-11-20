@@ -28,6 +28,8 @@ Reviewer has read/search and fixed CommandRunner terminal access only for regist
 
 Orchestrator preloads the short `task-reflection` Skill through its `skills` frontmatter. Before preparing a new TFR it consults relevant existing lessons when useful; while executing, it can store distinct verified actionable lessons without a per-task count limit as soon as the evidence is reliable, without a mandatory final-audit pass. Normal tasks need no memory call or full history scan. The user has granted standing opt-in for non-sensitive Copilot Memory maintenance: DANDORI's agent-scoped Hook allows the exact `store_memory` and `vote_memory` tools without per-call approval or a new TFR/TFC. Other Host/organization policies may still restrict them. Memory never grants task permissions or replaces project instructions, code or tests. No new Stop Hook, worker or cross-session transcript storage is added.
 
+Executor and Reviewer selectively use `read_memories` for relevant lessons; neither can store or vote. They may include verified `memory_suggestions` and evidence-backed `memory_feedback` in ordinary results. Orchestrator applies existing quality, duplication, and authority rules before saving or evaluating proposals. A review finding alone is not verified knowledge. Optional memory work adds no new agents, mandatory Task Card fields or persistence, and must not block the task. The Worker Hook permits only exact memory reads.
+
 ## Installation
 
 1. Follow the existing [CommandRunner installation guide](.copilot/skills/command-runner/references/README.md) and enable Copilot custom-agent hooks.

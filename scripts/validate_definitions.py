@@ -247,6 +247,10 @@ def validate_repository(root: Path) -> ValidationResult:
                            "Do not create GitHub comments"):
                 require(marker in body, "Reviewer: read-only execution policy missing " + marker, errors)
         if name != "Orchestrator":
+            require("read_memories" in tools,
+                    f"{name}: read-only Copilot Memory tool required", errors)
+            require("store_memory" not in tools and "vote_memory" not in tools,
+                    f"{name}: memory writes/votes forbidden", errors)
             require("hook.mjs" in str(hooks), f"{name}: fixed runner Hook missing", errors)
             require("node ~/.copilot/skills/command-runner/scripts/cli.mjs" in body,
                     f"{name}: fixed runner CLI missing", errors)
@@ -304,6 +308,18 @@ def validate_repository(root: Path) -> ValidationResult:
         require("never deletes old logs" not in text,
                 "command-runner: obsolete command reference cleanup guidance", errors)
 
+    worker_hook_path = root / ".copilot/skills/command-runner/scripts/hook.mjs"
+    if worker_hook_path.is_file():
+        hook_text = worker_hook_path.read_text()
+        allowlist_match = re.search(
+            r"const PERMITTED_NON_TERMINAL_TOOL_NAMES = new Set\\(\\[(.*?)\\]\\);",
+            hook_text, re.S)
+        allowed_tools_text = allowlist_match.group(1) if allowlist_match else ""
+        require("'read_memories'" in allowed_tools_text,
+                "Worker Hook: exact read_memories required", errors)
+        require("'store_memory'" not in allowed_tools_text and "'vote_memory'" not in allowed_tools_text,
+                "Worker Hook: memory mutations forbidden", errors)
+
     if all(name in agent_tools for name in NAMES):
         inherited = set(agent_tools["Executor"]) | set(agent_tools["Reviewer"])
         required_parent = {"task", "store_memory", "vote_memory", "read_memories"} | inherited
@@ -324,7 +340,7 @@ def validate_repository(root: Path) -> ValidationResult:
                 and isinstance(reflection_meta.get("description"), str)
                 and "allowed-tools" not in reflection_meta,
                 "task-reflection: invalid Skill identity or elevated tool permissions", errors)
-        for phrase in ("before drafting the TFR", "when evidence becomes reliable",
+        for phrase in ("worker-proposed lessons", "before drafting the TFR", "when evidence becomes reliable",
                        "standing opt-in", "without a fixed per-task count", "not authority",
                        "If storage is disabled", "Do not wait for the final answer"):
             require(phrase.lower() in reflection_body.lower(),

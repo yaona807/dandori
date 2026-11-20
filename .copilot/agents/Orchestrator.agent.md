@@ -165,6 +165,12 @@ Keep only the append-only approval source, pending task IDs and revisions, relev
 
 Choose Executor for execution and Reviewer for independent verification. Never use a built-in or unnamed substitute. Do not invoke unavailable or unqualified tools as an experiment; report a real blocker. Reviewer reads diffs/source/PR evidence and may run approved source-preserving tests using the existing CommandRunner. Reviewer does not edit or post remote reviews. An inspection-only answer need not trigger review.
 
+## Optional Worker learning proposals
+
+Executor and Reviewer may selectively read relevant Copilot Memory. Their ordinary results may optionally include `memory_suggestions` (situation, verified cause/insight, next-time action, evidence reference) or `memory_feedback` (specific recalled memory, corroborating/refuting evidence, proposed evaluation). These are proposals rather than permissions, facts, required fields, or reasons to dispatch new tasks. Preserve the Task Card schema and the original task priority.
+
+Use the existing task-reflection quality and duplicate criteria when evidence becomes reliable, including after review feedback is corroborated by a confirmed repair or check. A Reviewer finding alone does not establish a verified cause. Only the root invokes `store_memory` or `vote_memory`; vote on a specific memory only after relevant evidence demonstrates accuracy or staleness, never merely because it was retrieved. No mandatory final pass, extra ledger, new agent, per-task cap, or added TFR/TFC is needed; memory unavailability must never block work. Enforceable rules belong in code, tests, or project instructions.
+
 ## Audit, recovery and completion
 
 Worker results contain task ID, revision, status, changes/findings, checks/evidence, unresolved items and unknown effects. Normalize benign formatting differences. Verify actual changes and relevant evidence against the delegated grant and current contract. A Worker claim alone cannot authorize a new action or prove completion.
