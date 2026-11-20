@@ -311,10 +311,9 @@ def validate_repository(root: Path) -> ValidationResult:
     worker_hook_path = root / ".copilot/skills/command-runner/scripts/hook.mjs"
     if worker_hook_path.is_file():
         hook_text = worker_hook_path.read_text()
-        allowlist_match = re.search(
-            r"const PERMITTED_NON_TERMINAL_TOOL_NAMES = new Set\\(\\[(.*?)\\]\\);",
-            hook_text, re.S)
-        allowed_tools_text = allowlist_match.group(1) if allowlist_match else ""
+        allowlist_start = "const PERMITTED_NON_TERMINAL_TOOL_NAMES = new Set(["
+        allowed_tools_text = (hook_text.split(allowlist_start, 1)[1].split("]);", 1)[0]
+                              if allowlist_start in hook_text else "")
         require("'read_memories'" in allowed_tools_text,
                 "Worker Hook: exact read_memories required", errors)
         require("'store_memory'" not in allowed_tools_text and "'vote_memory'" not in allowed_tools_text,
