@@ -403,15 +403,15 @@ class ValidatorMutationTests(unittest.TestCase):
                 with temp:
                     path = repo / ".copilot/agents" / (worker + ".agent.md")
                     content = path.read_text()
-                    self.assertIn("  - read_memories\\n", content)
-                    path.write_text(content.replace("  - read_memories\\n", "", 1))
+                    self.assertIn("  - read_memories\n", content)
+                    path.write_text(content.replace("  - read_memories\n", "", 1))
                     self.assert_invalid(repo, "read-only Copilot Memory tool required")
                 temp, repo = self.make_repo()
                 with temp:
                     path = repo / ".copilot/agents" / (worker + ".agent.md")
                     content = path.read_text()
-                    path.write_text(content.replace("  - read_memories\\n",
-                                                    "  - read_memories\\n  - store_memory\\n", 1))
+                    path.write_text(content.replace("  - read_memories\n",
+                                                    "  - read_memories\n  - store_memory\n", 1))
                     self.assert_invalid(repo, "memory writes/votes forbidden")
 
     def test_worker_hook_memory_is_read_only(self):
