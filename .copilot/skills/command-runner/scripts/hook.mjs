@@ -26,6 +26,8 @@ const TERMINAL_TOOL_NAMES = new Set([
 // Unknown tools remain denied; the agent frontmatter is the capability boundary.
 const PERMITTED_NON_TERMINAL_TOOL_NAMES = new Set([
   'read', 'search', 'web', 'edit', 'Read', 'Edit', 'view',
+  // Read-only Copilot Memory for Workers; writes/votes remain root-only.
+  'read_memories',
   // Native Copilot code search and compatible PascalCase search aliases.
   // Exact read-only tool discovery identifiers from Copilot SDK and VS Code.
   // Tool discovery itself grants no GitHub writes or terminal execution.

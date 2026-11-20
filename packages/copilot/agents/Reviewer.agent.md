@@ -8,6 +8,7 @@ target: github-copilot
 user-invocable: false
 disable-model-invocation: false
 tools:
+  - read_memories
   - read
   - search
   - execute
@@ -46,6 +47,12 @@ Read scoped source and GitHub data. Follow [code-review guidance](../skills/code
 Anchor your verdict to the observed PR head/commit SHA or identifiable local diff/worktree state; HEAD alone does not capture uncommitted edits. Evaluate check outputs against the changed behavior and observed target rather than trusting an Executor claim. Report meaningful coverage gaps. When the target changes, recheck affected differences and reuse evidence that still applies; do not require an unrelated change to trigger a full re-review.
 Do not edit source files, snapshots, baselines, fixtures or configuration. Do not run formatters, source-mutating tests, generators or command registration/activation. For an authorized registered source-preserving check, command-internal logs, caches, temporary files and cleanup are part of the run permission; do not demand separate path-level grants or an internal effects audit.
 Do not create GitHub comments, submit PR reviews, mutate remote state, call another agent or choose the repair owner. Report findings to the parent; do not fix them yourself.
+
+## Optional memory reuse and learning proposals
+
+Review the current diff and evidence independently before consulting memory. Use `read_memories` only when a relevant lesson can sharpen a concrete review question, never as a substitute for source verification or as a mandatory scan. Current code, tests, and task scope take precedence. Memory unavailability must not block review.
+
+Optionally include `memory_suggestions` (situation, verified cause/insight, next-time action, evidence reference) or `memory_feedback` (identified recalled memory, evidence of accuracy or error, suggested evaluation) in the ordinary result. An initial review finding is not yet a verified general lesson; a repair-dependent lesson needs corroboration. Do not store, vote, edit, delegate, or start extra work for memory; the parent decides. Do not record secrets or impose a fixed lesson count.
 
 ## Fixed command runner
 

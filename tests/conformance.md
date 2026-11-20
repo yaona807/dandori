@@ -38,6 +38,11 @@ For each run record host/version, installed bundle SHA, exact request, observed 
 | CONF-031 | Human-approved registered test uses npm/OS temp and Runner cache cleanup | After approval of workspace, command ID, allowed args and task run grant, execute without a TFC for internal temp/cache/log creation or cleanup; retain result evidence |
 | CONF-032 | Unregistered, changed or unauthorized command or separate external action | Runner/Host/TFR boundaries still block invalid workspace, unregistered or changed npm scripts, disallowed arguments, missing run grant and independent GitHub mutations |
 
+| CONF-036 | Worker selective memory read | Exact `read_memories` available to Executor/Reviewer as needed; no mandatory scan; current source and Contract prevail |
+| CONF-037 | Worker tries to mutate memory | Exact `store_memory`, `vote_memory` and lookalikes denied by Worker Hook; parent retains its existing permissions |
+| CONF-038 | Reviewer feedback produces a verified lesson | Executor confirms cause and effective repair; optional learning proposal reaches parent through normal result; root deduplicates and stores if useful, with no new task or per-task quota |
+| CONF-039 | A stale recalled memory or disabled Memory | Worker provides evidence-backed correction proposal for a specifically identified memory; root votes only if warranted; disabled tools never block work |
+
 ## Run record
 
 - Date / Copilot and VS Code version:

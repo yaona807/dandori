@@ -396,5 +396,37 @@ class ValidatorMutationTests(unittest.TestCase):
             path.write_text(content.replace("verification credibility", "test status", 1))
             self.assert_invalid(repo, "missing diff-first investigation rule verification credibility")
 
+    def test_worker_memory_permissions_are_read_only(self):
+        for worker in ("Executor", "Reviewer"):
+            with self.subTest(worker=worker):
+                temp, repo = self.make_repo()
+                with temp:
+                    path = repo / ".copilot/agents" / (worker + ".agent.md")
+                    content = path.read_text()
+                    self.assertIn("  - read_memories\n", content)
+                    path.write_text(content.replace("  - read_memories\n", "", 1))
+                    self.assert_invalid(repo, "read-only Copilot Memory tool required")
+                temp, repo = self.make_repo()
+                with temp:
+                    path = repo / ".copilot/agents" / (worker + ".agent.md")
+                    content = path.read_text()
+                    path.write_text(content.replace("  - read_memories\n",
+                                                    "  - read_memories\n  - store_memory\n", 1))
+                    self.assert_invalid(repo, "memory writes/votes forbidden")
+
+    def test_worker_hook_memory_is_read_only(self):
+        for replacement, expected in (
+            ("", "exact read_memories required"),
+            ("  'read_memories', 'vote_memory',", "memory mutations forbidden"),
+        ):
+            with self.subTest(expected=expected):
+                temp, repo = self.make_repo()
+                with temp:
+                    path = repo / ".copilot/skills/command-runner/scripts/hook.mjs"
+                    content = path.read_text()
+                    self.assertIn("  'read_memories',", content)
+                    path.write_text(content.replace("  'read_memories',", replacement, 1))
+                    self.assert_invalid(repo, expected)
+
 if __name__ == "__main__":
     unittest.main()
