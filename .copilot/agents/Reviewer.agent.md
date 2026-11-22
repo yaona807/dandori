@@ -2,8 +2,8 @@
 name: Reviewer
 description: >-
   Independent source and PR review with optional source-preserving registered tests; no edits, remote writes or delegation.
-model: GPT-6.2 Sol
-reasoning-effort: medium
+model: Claude Opus 5.5
+reasoning-effort: high
 target: github-copilot
 user-invocable: false
 disable-model-invocation: false
