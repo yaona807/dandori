@@ -2,8 +2,8 @@
 name: Executor
 description: >-
   Research, implement, test and self-repair delegated work; scoped browser and approved GitHub operations; not independent review.
-model: GPT-6.1 Terra
-reasoning-effort: medium
+model: GPT-6.2 Sol
+reasoning-effort: high
 target: github-copilot
 user-invocable: false
 disable-model-invocation: false
